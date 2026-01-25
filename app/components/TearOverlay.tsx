@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -8,9 +8,22 @@ import * as THREE from "three";
 function TearPlane({ progress }: { progress: number }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
+  // Create uniforms once with useMemo
+  const uniforms = useMemo(
+    () => ({
+      uProgress: { value: 0 },
+    }),
+    []
+  );
+
+  // Update uniform every frame
   useFrame(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uProgress.value = progress;
+      // Debug log
+      if (Math.random() < 0.01) {
+        console.log("TearOverlay progress:", progress);
+      }
     }
   });
 
@@ -22,9 +35,7 @@ function TearPlane({ progress }: { progress: number }) {
         transparent={true}
         depthTest={false}
         depthWrite={false}
-        uniforms={{
-          uProgress: { value: 0 },
-        }}
+        uniforms={uniforms}
         vertexShader={`
           varying vec2 vUv;
           void main() {

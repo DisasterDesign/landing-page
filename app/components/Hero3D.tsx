@@ -273,6 +273,11 @@ export default function Hero3D({
           onTearProgressChange?.(clampedTear);
           onTearVisibilityChange?.(progress < 1);
 
+          // Debug log
+          if (clampedTear > 0) {
+            console.log("Hero3D tearProgress:", clampedTear);
+          }
+
           scrollTicking.current = false;
         });
         scrollTicking.current = true;
@@ -282,7 +287,7 @@ export default function Hero3D({
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll(); // Initial check
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [onTearProgressChange, onTearVisibilityChange]);
 
 
   return (
