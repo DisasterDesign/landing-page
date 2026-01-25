@@ -3,25 +3,98 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #FDF4EB;
+  --foreground: #000000;
+  --accent: #F37021;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+@keyframes lightning-flash {
+  0%, 90%, 100% {
+    transform: translateX(-200%) skewX(-20deg);
+    opacity: 0;
   }
+  92%, 94% {
+    transform: translateX(200%) skewX(-20deg);
+    opacity: 1;
+  }
+}
+
+@keyframes lightning-sweep {
+  0%, 70%, 100% {
+    transform: translateX(-150%) skewX(-20deg);
+    opacity: 0;
+  }
+  80% {
+    transform: translateX(-50%) skewX(-20deg);
+    opacity: 1;
+  }
+  90% {
+    transform: translateX(50%) skewX(-20deg);
+    opacity: 1;
+  }
+  95% {
+    transform: translateX(150%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+/* Founders Section Animations */
+@keyframes marquee-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-right {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes scroll-text {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.animate-marquee-left {
+  animation: marquee-left 30s linear infinite;
+}
+
+.animate-marquee-right {
+  animation: marquee-right 30s linear infinite;
+}
+
+.animate-scroll-text {
+  animation: scroll-text 60s linear infinite;
+}
+
+/* Fade in animation for founder text change */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
 }
