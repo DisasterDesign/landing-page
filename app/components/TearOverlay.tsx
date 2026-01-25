@@ -80,7 +80,7 @@ export default function TearOverlay({ progress, visible }: TearOverlayProps) {
   return (
     <div
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: 100 }}
+      style={{ zIndex: 3 }}
     >
       <Canvas
         orthographic
