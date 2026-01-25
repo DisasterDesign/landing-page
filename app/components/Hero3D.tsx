@@ -217,16 +217,48 @@ export default function Hero3D() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Preload all background sequence frames
+  // Preload all background sequence frames into array for instant access
+  const framesRef = useRef<HTMLImageElement[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const currentFrameRef = useRef(1);
+
   useEffect(() => {
-    const preloadImages = () => {
-      for (let i = 1; i <= TOTAL_BG_FRAMES; i++) {
-        const img = new window.Image();
-        img.src = `/hero-sequence/frame_${String(i).padStart(3, '0')}.webp`;
+    const frames: HTMLImageElement[] = [];
+    let loadedCount = 0;
+
+    for (let i = 1; i <= TOTAL_BG_FRAMES; i++) {
+      const img = new window.Image();
+      img.src = `/hero-sequence/frame_${String(i).padStart(3, '0')}.webp`;
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === TOTAL_BG_FRAMES) {
+          setBgLoaded(true);
+        }
+      };
+      frames[i] = img;
+    }
+    framesRef.current = frames;
+  }, []);
+
+  // Render frame to canvas for smooth animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !bgLoaded) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const renderFrame = () => {
+      const frame = framesRef.current[currentFrameRef.current];
+      if (frame && frame.complete) {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
       }
     };
-    preloadImages();
-  }, []);
+
+    renderFrame();
+  }, [bgLoaded]);
 
   // Background fade in animation
   useEffect(() => {
@@ -279,44 +311,79 @@ export default function Hero3D() {
     };
   }, []);
 
+  // Optimized scroll handler with requestAnimationFrame throttling
+  const scrollTicking = useRef(false);
+  const mouseTicking = useRef(false);
+
   useEffect(() => {
     const handleScroll = () => {
-      if (!containerRef.current) return;
-
-      const rect = containerRef.current.getBoundingClientRect();
-      const progress = Math.min(
-        Math.max(-rect.top / (containerRef.current.offsetHeight - window.innerHeight), 0),
-        1
-      );
-      setScrollProgress(progress);
+      if (!scrollTicking.current) {
+        requestAnimationFrame(() => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const progress = Math.min(
+            Math.max(-rect.top / (containerRef.current.offsetHeight - window.innerHeight), 0),
+            1
+          );
+          setScrollProgress(progress);
+          scrollTicking.current = false;
+        });
+        scrollTicking.current = true;
+      }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({
-        x: (e.clientX / window.innerWidth - 0.5) * 2,
-        y: (e.clientY / window.innerHeight - 0.5) * 2,
-      });
+      if (!mouseTicking.current) {
+        requestAnimationFrame(() => {
+          setMousePos({
+            x: (e.clientX / window.innerWidth - 0.5) * 2,
+            y: (e.clientY / window.innerHeight - 0.5) * 2,
+          });
+          mouseTicking.current = false;
+        });
+        mouseTicking.current = true;
+      }
     };
 
-    window.addEventListener("scroll", handleScroll);
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
 
-  // Calculate current background frame
+  // Calculate current background frame and render to canvas
   const bgFrame = (() => {
     let frame: number;
     if (!entranceComplete) {
-      // Start from frame 1 and progress smoothly to ENTRANCE_BG_END_FRAME
       frame = 1 + Math.floor(entranceProgress * (ENTRANCE_BG_END_FRAME - 1));
     } else {
       frame = entranceEndBgFrame + Math.floor(scrollProgress * (TOTAL_BG_FRAMES - entranceEndBgFrame));
     }
     return Math.min(Math.max(1, frame), TOTAL_BG_FRAMES);
   })();
+
+  // Render frame to canvas when bgFrame changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !bgLoaded) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const frame = framesRef.current[bgFrame];
+    if (frame && frame.complete) {
+      currentFrameRef.current = bgFrame;
+      // Set canvas size to match container
+      const rect = canvas.getBoundingClientRect();
+      if (canvas.width !== rect.width || canvas.height !== rect.height) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      }
+      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    }
+  }, [bgFrame, bgLoaded]);
 
   return (
     <section
@@ -377,7 +444,7 @@ export default function Hero3D() {
         {/* Site background base - revealed as hero image fades */}
         <div className="absolute inset-0 bg-[#FDF4EB]" />
 
-        {/* Background Sequence with Parallax */}
+        {/* Background Sequence with Parallax - Canvas-based for smooth animation */}
         <div
           className="absolute inset-0 scale-110"
           style={{
@@ -386,12 +453,10 @@ export default function Hero3D() {
             transition: `transform 0.1s ease-out${!bgLoaded ? ", opacity 1.5s ease-out" : ""}`,
           }}
         >
-          {/* Dynamic background frame sequence */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/hero-sequence/frame_${String(bgFrame).padStart(3, '0')}.webp`}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full"
+            style={{ objectFit: 'cover' }}
           />
         </div>
 
