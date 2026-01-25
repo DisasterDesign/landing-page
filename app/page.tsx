@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import NavigationTOC from "./components/NavigationTOC";
 import Header from "./components/Header";
@@ -20,15 +21,29 @@ const Hero3D = dynamic(() => import("./components/Hero3D"), {
   ),
 });
 
+// Dynamic import for TearOverlay (WebGL)
+const TearOverlay = dynamic(() => import("./components/TearOverlay"), {
+  ssr: false,
+});
+
 export default function Home() {
+  const [tearProgress, setTearProgress] = useState(0);
+  const [tearVisible, setTearVisible] = useState(true);
+
   return (
     <main className="relative">
+      {/* Tear effect overlay - above everything */}
+      <TearOverlay progress={tearProgress} visible={tearVisible} />
+
       <GridLines />
       <Header />
       <NavigationTOC />
 
       {/* בית */}
-      <Hero3D />
+      <Hero3D
+        onTearProgressChange={setTearProgress}
+        onTearVisibilityChange={setTearVisible}
+      />
 
       {/* איך זה עובד? */}
       <HowItWorks />
