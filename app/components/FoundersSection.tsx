@@ -245,7 +245,7 @@ export default function FoundersSection() {
           {/* Background Images with Parallax */}
           {/* Bottom layer - 2bar.png */}
           <Image
-            src="/2bar.png"
+            src="/2bar.webp"
             alt=""
             fill
             className="object-cover transition-transform duration-200 ease-out"
@@ -255,7 +255,7 @@ export default function FoundersSection() {
           />
           {/* Middle layer - 1bar.png */}
           <Image
-            src="/1bar.png"
+            src="/1bar.webp"
             alt=""
             fill
             className="object-cover transition-transform duration-200 ease-out"
@@ -265,7 +265,7 @@ export default function FoundersSection() {
           />
           {/* Top layer - 0bar.png with 45% opacity */}
           <Image
-            src="/0bar.png"
+            src="/0bar.webp"
             alt=""
             fill
             className="object-cover transition-transform duration-200 ease-out"
