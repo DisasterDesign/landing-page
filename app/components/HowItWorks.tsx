@@ -301,7 +301,7 @@ export default function HowItWorks() {
         }}
       >
         <Image
-          src="/רקע איך זה עובד.png"
+          src="/how-it-works-bg.webp"
           alt=""
           fill
           className="object-cover"
