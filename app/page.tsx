@@ -1,3 +1,5 @@
+"use client";
+
 import dynamic from "next/dynamic";
 import NavigationTOC from "./components/NavigationTOC";
 import Header from "./components/Header";

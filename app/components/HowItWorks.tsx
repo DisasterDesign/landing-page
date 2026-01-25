@@ -94,9 +94,35 @@ export default function HowItWorks() {
   const [bgOpacity, setBgOpacity] = useState(0);
   const [titleProgress, setTitleProgress] = useState(0);
   const [bottomTextProgress, setBottomTextProgress] = useState(0);
+  const [isTearActive, setIsTearActive] = useState(false); // For positioning during Hero tear
   const containerRef = useRef<HTMLDivElement>(null);
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
+
+  // Track Hero tear state based on scroll
+  useEffect(() => {
+    const heroSection = document.getElementById("hero");
+    if (!heroSection) return;
+
+    const handleScroll = () => {
+      const rect = heroSection.getBoundingClientRect();
+      const heroHeight = heroSection.offsetHeight;
+      const windowHeight = window.innerHeight;
+
+      // Hero scroll progress (0-1)
+      const heroProgress = Math.min(
+        Math.max(-rect.top / (heroHeight - windowHeight), 0),
+        1
+      );
+
+      // Tear is active when Hero is between 20-100% scrolled
+      setIsTearActive(heroProgress > 0.15 && heroProgress < 1);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Initial check
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Mouse parallax effect
   useEffect(() => {
@@ -289,25 +315,21 @@ export default function HowItWorks() {
       ref={sectionRef}
       id="how-it-works"
       className="min-h-screen relative overflow-hidden py-20"
-      style={{ backgroundColor: "#FDF4EB" }}
+      style={{
+        backgroundColor: "#FDF4EB",
+        // During tear: fixed position behind Hero so visible through tear hole
+        ...(isTearActive
+          ? {
+              position: "fixed" as const,
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100vh",
+              zIndex: 1, // Behind Canvas (z-index: 2)
+            }
+          : {}),
+      }}
     >
-      {/* Background with scroll-based opacity and parallax */}
-      <div
-        className="absolute inset-0 pointer-events-none z-0 scale-110"
-        style={{
-          opacity: bgOpacity,
-          transform: `translate(${mousePos.x * -15}px, ${mousePos.y * -15}px) scale(1.1)`,
-          transition: "opacity 0.1s ease-out, transform 0.15s ease-out",
-        }}
-      >
-        <Image
-          src="/how-it-works-bg.webp"
-          alt=""
-          fill
-          className="object-cover"
-        />
-      </div>
-
       {/* Section Title */}
       <div
         className="flex justify-center mb-16 relative z-10"

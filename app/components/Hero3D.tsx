@@ -16,9 +16,6 @@ const DESKTOP_SCROLL_END_FRAME = 120;
 const MOBILE_ENTRANCE_END_FRAME = 40;
 const MOBILE_SCROLL_END_FRAME = 120;
 const MOBILE_BREAKPOINT = 768;
-const TOTAL_BG_FRAMES = 192;
-const ENTRANCE_BG_END_FRAME = 96; // Background frames 1-96 during entrance, 96-192 during scroll
-const BG_SPEED_MULTIPLIER = 1; // Synced with 3D entrance (1 = same speed)
 
 // Dynamic FOV for responsive desktop screens
 // Wider screens (1920px+) → 50 FOV (no zoom out needed)
@@ -187,20 +184,132 @@ function Scene({
   );
 }
 
+// Orange background plane with integrated tear effect
+function OrangeBackground({ tearProgress }: { tearProgress: number }) {
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const smoothedProgress = useRef(0);
+
+  // Update progress with smoothing
+  useFrame(() => {
+    if (materialRef.current) {
+      // Smooth lerp for fluid animation
+      smoothedProgress.current += (tearProgress - smoothedProgress.current) * 0.15;
+      materialRef.current.uniforms.uProgress.value = smoothedProgress.current;
+
+      // Debug log every 60 frames
+      if (Math.random() < 0.02) {
+        console.log('tearProgress:', tearProgress, 'smoothed:', smoothedProgress.current);
+      }
+    }
+  });
+
+  return (
+    <mesh position={[0, 0, -10]}>
+      <planeGeometry args={[100, 100]} />
+      <shaderMaterial
+        ref={materialRef}
+        transparent={true}
+        uniforms={{
+          uProgress: { value: 0 },
+          uTime: { value: 0 },
+        }}
+        vertexShader={`
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `}
+        fragmentShader={`
+          precision mediump float;
+
+          uniform float uProgress;
+          uniform float uTime;
+
+          varying vec2 vUv;
+
+          // Simplex 2D noise
+          vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+
+          float snoise(vec2 v) {
+            const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                                -0.577350269189626, 0.024390243902439);
+            vec2 i  = floor(v + dot(v, C.yy));
+            vec2 x0 = v - i + dot(i, C.xx);
+            vec2 i1;
+            i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec4 x12 = x0.xyxy + C.xxzz;
+            x12.xy -= i1;
+            i = mod(i, 289.0);
+            vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                             + i.x + vec3(0.0, i1.x, 1.0));
+            vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+                                    dot(x12.zw,x12.zw)), 0.0);
+            m = m*m;
+            m = m*m;
+            vec3 x = 2.0 * fract(p * C.www) - 1.0;
+            vec3 h = abs(x) - 0.5;
+            vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox;
+            m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+            vec3 g;
+            g.x = a0.x * x0.x + h.x * x0.y;
+            g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+            return 130.0 * dot(m, g);
+          }
+
+          // Fractal Brownian Motion for organic edges
+          float fbm(vec2 p) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            float frequency = 1.0;
+            for (int i = 0; i < 4; i++) {
+              value += amplitude * snoise(p * frequency);
+              frequency *= 2.0;
+              amplitude *= 0.5;
+            }
+            return value;
+          }
+
+          void main() {
+            vec2 center = vec2(0.5, 0.5);
+            float dist = distance(vUv, center);
+
+            // Add noise for organic tear edges
+            float angle = atan(vUv.y - 0.5, vUv.x - 0.5);
+            float noise = fbm(vec2(angle * 2.0, dist * 3.0)) * 0.08;
+
+            // Radius starts at -0.2 so hole doesn't exist at progress=0
+            // At progress=0: radius=-0.2 (no visible hole)
+            // At progress=1: radius=1.0 (covers full screen diagonal ~0.7)
+            float radius = uProgress * 1.2 - 0.2;
+
+            // Soft edge width
+            float edge = 0.08;
+
+            // alpha = 1 outside the tear (show orange), alpha = 0 inside (reveal section below)
+            float alpha = smoothstep(radius - edge + noise, radius + edge + noise, dist);
+
+            // Orange color
+            vec3 orangeColor = vec3(0.95, 0.45, 0.15);
+
+            gl_FragColor = vec4(orangeColor, alpha);
+          }
+        `}
+      />
+    </mesh>
+  );
+}
+
 // Main Hero component
 export default function Hero3D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [bgLoaded, setBgLoaded] = useState(false);
+  const [tearProgress, setTearProgress] = useState(0);
   const [textLoaded, setTextLoaded] = useState(false);
   const [textColor, setTextColor] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [screenWidth, setScreenWidth] = useState(1920);
-  const [entranceComplete, setEntranceComplete] = useState(false);
-  const [entranceProgress, setEntranceProgress] = useState(0);
-  const entranceProgressRef = useRef(0); // Ref to track current progress for reliable capture
-  const [entranceEndBgFrame, setEntranceEndBgFrame] = useState(ENTRANCE_BG_END_FRAME); // Capture exact frame at transition
   const [borderLoaded, setBorderLoaded] = useState(false); // For animated border
   const [viewportSize, setViewportSize] = useState({ width: 1920, height: 1080 });
 
@@ -217,55 +326,6 @@ export default function Hero3D() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Preload all background sequence frames into array for instant access
-  const framesRef = useRef<HTMLImageElement[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const currentFrameRef = useRef(1);
-
-  useEffect(() => {
-    const frames: HTMLImageElement[] = [];
-    let loadedCount = 0;
-
-    for (let i = 1; i <= TOTAL_BG_FRAMES; i++) {
-      const img = new window.Image();
-      img.src = `/hero-sequence/frame_${String(i).padStart(3, '0')}.webp`;
-      img.onload = () => {
-        loadedCount++;
-        if (loadedCount === TOTAL_BG_FRAMES) {
-          setBgLoaded(true);
-        }
-      };
-      frames[i] = img;
-    }
-    framesRef.current = frames;
-  }, []);
-
-  // Render frame to canvas for smooth animation
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !bgLoaded) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const renderFrame = () => {
-      const frame = framesRef.current[currentFrameRef.current];
-      if (frame && frame.complete) {
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-      }
-    };
-
-    renderFrame();
-  }, [bgLoaded]);
-
-  // Background fade in animation
-  useEffect(() => {
-    const timer = setTimeout(() => setBgLoaded(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Border animation and viewport tracking
   useEffect(() => {
     const updateViewport = () => {
@@ -280,27 +340,6 @@ export default function Hero3D() {
     };
   }, []);
 
-  // Entrance progress animation (synced with 3D entrance)
-  useEffect(() => {
-    if (entranceComplete) return;
-
-    const entranceDuration = (isMobile ? MOBILE_ENTRANCE_END_FRAME : DESKTOP_ENTRANCE_END_FRAME) / FPS * 1000 / BG_SPEED_MULTIPLIER;
-    const startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / entranceDuration, 1);
-      entranceProgressRef.current = progress; // Update ref for reliable capture
-      setEntranceProgress(progress);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [entranceComplete, isMobile]);
-
   // Webz text animation
   useEffect(() => {
     const loadTimer = setTimeout(() => setTextLoaded(true), 200);
@@ -313,7 +352,6 @@ export default function Hero3D() {
 
   // Optimized scroll handler with requestAnimationFrame throttling
   const scrollTicking = useRef(false);
-  const mouseTicking = useRef(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -321,69 +359,35 @@ export default function Hero3D() {
         requestAnimationFrame(() => {
           if (!containerRef.current) return;
           const rect = containerRef.current.getBoundingClientRect();
+          const heroHeight = containerRef.current.offsetHeight;
+          const windowHeight = window.innerHeight;
+
+          // General scroll progress (0-1 over the full hero section)
           const progress = Math.min(
-            Math.max(-rect.top / (containerRef.current.offsetHeight - window.innerHeight), 0),
+            Math.max(-rect.top / (heroHeight - windowHeight), 0),
             1
           );
           setScrollProgress(progress);
+
+          // Tear progress: starts at 20% scroll, completes at 80%
+          // This makes the tear animation slower and more gradual
+          const tearStart = 0.2;
+          const tearEnd = 0.8;
+          const rawTear = (progress - tearStart) / (tearEnd - tearStart);
+          const clampedTear = Math.max(0, Math.min(1, rawTear));
+          setTearProgress(clampedTear);
+
           scrollTicking.current = false;
         });
         scrollTicking.current = true;
       }
     };
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!mouseTicking.current) {
-        requestAnimationFrame(() => {
-          setMousePos({
-            x: (e.clientX / window.innerWidth - 0.5) * 2,
-            y: (e.clientY / window.innerHeight - 0.5) * 2,
-          });
-          mouseTicking.current = false;
-        });
-        mouseTicking.current = true;
-      }
-    };
-
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("mousemove", handleMouseMove);
-    };
+    handleScroll(); // Initial check
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Calculate current background frame and render to canvas
-  const bgFrame = (() => {
-    let frame: number;
-    if (!entranceComplete) {
-      frame = 1 + Math.floor(entranceProgress * (ENTRANCE_BG_END_FRAME - 1));
-    } else {
-      frame = entranceEndBgFrame + Math.floor(scrollProgress * (TOTAL_BG_FRAMES - entranceEndBgFrame));
-    }
-    return Math.min(Math.max(1, frame), TOTAL_BG_FRAMES);
-  })();
-
-  // Render frame to canvas when bgFrame changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !bgLoaded) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const frame = framesRef.current[bgFrame];
-    if (frame && frame.complete) {
-      currentFrameRef.current = bgFrame;
-      // Set canvas size to match container
-      const rect = canvas.getBoundingClientRect();
-      if (canvas.width !== rect.width || canvas.height !== rect.height) {
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-      }
-      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-    }
-  }, [bgFrame, bgLoaded]);
 
   return (
     <section
@@ -391,7 +395,7 @@ export default function Hero3D() {
       ref={containerRef}
       className="h-[300vh] relative"
     >
-      <div className="sticky top-0 h-screen overflow-hidden">
+      <div className="sticky top-0 h-screen overflow-hidden z-[5]">
         {/* Animated Border */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none z-[4]"
@@ -441,29 +445,12 @@ export default function Hero3D() {
           />
         </svg>
 
-        {/* Site background base - revealed as hero image fades */}
-        <div className="absolute inset-0 bg-[#FDF4EB]" />
-
-        {/* Background Sequence with Parallax - Canvas-based for smooth animation */}
-        <div
-          className="absolute inset-0 scale-110"
-          style={{
-            transform: `translate(${mousePos.x * -20}px, ${mousePos.y * -20 + scrollProgress * -100}px) scale(1.1)`,
-            opacity: bgLoaded ? (scrollProgress < 0.85 ? 1 : Math.max(0, 1 - (scrollProgress - 0.85) * 6.67)) : 0,
-            transition: `transform 0.1s ease-out${!bgLoaded ? ", opacity 1.5s ease-out" : ""}`,
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full"
-            style={{ objectFit: 'cover' }}
-          />
-        </div>
+        {/* Transparent - HowItWorks section is visible through the tear */}
 
         {/* Noise Particles - above background */}
         <NoiseParticles />
 
-        {/* 3D Canvas */}
+        {/* 3D Canvas with integrated tear effect */}
         <Canvas
           camera={{
             position: isMobile ? [0, -2, 10] : [-2, 0, 10],
@@ -471,18 +458,13 @@ export default function Hero3D() {
           }}
           className="absolute inset-0 z-[2]"
           gl={{ alpha: true, antialias: true }}
-          style={{ background: "transparent" }}
         >
           <Suspense fallback={null}>
+            <OrangeBackground tearProgress={tearProgress} />
             <Scene
               scrollProgress={scrollProgress}
               isMobile={isMobile}
-              onEntranceComplete={() => {
-                // Capture the exact background frame at transition to prevent jump (use ref for reliable value)
-                const currentBgFrame = Math.max(1, Math.floor(entranceProgressRef.current * ENTRANCE_BG_END_FRAME));
-                setEntranceEndBgFrame(currentBgFrame);
-                setEntranceComplete(true);
-              }}
+              onEntranceComplete={() => {}}
             />
           </Suspense>
         </Canvas>
