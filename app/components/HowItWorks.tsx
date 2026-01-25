@@ -267,7 +267,7 @@ export default function HowItWorks() {
     const dragTimer = setTimeout(() => {
       setIsDragging(true);
       setCursorPosition({ x: element.x, y: element.y });
-      setPlacedElements((prev) => new Set([...prev, elementIndex]));
+      setPlacedElements((prev) => new Set([...Array.from(prev), elementIndex]));
     }, CURSOR_MOVE_DURATION + PAUSE_BETWEEN_ELEMENTS);
 
     // Step 3: Move to next element
