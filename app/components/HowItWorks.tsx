@@ -90,8 +90,6 @@ export default function HowItWorks() {
   const [isDragging, setIsDragging] = useState(false);
   const [currentAnimationIndex, setCurrentAnimationIndex] = useState(-1); // -1 = not started
   const [scale, setScale] = useState(1);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [bgOpacity, setBgOpacity] = useState(0);
   const [titleProgress, setTitleProgress] = useState(0);
   const [bottomTextProgress, setBottomTextProgress] = useState(0);
   const [isTearActive, setIsTearActive] = useState(false); // For positioning during Hero tear
@@ -124,19 +122,7 @@ export default function HowItWorks() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Mouse parallax effect
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({
-        x: (e.clientX / window.innerWidth) * 2 - 1,
-        y: (e.clientY / window.innerHeight) * 2 - 1,
-      });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  // Scroll-based animations for background, title, and bottom text
+  // Scroll-based animations for title and bottom text
   useEffect(() => {
     const handleScroll = () => {
       if (!sectionRef.current) return;
@@ -144,30 +130,12 @@ export default function HowItWorks() {
       const rect = sectionRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
 
-      let bgOp = 0;
       let titleProg = 0;
       let bottomProg = 0;
 
       // Section is in viewport
       if (rect.top < windowHeight && rect.bottom > 0) {
-        // === Background opacity ===
-        const entryStart = windowHeight * 0.5;
-        const entryEnd = windowHeight * 0.2;
-        const entryProgress = rect.top < entryStart
-          ? Math.min(1, (entryStart - rect.top) / (entryStart - entryEnd))
-          : 0;
-
-        const exitStart = windowHeight * 0.6;
-        const exitEnd = windowHeight * 0.2;
-        const exitProgress = rect.bottom > exitStart
-          ? 1
-          : rect.bottom < exitEnd
-            ? 0
-            : (rect.bottom - exitEnd) / (exitStart - exitEnd);
-
-        bgOp = Math.min(entryProgress, exitProgress);
-
-        // === Title animation (top) - same as background but slightly earlier ===
+        // === Title animation ===
         const titleEntryStart = windowHeight * 0.6;
         const titleEntryEnd = windowHeight * 0.3;
         const titleEntry = rect.top < titleEntryStart
@@ -184,11 +152,24 @@ export default function HowItWorks() {
 
         titleProg = Math.min(titleEntry, titleExit);
 
-        // === Bottom text animation - same as background ===
-        bottomProg = bgOp;
+        // === Bottom text animation ===
+        const entryStart = windowHeight * 0.5;
+        const entryEnd = windowHeight * 0.2;
+        const entryProgress = rect.top < entryStart
+          ? Math.min(1, (entryStart - rect.top) / (entryStart - entryEnd))
+          : 0;
+
+        const exitStart = windowHeight * 0.6;
+        const exitEnd = windowHeight * 0.2;
+        const exitProgress = rect.bottom > exitStart
+          ? 1
+          : rect.bottom < exitEnd
+            ? 0
+            : (rect.bottom - exitEnd) / (exitStart - exitEnd);
+
+        bottomProg = Math.min(entryProgress, exitProgress);
       }
 
-      setBgOpacity(bgOp);
       setTitleProgress(titleProg);
       setBottomTextProgress(bottomProg);
     };
