@@ -51,10 +51,12 @@ function TearPlane({ progress }: { progress: number }) {
             vec2 center = vec2(0.5, 0.5);
             float dist = distance(vUv, center);
 
-            // Radius grows with progress
-            float radius = uProgress * 1.2;
+            // Radius starts negative so hole doesn't exist at progress=0
+            // progress=0 → radius=-0.2 → no visible hole
+            // progress=1 → radius=1.0 → hole covers screen
+            float radius = uProgress * 1.2 - 0.2;
 
-            // alpha = 0 inside hole, alpha = 1 outside
+            // alpha = 1 outside (orange visible), alpha = 0 inside (hole/transparent)
             float alpha = smoothstep(radius, radius + 0.05, dist);
 
             // Orange color
