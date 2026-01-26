@@ -574,8 +574,8 @@ function AnimatedAtoms({ introProgress, scrollProgress }: AnimatedAtomsProps) {
 function WhiteFlash({ scrollProgress }: { scrollProgress: number }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
-  // Frame 180-200 maps to scrollProgress 0.6-1.0 (20 frames)
-  const FLASH_START = 0.6;
+  // Flash spans most of the scroll for dramatic buildup
+  const FLASH_START = 0.25;
   const FLASH_END = 1.0;
 
   const uniforms = useMemo(() => ({
@@ -901,12 +901,23 @@ export default function CosmicHero({ onScrollProgress }: CosmicHeroProps) {
       className="h-[215vh] relative"
     >
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* Cosmic Canvas - hidden during tear transition (keep mounted for performance) */}
+        {/* White flash overlay - CSS version to bridge canvas hiding (above tear overlay) */}
+        {scrollProgress > 0.25 && tearProgress > 0 && tearProgress < 0.4 && (
+          <div
+            className="fixed inset-0 bg-white pointer-events-none"
+            style={{
+              zIndex: 250,
+              opacity: Math.min(1, (scrollProgress - 0.25) / 0.75) * (1 - tearProgress / 0.4),
+            }}
+          />
+        )}
+
+        {/* Cosmic Canvas - hidden during tear transition (show slightly early for smooth transition back) */}
         <div
           className="absolute inset-0"
           style={{
-            visibility: tearProgress === 0 ? 'visible' : 'hidden',
-            pointerEvents: tearProgress === 0 ? 'auto' : 'none'
+            visibility: tearProgress < 0.02 ? 'visible' : 'hidden',
+            pointerEvents: tearProgress < 0.02 ? 'auto' : 'none'
           }}
         >
           <Canvas
