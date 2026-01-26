@@ -231,7 +231,7 @@ export default function Contact() {
     <section
       ref={sectionRef}
       id="contact"
-      className="min-h-screen relative overflow-hidden py-20 bg-[#FDF4EB]"
+      className="min-h-screen relative overflow-hidden py-20 bg-[#080520]"
     >
       {/* Wave layers with waterfall animation and parallax */}
       <WaveLayers isVisible={isVisible} />
@@ -299,7 +299,7 @@ export default function Contact() {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-4 py-4 bg-transparent border-b-2 border-[#1E1E1E]/20 text-[#1E1E1E] text-right text-lg outline-none transition-all duration-300 focus:border-[#F37021] placeholder:text-[#1E1E1E]/40"
+                className="w-full px-4 py-4 bg-transparent border-b-2 border-white/20 text-white text-right text-lg outline-none transition-all duration-300 focus:border-[#F37021] placeholder:text-white/40"
                 placeholder="מה השם שלך?"
               />
             </div>
@@ -319,7 +319,7 @@ export default function Contact() {
                 value={formData.message}
                 onChange={handleChange}
                 rows={5}
-                className="w-full px-4 py-4 bg-transparent border-b-2 border-[#1E1E1E]/20 text-[#1E1E1E] text-right text-lg outline-none transition-all duration-300 focus:border-[#F37021] placeholder:text-[#1E1E1E]/40 resize-none"
+                className="w-full px-4 py-4 bg-transparent border-b-2 border-white/20 text-white text-right text-lg outline-none transition-all duration-300 focus:border-[#F37021] placeholder:text-white/40 resize-none"
                 placeholder="ספר לנו הכל..."
               />
             </div>

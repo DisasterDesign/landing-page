@@ -12,15 +12,18 @@ interface WireframeElement {
   width: number;
   height: number;
   hasShadow?: boolean;
+  whiteShadow?: boolean;
+  backgroundColor?: string;
+  invertColors?: boolean;
 }
 
 // Final positions for all elements (navbar items scaled to 70%, evenly spaced with 30px gaps)
 const elements: WireframeElement[] = [
   // Navbar items - scaled to 70% with even 30px spacing
-  { id: "about", src: "/section 2/About.svg", x: 436, y: 32, width: 39, height: 11 },
-  { id: "projects", src: "/section 2/Projects.svg", x: 505, y: 32, width: 52, height: 12 },
-  { id: "members", src: "/section 2/Our Members.svg", x: 587, y: 32, width: 87, height: 11 },
-  { id: "contact", src: "/section 2/Contact.svg", x: 704, y: 32, width: 50, height: 11 },
+  { id: "about", src: "/section 2/About.svg", x: 436, y: 32, width: 39, height: 11, invertColors: true },
+  { id: "projects", src: "/section 2/Projects.svg", x: 505, y: 32, width: 52, height: 12, invertColors: true },
+  { id: "members", src: "/section 2/Our Members.svg", x: 587, y: 32, width: 87, height: 11, invertColors: true },
+  { id: "contact", src: "/section 2/Contact.svg", x: 704, y: 32, width: 50, height: 11, invertColors: true },
   // CTA button - right side (75% of 164x50 = 123x38) with shadow
   { id: "letsTalk", src: "/section 2/cta.svg", x: 1047, y: 20, width: 123, height: 38, hasShadow: true },
 
@@ -30,7 +33,7 @@ const elements: WireframeElement[] = [
   { id: "titleReality", src: "/section 2/reality.svg", x: 80, y: 437, width: 193, height: 62 },
 
   // CTA button - centered horizontally, lower position
-  { id: "makeIt", src: "/section 2/make it.svg", x: 499, y: 600, width: 192, height: 62, hasShadow: true },
+  { id: "makeIt", src: "/section 2/make it.svg", x: 499, y: 600, width: 192, height: 62, whiteShadow: true },
 ];
 
 // Animation timing (30% faster)
@@ -97,45 +100,34 @@ export default function HowItWorks() {
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
 
-  // Track Hero tear state based on scroll
+  // Combined scroll handler for tear state and text animations
   useEffect(() => {
-    const heroSection = document.getElementById("hero");
-    if (!heroSection) return;
-
     const handleScroll = () => {
-      const rect = heroSection.getBoundingClientRect();
-      const heroHeight = heroSection.offsetHeight;
       const windowHeight = window.innerHeight;
 
-      // Hero scroll progress (0-1)
-      const heroProgress = Math.min(
-        Math.max(-rect.top / (heroHeight - windowHeight), 0),
-        1
-      );
+      // === Hero tear tracking ===
+      const heroSection = document.getElementById("hero");
+      if (heroSection) {
+        const heroRect = heroSection.getBoundingClientRect();
+        const heroHeight = heroSection.offsetHeight;
+        const heroProgress = Math.min(
+          Math.max(-heroRect.top / (heroHeight - windowHeight), 0),
+          1
+        );
+        // Tear is active when Hero is between 80-100% scrolled
+        setIsTearActive(heroProgress > 0.80 && heroProgress < 1);
+      }
 
-      // Tear is active when Hero is between 20-100% scrolled
-      setIsTearActive(heroProgress > 0.15 && heroProgress < 1);
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Initial check
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Scroll-based animations for title and bottom text
-  useEffect(() => {
-    const handleScroll = () => {
+      // === Title and bottom text animations ===
       if (!sectionRef.current) return;
 
       const rect = sectionRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-
       let titleProg = 0;
       let bottomProg = 0;
 
       // Section is in viewport
       if (rect.top < windowHeight && rect.bottom > 0) {
-        // === Title animation ===
+        // Title animation
         const titleEntryStart = windowHeight * 0.6;
         const titleEntryEnd = windowHeight * 0.3;
         const titleEntry = rect.top < titleEntryStart
@@ -152,7 +144,7 @@ export default function HowItWorks() {
 
         titleProg = Math.min(titleEntry, titleExit);
 
-        // === Bottom text animation ===
+        // Bottom text animation
         const entryStart = windowHeight * 0.5;
         const entryEnd = windowHeight * 0.2;
         const entryProgress = rect.top < entryStart
@@ -174,7 +166,7 @@ export default function HowItWorks() {
       setBottomTextProgress(bottomProg);
     };
 
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll(); // Initial call
 
     return () => window.removeEventListener("scroll", handleScroll);
@@ -297,8 +289,8 @@ export default function HowItWorks() {
       id="how-it-works"
       className="min-h-screen relative overflow-hidden py-20"
       style={{
-        backgroundColor: "#FDF4EB",
-        // During tear: fixed position behind Hero so visible through tear hole
+        backgroundColor: "#080520",
+        // During tear: fixed position visible through tear hole
         ...(isTearActive
           ? {
               position: "fixed" as const,
@@ -306,18 +298,27 @@ export default function HowItWorks() {
               left: 0,
               width: "100%",
               height: "100vh",
-              zIndex: 1, // Behind Canvas (z-index: 2)
+              zIndex: 150, // Above hero content, below tear overlay (z-index: 200)
             }
           : {}),
       }}
     >
+      {/* Concrete texture overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          opacity: 0.03,
+          mixBlendMode: "multiply",
+        }}
+      />
       {/* Section Title */}
       <div
         className="flex justify-center mb-16 relative z-10"
         style={{
-          opacity: titleProgress,
+          opacity: isTearActive ? 0 : titleProgress,
           transform: `translateY(${(1 - titleProgress) * -30}px)`,
-          transition: "transform 0.1s ease-out",
+          transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
         <Image
@@ -328,6 +329,7 @@ export default function HowItWorks() {
           style={{
             width: "clamp(280px, 30vw, 456px)",
             height: "auto",
+            filter: "brightness(0) invert(1)",
           }}
           priority
         />
@@ -340,6 +342,8 @@ export default function HowItWorks() {
         style={{
           width: "min(81vw, 1190px)",
           height: FRAME_HEIGHT * scale,
+          opacity: isTearActive ? 0 : 1,
+          transition: "opacity 0.2s ease-out",
         }}
       >
         {/* Inner Container - fixed size, scaled down, centered */}
@@ -351,8 +355,11 @@ export default function HowItWorks() {
             height: FRAME_HEIGHT,
             transform: `translateX(-50%) scale(${scale})`,
             transformOrigin: "top center",
-            backgroundColor: "#FDF4EB",
-            boxShadow: borderComplete ? "0 8px 25px rgba(31, 31, 31, 0.15)" : "none",
+            backgroundColor: "#080520",
+            borderRadius: "24px",
+            boxShadow: borderComplete
+              ? "0 0 60px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)"
+              : "none",
             transition: "box-shadow 0.8s ease-out",
           }}
         >
@@ -366,8 +373,10 @@ export default function HowItWorks() {
               y="0.5"
               width={FRAME_WIDTH - 1}
               height={FRAME_HEIGHT - 1}
+              rx="24"
+              ry="24"
               fill="none"
-              stroke="rgba(31, 31, 31, 0.2)"
+              stroke="rgba(31, 31, 31, 0.15)"
               strokeWidth="1"
               style={{
                 strokeDasharray: perimeter,
@@ -399,10 +408,15 @@ export default function HowItWorks() {
                   height: el.height,
                   opacity: isElementVisible ? 1 : 0,
                   transform: `rotate(${rotation}deg)`,
-                  transition: `opacity 0.6s ease-out, left ${DRAG_DURATION}ms ease-out, top ${DRAG_DURATION}ms ease-out, transform ${DRAG_DURATION}ms ease-out`,
-                  filter: el.hasShadow && isElementVisible
-                    ? "drop-shadow(0 2px 2px rgba(31, 31, 31, 0.15))"
+                  transition: `opacity 0.6s ease-out, left ${DRAG_DURATION}ms ease-out, top ${DRAG_DURATION}ms ease-out, transform ${DRAG_DURATION}ms ease-out, filter 0.5s ease-out`,
+                  filter: el.whiteShadow && isPlaced
+                    ? "drop-shadow(0 0 20px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 40px rgba(255, 255, 255, 0.3))"
+                    : el.hasShadow && isElementVisible
+                    ? "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))"
                     : "none",
+                  backgroundColor: el.backgroundColor,
+                  borderRadius: el.backgroundColor ? "8px" : undefined,
+                  padding: el.backgroundColor ? "12px 24px" : undefined,
                 }}
               >
                 <Image
@@ -411,6 +425,9 @@ export default function HowItWorks() {
                   width={el.width}
                   height={el.height}
                   className="pointer-events-none"
+                  style={{
+                    filter: el.invertColors ? "brightness(0) invert(1)" : undefined,
+                  }}
                   priority
                   unoptimized
                 />
@@ -438,9 +455,9 @@ export default function HowItWorks() {
       <div
         className="flex justify-center mt-12 px-4 relative z-10"
         style={{
-          opacity: bottomTextProgress,
+          opacity: isTearActive ? 0 : bottomTextProgress,
           transform: `translateY(${(1 - bottomTextProgress) * 30}px)`,
-          transition: "transform 0.1s ease-out",
+          transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
         <Image
@@ -451,6 +468,7 @@ export default function HowItWorks() {
           style={{
             width: "clamp(220px, 28vw, 311px)",
             height: "auto",
+            filter: "brightness(0) invert(1)",
           }}
         />
       </div>

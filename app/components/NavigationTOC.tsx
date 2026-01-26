@@ -26,6 +26,7 @@ export default function NavigationTOC() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showText, setShowText] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  // Always white text - all sections are dark
   const navRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
@@ -36,16 +37,18 @@ export default function NavigationTOC() {
       setIsLoaded(true);
     }, 100);
 
-    // Show text after border animation (1.2s)
+    // Show text after Big Bang entrance animation completes
+    // Animation: 300ms delay + 2500ms circle + 300ms lines + 800ms explosion = ~3500ms
     const textTimer = setTimeout(() => {
       setShowText(true);
-    }, 1300);
+    }, 3600);
 
     return () => {
       clearTimeout(loadTimer);
       clearTimeout(textTimer);
     };
   }, []);
+
 
   // Get nav dimensions for SVG
   useEffect(() => {
@@ -133,8 +136,9 @@ export default function NavigationTOC() {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Border visibility: show after load, hide on scroll
-  const showBorder = isLoaded && !isScrolled;
+  // Always white text - all sections are dark
+  const textColor = "#ffffff";
+  const svgFilter = "brightness(0) invert(1)";
 
   return (
     <nav
@@ -145,69 +149,6 @@ export default function NavigationTOC() {
           : "left-1/2 -translate-x-1/2 top-[15%]"
       }`}
     >
-      {/* Animated SVG Border - 4 separate edges */}
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ overflow: "visible" }}
-      >
-        {/* Top edge */}
-        <line
-          x1="0"
-          y1="0.5"
-          x2={dimensions.width || "100%"}
-          y2="0.5"
-          stroke="rgba(31,31,31,0.3)"
-          strokeWidth="1"
-          style={{
-            strokeDasharray: dimensions.width || 200,
-            strokeDashoffset: showBorder ? 0 : dimensions.width || 200,
-            transition: `stroke-dashoffset ${isScrolled ? '0.5s' : '1.2s'} ease-out`,
-          }}
-        />
-        {/* Right edge */}
-        <line
-          x1={dimensions.width ? dimensions.width - 0.5 : "100%"}
-          y1="0"
-          x2={dimensions.width ? dimensions.width - 0.5 : "100%"}
-          y2={dimensions.height || "100%"}
-          stroke="rgba(31,31,31,0.3)"
-          strokeWidth="1"
-          style={{
-            strokeDasharray: dimensions.height || 300,
-            strokeDashoffset: showBorder ? 0 : dimensions.height || 300,
-            transition: `stroke-dashoffset ${isScrolled ? '0.5s' : '1.2s'} ease-out`,
-          }}
-        />
-        {/* Bottom edge */}
-        <line
-          x1={dimensions.width || "100%"}
-          y1={dimensions.height ? dimensions.height - 0.5 : "100%"}
-          x2="0"
-          y2={dimensions.height ? dimensions.height - 0.5 : "100%"}
-          stroke="rgba(31,31,31,0.3)"
-          strokeWidth="1"
-          style={{
-            strokeDasharray: dimensions.width || 200,
-            strokeDashoffset: showBorder ? 0 : dimensions.width || 200,
-            transition: `stroke-dashoffset ${isScrolled ? '0.5s' : '1.2s'} ease-out`,
-          }}
-        />
-        {/* Left edge */}
-        <line
-          x1="0.5"
-          y1={dimensions.height || "100%"}
-          x2="0.5"
-          y2="0"
-          stroke="rgba(31,31,31,0.3)"
-          strokeWidth="1"
-          style={{
-            strokeDasharray: dimensions.height || 300,
-            strokeDashoffset: showBorder ? 0 : dimensions.height || 300,
-            transition: `stroke-dashoffset ${isScrolled ? '0.5s' : '1.2s'} ease-out`,
-          }}
-        />
-      </svg>
-
       {/* Content */}
       <ul className="flex flex-col gap-3 relative min-w-[290px]">
         {sections.map(({ id, label, numeral, svg, width, height }, index) => {
@@ -232,13 +173,16 @@ export default function NavigationTOC() {
               <button
                 onClick={() => scrollToSection(id)}
                 dir="ltr"
-                className={`flex items-center justify-between w-full transition-all duration-300 ${
+                className={`flex items-center justify-between w-full transition-all duration-500 ${
                   isActive
                     ? "opacity-100"
                     : "opacity-50 hover:opacity-80"
                 }`}
               >
-                <span className={`font-light text-[#1F1F1F] ${isActive ? "text-sm" : "text-xs"}`}>
+                <span
+                  className={`font-light transition-colors duration-500 ${isActive ? "text-sm" : "text-xs"}`}
+                  style={{ color: textColor }}
+                >
                   {numeral}
                 </span>
                 {svg ? (
@@ -247,16 +191,17 @@ export default function NavigationTOC() {
                     alt={label}
                     width={Math.round(width * scale)}
                     height={Math.round(height * scale)}
-                    className="transition-all duration-300"
+                    className="transition-all duration-500"
                     style={{
                       width: Math.round(width * scale),
                       height: "auto",
+                      filter: svgFilter,
                     }}
                   />
                 ) : (
                   <span
-                    className="text-right text-[#1F1F1F]"
-                    style={{ fontSize: isActive ? "1.5rem" : "1rem" }}
+                    className="text-right transition-colors duration-500"
+                    style={{ fontSize: isActive ? "1.5rem" : "1rem", color: textColor }}
                   >
                     {label}
                   </span>
