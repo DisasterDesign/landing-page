@@ -51,9 +51,11 @@ export default function Header() {
       </a>
 
       {/* Logo - white over dark sections, dark otherwise */}
-      <img
+      <Image
         src="/logo.svg"
         alt="Logo"
+        width={120}
+        height={40}
         className="h-10 w-auto transition-all duration-500"
         style={{
           opacity: isLoaded ? 1 : 0,
