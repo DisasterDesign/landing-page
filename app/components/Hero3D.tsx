@@ -197,7 +197,6 @@ export default function Hero3D({
 }: Hero3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [tearProgress, setTearProgress] = useState(0);
   const [textLoaded, setTextLoaded] = useState(false);
   const [textColor, setTextColor] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -267,7 +266,6 @@ export default function Hero3D({
           const tearEnd = 0.8;
           const rawTear = (progress - tearStart) / (tearEnd - tearStart);
           const clampedTear = Math.max(0, Math.min(1, rawTear));
-          setTearProgress(clampedTear);
 
           // Notify parent of tear progress
           onTearProgressChange?.(clampedTear);

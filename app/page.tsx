@@ -21,7 +21,7 @@ const CosmicHero = dynamic(() => import("./components/CosmicHero"), {
 });
 
 export default function Home() {
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const [, setScrollProgress] = useState(0);
 
   return (
     <main className="relative">

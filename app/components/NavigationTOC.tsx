@@ -16,27 +16,16 @@ const sections = [
 // Scale factor for menu items - smaller for cleaner look
 const MENU_SCALE = 0.2;
 
-// Minimum content width based on largest SVG (השירותים: 960px * 0.26 ≈ 250px)
-// + numeral (~25px) + gap (~12px) = ~287px, rounded up to 290px
-const MIN_CONTENT_WIDTH = 290;
-
 export default function NavigationTOC() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
-  const [isLoaded, setIsLoaded] = useState(false);
   const [showText, setShowText] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   // Always white text - all sections are dark
   const navRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   // Entrance animation timing
   useEffect(() => {
-    // Small delay to ensure component is mounted
-    const loadTimer = setTimeout(() => {
-      setIsLoaded(true);
-    }, 100);
-
     // Show text after Big Bang entrance animation completes
     // Animation: 300ms delay + 2500ms circle + 300ms lines + 800ms explosion = ~3500ms
     const textTimer = setTimeout(() => {
@@ -44,35 +33,11 @@ export default function NavigationTOC() {
     }, 3600);
 
     return () => {
-      clearTimeout(loadTimer);
       clearTimeout(textTimer);
     };
   }, []);
 
 
-  // Get nav dimensions for SVG
-  useEffect(() => {
-    if (navRef.current) {
-      const updateDimensions = () => {
-        if (navRef.current) {
-          setDimensions({
-            width: Math.max(navRef.current.offsetWidth, MIN_CONTENT_WIDTH + 32), // +32 for p-4 padding
-            height: navRef.current.offsetHeight,
-          });
-        }
-      };
-
-      // Delayed initial update to allow SVGs to load
-      const timer = setTimeout(updateDimensions, 100);
-      updateDimensions();
-
-      window.addEventListener("resize", updateDimensions);
-      return () => {
-        window.removeEventListener("resize", updateDimensions);
-        clearTimeout(timer);
-      };
-    }
-  }, [showText]);
 
   // Scroll-based position change - detect when past hero section
   useEffect(() => {

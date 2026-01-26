@@ -3,8 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 
+// Logo type
+type Logo = {
+  id: number;
+  name: string;
+  src: string;
+  projectImage: string;
+};
+
 // Placeholder logo data with project images
-const logos = [
+const logos: Logo[] = [
   { id: 1, name: "Client 1", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
   { id: 2, name: "Client 2", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
   { id: 3, name: "Client 3", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
@@ -36,8 +44,8 @@ function LogoItem({
   logo,
   onHover,
 }: {
-  logo: (typeof logos)[0];
-  onHover: (logo: (typeof logos)[0] | null) => void;
+  logo: Logo;
+  onHover: (logo: Logo | null) => void;
 }) {
   return (
     <div
@@ -61,10 +69,10 @@ function LogoBar({
   direction = "left",
   onLogoHover,
 }: {
-  logos: (typeof logos);
+  logos: Logo[];
   className?: string;
   direction?: "left" | "right";
-  onLogoHover: (logo: (typeof logos)[0] | null) => void;
+  onLogoHover: (logo: Logo | null) => void;
 }) {
   const animationClass = direction === "left" ? "animate-marquee-left" : "animate-marquee-right";
 
@@ -136,7 +144,7 @@ function FounderPhoto({
 
 // Main Section Component
 export default function FoundersSection() {
-  const [hoveredLogo, setHoveredLogo] = useState<(typeof logos)[0] | null>(null);
+  const [hoveredLogo, setHoveredLogo] = useState<Logo | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
