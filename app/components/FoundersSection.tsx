@@ -171,7 +171,6 @@ export default function FoundersSection() {
       ref={sectionRef}
       id="about-us"
       className="relative min-h-screen py-20"
-      style={{ backgroundColor: "#080520" }}
     >
       {/* Section Title */}
       <div

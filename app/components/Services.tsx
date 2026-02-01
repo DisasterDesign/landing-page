@@ -5,7 +5,6 @@ export default function Services() {
     <section
       id="services"
       className="min-h-screen relative overflow-hidden py-20"
-      style={{ backgroundColor: "#080520" }}
     >
       {/* Section Title */}
       <div className="flex justify-center mb-16">

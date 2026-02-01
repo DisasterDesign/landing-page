@@ -231,7 +231,7 @@ export default function Contact() {
     <section
       ref={sectionRef}
       id="contact"
-      className="min-h-screen relative overflow-hidden py-20 bg-[#080520]"
+      className="min-h-screen relative overflow-hidden py-20"
     >
       {/* Wave layers with waterfall animation and parallax */}
       <WaveLayers isVisible={isVisible} />

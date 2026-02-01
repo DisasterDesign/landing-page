@@ -95,7 +95,6 @@ export default function HowItWorks() {
   const [scale, setScale] = useState(1);
   const [titleProgress, setTitleProgress] = useState(0);
   const [bottomTextProgress, setBottomTextProgress] = useState(0);
-  const [isTearActive, setIsTearActive] = useState(false); // For positioning during Hero tear
   const containerRef = useRef<HTMLDivElement>(null);
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -104,19 +103,6 @@ export default function HowItWorks() {
   useEffect(() => {
     const handleScroll = () => {
       const windowHeight = window.innerHeight;
-
-      // === Hero tear tracking ===
-      const heroSection = document.getElementById("hero");
-      if (heroSection) {
-        const heroRect = heroSection.getBoundingClientRect();
-        const heroHeight = heroSection.offsetHeight;
-        const heroProgress = Math.min(
-          Math.max(-heroRect.top / (heroHeight - windowHeight), 0),
-          1
-        );
-        // Tear is active when Hero is between 80-100% scrolled
-        setIsTearActive(heroProgress > 0.80 && heroProgress < 1);
-      }
 
       // === Title and bottom text animations ===
       if (!sectionRef.current) return;
@@ -288,20 +274,6 @@ export default function HowItWorks() {
       ref={sectionRef}
       id="how-it-works"
       className="min-h-screen relative overflow-hidden py-20"
-      style={{
-        backgroundColor: "#080520",
-        // During tear: fixed position visible through tear hole
-        ...(isTearActive
-          ? {
-              position: "fixed" as const,
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100vh",
-              zIndex: 150, // Above hero content, below tear overlay (z-index: 200)
-            }
-          : {}),
-      }}
     >
       {/* Concrete texture overlay */}
       <div
@@ -316,7 +288,7 @@ export default function HowItWorks() {
       <div
         className="flex justify-center mb-16 relative z-10"
         style={{
-          opacity: isTearActive ? 0 : titleProgress,
+          opacity: titleProgress,
           transform: `translateY(${(1 - titleProgress) * -30}px)`,
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
@@ -342,7 +314,7 @@ export default function HowItWorks() {
         style={{
           width: "min(81vw, 1190px)",
           height: FRAME_HEIGHT * scale,
-          opacity: isTearActive ? 0 : 1,
+          opacity: 1,
           transition: "opacity 0.2s ease-out",
         }}
       >
@@ -455,7 +427,7 @@ export default function HowItWorks() {
       <div
         className="flex justify-center mt-12 px-4 relative z-10"
         style={{
-          opacity: isTearActive ? 0 : bottomTextProgress,
+          opacity: bottomTextProgress,
           transform: `translateY(${(1 - bottomTextProgress) * 30}px)`,
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}

@@ -9,6 +9,7 @@ import FoundersSection from "./components/FoundersSection";
 import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Contact from "./components/Contact";
+import CosmicFixedBackground from "./components/CosmicFixedBackground";
 
 // Dynamic import for CosmicHero (cosmic space environment)
 const CosmicHero = dynamic(() => import("./components/CosmicHero"), {
@@ -25,6 +26,9 @@ export default function Home() {
 
   return (
     <main className="relative">
+      {/* Fixed cosmic background for entire site */}
+      <CosmicFixedBackground />
+
       <Header />
       <NavigationTOC />
 
