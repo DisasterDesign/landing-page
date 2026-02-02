@@ -855,8 +855,7 @@ function Scene({ introProgress, scrollProgress }: { introProgress: number; scrol
 
       {/* Glass spheres with depth and parallax */}
       <GlassSpheres mouseTarget={mouseTargetRef.current} introProgress={introProgress} scrollProgress={scrollProgress} />
-
-          </>
+    </>
   );
 }
 
