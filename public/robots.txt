@@ -1,0 +1,6 @@
+# Fuzion Webz Robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://fuzionwebz.com/sitemap.xml
