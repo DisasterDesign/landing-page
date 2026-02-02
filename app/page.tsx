@@ -15,7 +15,7 @@ import CosmicFixedBackground from "./components/CosmicFixedBackground";
 const CosmicHero = dynamic(() => import("./components/CosmicHero"), {
   ssr: false,
   loading: () => (
-    <section className="h-screen flex items-center justify-center bg-[#000510]">
+    <section className="h-screen flex items-center justify-center">
       <div className="text-2xl text-white/30">Loading...</div>
     </section>
   ),

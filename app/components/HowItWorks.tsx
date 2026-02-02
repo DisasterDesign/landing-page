@@ -1,7 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useGLTF, Environment } from "@react-three/drei";
+import * as THREE from "three";
 
 // Wireframe element definitions with actual SVG sizes
 interface WireframeElement {
@@ -67,6 +70,79 @@ function generateScatteredPositions(): ScatteredPosition[] {
   }));
 }
 
+// ============================================
+// ASTRONAUT 3D - Enters from depth on scroll
+// ============================================
+function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const { scene } = useGLTF("/v10.glb");
+  const scrollRef = useRef(scrollProgress);
+
+  // Update ref when prop changes
+  scrollRef.current = scrollProgress;
+
+  useFrame((state) => {
+    if (!groupRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    // Get latest scroll progress from ref
+    const currentScroll = scrollRef.current;
+
+    // Animation: astronaut enters from very far back
+    // Starts at 0% scroll, completes at 50%
+    const enterStart = 0.0;
+    const enterEnd = 0.5;
+    const progress = currentScroll < enterStart ? 0 :
+      Math.min(1, (currentScroll - enterStart) / (enterEnd - enterStart));
+
+    // Ease out cubic for smooth deceleration
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+    // Z position: starts far back, ends at final position
+    const startZ = -3000; // Far back (visible with far: 6000)
+    const endZ = -50;      // Final position (much further back)
+    const currentZ = startZ + (endZ - startZ) * easedProgress;
+
+    // X position: right side (original)
+    const xPos = 4.5;
+
+    // Y position: floating (original)
+    const baseY = -7;
+    const floatY = Math.sin(time * 0.5) * 0.3;
+
+    groupRef.current.position.set(xPos, baseY + floatY, currentZ);
+
+    // Subtle rotation
+    groupRef.current.rotation.y = Math.sin(time * 0.3) * 0.2 - 0.5;
+    groupRef.current.rotation.x = Math.sin(time * 0.4) * 0.05;
+    groupRef.current.rotation.z = Math.sin(time * 0.2) * 0.03;
+
+    // Scale: original values
+    const scale = 25.5 + easedProgress * 15.3; // 25.5 to 40.8
+    groupRef.current.scale.setScalar(scale);
+  });
+
+  return (
+    <group ref={groupRef} position={[4, -1, -30]}>
+      <primitive object={scene} />
+    </group>
+  );
+}
+
+// Astronaut Scene wrapper
+function AstronautScene({ scrollProgress }: { scrollProgress: number }) {
+  return (
+    <>
+      <ambientLight intensity={0.6} />
+      <pointLight position={[5, 5, 5]} intensity={1} />
+      <pointLight position={[-5, -5, 5]} intensity={0.5} color="#6644ff" />
+      <Environment files="/rosendal_park_sunset_puresky_1k.hdr" />
+      <Astronaut3D scrollProgress={scrollProgress} />
+    </>
+  );
+}
+
 // Cursor SVG Component
 function CursorSVG() {
   return (
@@ -95,6 +171,7 @@ export default function HowItWorks() {
   const [scale, setScale] = useState(1);
   const [titleProgress, setTitleProgress] = useState(0);
   const [bottomTextProgress, setBottomTextProgress] = useState(0);
+  const [astronautProgress, setAstronautProgress] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -146,6 +223,12 @@ export default function HowItWorks() {
             : (rect.bottom - exitEnd) / (exitStart - exitEnd);
 
         bottomProg = Math.min(entryProgress, exitProgress);
+
+        // Astronaut scroll progress (0 to 1 based on section visibility)
+        const sectionHeight = rect.height;
+        const scrolledIntoSection = windowHeight - rect.top;
+        const astroProgress = Math.max(0, Math.min(1, scrolledIntoSection / (sectionHeight + windowHeight)));
+        setAstronautProgress(astroProgress);
       }
 
       setTitleProgress(titleProg);
@@ -275,6 +358,19 @@ export default function HowItWorks() {
       id="how-it-works"
       className="min-h-screen relative overflow-hidden py-20"
     >
+      {/* Astronaut 3D Canvas - positioned on right side */}
+      <div className="absolute inset-0 pointer-events-none z-20">
+        <Canvas
+          camera={{ position: [0, 0, 8], fov: 50, near: 0.1, far: 6000 }}
+          gl={{ antialias: true, alpha: true }}
+          dpr={[1, 2]}
+        >
+          <Suspense fallback={null}>
+            <AstronautScene scrollProgress={astronautProgress} />
+          </Suspense>
+        </Canvas>
+      </div>
+
       {/* Concrete texture overlay */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -327,7 +423,7 @@ export default function HowItWorks() {
             height: FRAME_HEIGHT,
             transform: `translateX(-50%) scale(${scale})`,
             transformOrigin: "top center",
-            backgroundColor: "#080520",
+            backgroundColor: "transparent",
             borderRadius: "24px",
             boxShadow: borderComplete
               ? "0 0 60px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)"

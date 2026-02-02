@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, Suspense, useMemo } from "react";
+import { useRef, useEffect, useState, Suspense, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -187,8 +187,19 @@ function Scene() {
 // MAIN COMPONENT - Fixed background for entire page
 // ============================================
 export default function CosmicFixedBackground() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Small delay to ensure smooth fade-in after mount
+    const timer = setTimeout(() => setIsVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <div className="fixed inset-0 -z-10">
+    <div
+      className="fixed inset-0 -z-10 transition-opacity duration-1000 ease-out"
+      style={{ opacity: isVisible ? 1 : 0 }}
+    >
       <Canvas
         camera={{ position: [0, 0, 8], fov: 65, near: 0.1, far: 300 }}
         gl={{ antialias: true, alpha: true }}
