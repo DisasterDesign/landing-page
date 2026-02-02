@@ -9,6 +9,7 @@ import FoundersSection from "./components/FoundersSection";
 import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Contact from "./components/Contact";
+import Footer from "./components/Footer";
 import CosmicFixedBackground from "./components/CosmicFixedBackground";
 import LoadingScreen from "./components/LoadingScreen";
 
@@ -56,9 +57,7 @@ export default function Home() {
       {/* צור קשר */}
       <Contact />
 
-      <footer className="py-8 text-center" style={{ backgroundColor: "#080520" }}>
-        <p className="text-white/60">© 2024 Webz. All rights reserved.</p>
-      </footer>
+      <Footer />
     </main>
   );
 }

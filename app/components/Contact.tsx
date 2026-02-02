@@ -1,173 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations } from "@react-three/drei";
-import * as THREE from "three";
-
-// Animation constants
-const FPS = 25;
-const ENTRANCE_END_FRAME = 40;
-
-// Mouse position hook for parallax
-function useMousePosition() {
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMouse({
-        x: (e.clientX / window.innerWidth) * 2 - 1,
-        y: -(e.clientY / window.innerHeight) * 2 + 1,
-      });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  return mouse;
-}
-
-// Phone 3D Model component
-function PhoneModel({
-  isVisible,
-  mouse,
-}: {
-  isVisible: boolean;
-  mouse: { x: number; y: number };
-}) {
-  const group = useRef<THREE.Group>(null);
-  const { scene, animations } = useGLTF("/phone.glb?v=4");
-  const { mixer } = useAnimations(animations, group);
-  const [entranceComplete, setEntranceComplete] = useState(false);
-  const entranceTime = useRef(0);
-  const actionRef = useRef<THREE.AnimationAction | null>(null);
-
-  const entranceEndTime = ENTRANCE_END_FRAME / FPS;
-
-  // Initialize animation
-  useEffect(() => {
-    if (!mixer || !animations.length) return;
-
-    const clip = animations[0];
-    const action = mixer.clipAction(clip);
-
-    action.clampWhenFinished = true;
-    action.setLoop(THREE.LoopOnce, 1);
-    action.paused = false;
-    action.enabled = true;
-    action.setEffectiveWeight(1);
-    action.play();
-
-    actionRef.current = action;
-    mixer.setTime(0);
-  }, [mixer, animations]);
-
-  // Control animation + parallax
-  useFrame((_, delta) => {
-    if (!mixer || !isVisible) return;
-
-    if (actionRef.current) {
-      actionRef.current.paused = false;
-      actionRef.current.enabled = true;
-    }
-
-    // Entrance animation: frames 0-40
-    if (!entranceComplete) {
-      entranceTime.current += delta;
-
-      if (entranceTime.current >= entranceEndTime) {
-        entranceTime.current = entranceEndTime;
-        setEntranceComplete(true);
-      }
-
-      mixer.setTime(Math.min(entranceTime.current, entranceEndTime));
-    }
-
-    // Mouse parallax effect
-    if (group.current) {
-      group.current.rotation.y = THREE.MathUtils.lerp(
-        group.current.rotation.y,
-        mouse.x * 0.3,
-        0.05
-      );
-      group.current.rotation.x = THREE.MathUtils.lerp(
-        group.current.rotation.x,
-        mouse.y * 0.15,
-        0.05
-      );
-    }
-  });
-
-  return (
-    <group ref={group}>
-      <primitive object={scene} scale={15} />
-    </group>
-  );
-}
-
-// Scene wrapper
-function PhoneScene({ isVisible }: { isVisible: boolean }) {
-  const mouse = useMousePosition();
-  return <PhoneModel isVisible={isVisible} mouse={mouse} />;
-}
-
-// Wave layers with parallax effect
-function WaveLayers({ isVisible }: { isVisible: boolean }) {
-  const mouse = useMousePosition();
-  const [hasEntered, setHasEntered] = useState(false);
-
-  // Track when entrance animation completes
-  useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(() => setHasEntered(true), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [isVisible]);
-
-  return (
-    <>
-      {/* Wave 1 - lighter beige, back layer */}
-      <div
-        className={`absolute left-0 right-0 bottom-0 w-full ${
-          hasEntered ? "" : "transition-all duration-1000 ease-out"
-        }`}
-        style={{
-          transform: `translateY(${isVisible ? 0 : 100}%) translateX(${hasEntered ? mouse.x * 10 : 0}px)`,
-          opacity: isVisible ? 1 : 0,
-        }}
-      >
-        <Image
-          src="/contact-wave-1.svg"
-          alt=""
-          width={1728}
-          height={313}
-          className="w-full h-auto"
-          style={{ display: "block" }}
-        />
-      </div>
-      {/* Wave 2 - darker beige, front layer */}
-      <div
-        className={`absolute left-0 right-0 bottom-0 w-full ${
-          hasEntered ? "" : "transition-all duration-1000 ease-out delay-150"
-        }`}
-        style={{
-          transform: `translateY(${isVisible ? 0 : 100}%) translateX(${hasEntered ? mouse.x * 20 : 0}px)`,
-          opacity: isVisible ? 1 : 0,
-        }}
-      >
-        <Image
-          src="/contact-wave-2.svg"
-          alt=""
-          width={1728}
-          height={275}
-          className="w-full h-auto"
-          style={{ display: "block" }}
-        />
-      </div>
-    </>
-  );
-}
 
 export default function Contact() {
   const [formData, setFormData] = useState({ name: "", message: "" });
@@ -231,17 +65,14 @@ export default function Contact() {
     <section
       ref={sectionRef}
       id="contact"
-      className="min-h-screen relative overflow-hidden py-20"
+      className="min-h-[70vh] relative overflow-hidden py-20"
     >
-      {/* Wave layers with waterfall animation and parallax */}
-      <WaveLayers isVisible={isVisible} />
-
-      <div className="container mx-auto px-8 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 min-h-[80vh] relative z-10">
-        {/* Form Side */}
-        <div className="w-full lg:w-1/2 max-w-[500px] order-2 lg:order-1">
+      <div className="container mx-auto px-8 flex flex-col items-start justify-center min-h-[60vh] relative z-10">
+        {/* Form */}
+        <div className="w-full max-w-[500px] ml-4 md:ml-12 lg:ml-24">
           {/* SVG Title */}
           <div
-            className={`mb-12 transition-all duration-700 ${
+            className={`mb-12 flex justify-center transition-all duration-700 ${
               isVisible
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 -translate-y-8"
@@ -253,6 +84,7 @@ export default function Contact() {
               width={231}
               height={50}
               className="h-auto"
+              style={{ filter: "brightness(0) invert(1)" }}
             />
           </div>
 
@@ -273,7 +105,7 @@ export default function Contact() {
                 width={dimensions.width ? dimensions.width - 1 : "100%"}
                 height={dimensions.height ? dimensions.height - 1 : "100%"}
                 fill="none"
-                stroke="rgba(31,31,31,0.3)"
+                stroke="rgba(255,255,255,0.2)"
                 strokeWidth="1"
                 style={{
                   strokeDasharray: perimeter || 1000,
@@ -344,34 +176,7 @@ export default function Contact() {
             </div>
           </form>
         </div>
-
-        {/* 3D Phone Model */}
-        <div
-          className={`w-full lg:w-1/2 h-[350px] lg:h-[600px] order-1 lg:order-2 transition-all duration-700 ${
-            isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-12"
-          }`}
-        >
-          <Canvas
-            camera={{ position: [0, 0, 4], fov: 45 }}
-            gl={{ alpha: true, antialias: true }}
-            style={{ background: "transparent" }}
-          >
-            <Suspense fallback={null}>
-              <ambientLight intensity={0.8} />
-              <directionalLight position={[5, 5, 5]} intensity={1.2} />
-              <pointLight
-                position={[-3, -3, 3]}
-                intensity={0.6}
-                color="#F37021"
-              />
-              <PhoneScene isVisible={isVisible} />
-            </Suspense>
-          </Canvas>
-        </div>
       </div>
     </section>
   );
 }
-
-// Preload the phone model
-useGLTF.preload("/phone.glb?v=4");

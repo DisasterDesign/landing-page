@@ -2,25 +2,26 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
+
+const CollidingSpheres = dynamic(() => import("./CollidingSpheres"), {
+  ssr: false,
+});
 
 // Logo type
 type Logo = {
   id: number;
   name: string;
   src: string;
-  projectImage: string;
+  url: string | null;
 };
 
-// Placeholder logo data with project images
+// Client logos
 const logos: Logo[] = [
-  { id: 1, name: "Client 1", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 2, name: "Client 2", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 3, name: "Client 3", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 4, name: "Client 4", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 5, name: "Client 5", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 6, name: "Client 6", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 7, name: "Client 7", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
-  { id: 8, name: "Client 8", src: "/placeholder-logo.svg", projectImage: "/placeholder-project.jpg" },
+  { id: 1, name: "Inner Cosmos", src: "/clients/innercosmos.png", url: "https://innercosmos.ai/" },
+  { id: 2, name: "Aquatis", src: "/clients/aquatis.png", url: "https://aquatis.ai/" },
+  { id: 3, name: "Titans", src: "/clients/titans.svg", url: "https://titans.global/" },
+  { id: 4, name: "Third Eye", src: "/clients/thirdeye.svg", url: "https://3i.titans.global/" },
 ];
 
 // Founders data
@@ -40,24 +41,28 @@ const founders = [
 ];
 
 // Single Logo Item Component
-function LogoItem({
-  logo,
-  onClick,
-}: {
-  logo: Logo;
-  onClick: (logo: Logo) => void;
-}) {
+function LogoItem({ logo }: { logo: Logo }) {
+  const handleClick = () => {
+    if (logo.url) {
+      window.open(logo.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   return (
     <div
-      className="flex-shrink-0 w-24 h-24 mx-6 flex items-center justify-center cursor-pointer
-                 grayscale hover:grayscale-0 opacity-40 hover:opacity-100
-                 transition-all duration-300 hover:scale-125"
-      onClick={() => onClick(logo)}
+      className="flex-shrink-0 w-28 h-28 mx-6 flex items-center justify-center cursor-pointer
+                 opacity-60 hover:opacity-100 transition-all duration-300 hover:scale-125"
+      onClick={handleClick}
     >
-      {/* Placeholder - white box with logo name */}
-      <div className="w-20 h-20 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
-        <span className="text-white/60 text-xs font-medium">{logo.name}</span>
-      </div>
+      <Image
+        src={logo.src}
+        alt={logo.name}
+        width={80}
+        height={80}
+        className="object-contain max-h-16 w-auto"
+        style={{ filter: "brightness(0) invert(1)" }}
+        unoptimized
+      />
     </div>
   );
 }
@@ -67,12 +72,10 @@ function LogoBar({
   logos,
   className,
   direction = "left",
-  onLogoClick,
 }: {
   logos: Logo[];
   className?: string;
   direction?: "left" | "right";
-  onLogoClick: (logo: Logo) => void;
 }) {
   const animationClass = direction === "left" ? "animate-marquee-left" : "animate-marquee-right";
 
@@ -81,7 +84,7 @@ function LogoBar({
       <div className={`flex ${animationClass} hover:[animation-play-state:paused]`}>
         {/* Duplicate logos for seamless infinite scroll */}
         {[...logos, ...logos].map((logo, i) => (
-          <LogoItem key={`${logo.id}-${i}`} logo={logo} onClick={onLogoClick} />
+          <LogoItem key={`${logo.id}-${i}`} logo={logo} />
         ))}
       </div>
     </div>
@@ -144,11 +147,11 @@ function FounderPhoto({
 
 // Main Section Component
 export default function FoundersSection() {
-  const [selectedLogo, setSelectedLogo] = useState<Logo | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
 
-  // Scroll-based visibility
+  // Scroll-based visibility and progress
   useEffect(() => {
     const handleScroll = () => {
       if (!sectionRef.current) return;
@@ -158,6 +161,12 @@ export default function FoundersSection() {
 
       const shouldBeVisible = rect.top < windowHeight * 0.7 && rect.bottom > windowHeight * 0.3;
       setIsVisible(shouldBeVisible);
+
+      // Calculate scroll progress (0-1)
+      const sectionHeight = rect.height;
+      const scrolled = windowHeight - rect.top;
+      const progress = Math.max(0, Math.min(1, scrolled / (sectionHeight + windowHeight * 0.5)));
+      setScrollProgress(progress);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -172,9 +181,12 @@ export default function FoundersSection() {
       id="about-us"
       className="relative min-h-screen py-20"
     >
+      {/* 3D Colliding Spheres Background */}
+      <CollidingSpheres scrollProgress={scrollProgress} />
+
       {/* Section Title */}
       <div
-        className="flex justify-center mb-20 px-4 transition-all duration-700"
+        className="relative z-10 flex justify-center mb-20 px-4 transition-all duration-700"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "translateY(0)" : "translateY(-30px)",
@@ -192,7 +204,7 @@ export default function FoundersSection() {
       </div>
 
       {/* Roey Section - Photo + Logo Bar */}
-      <div className="relative mb-20 md:mb-24">
+      <div className="relative z-10 mb-20 md:mb-24">
         {/* Roey's Photo - floating top-left */}
         <FounderPhoto
           founder={founders[0]}
@@ -208,12 +220,12 @@ export default function FoundersSection() {
             transitionDelay: "200ms",
           }}
         >
-          <LogoBar logos={logos} direction="right" onLogoClick={setSelectedLogo} />
+          <LogoBar logos={logos} direction="right" />
         </div>
       </div>
 
       {/* Elad Section - Photo + Logo Bar */}
-      <div className="relative mb-20 pb-10">
+      <div className="relative z-10 mb-20 pb-10">
         {/* Elad's Photo - floating bottom-right */}
         <FounderPhoto
           founder={founders[1]}
@@ -229,46 +241,9 @@ export default function FoundersSection() {
             transitionDelay: "400ms",
           }}
         >
-          <LogoBar logos={logos} direction="left" onLogoClick={setSelectedLogo} />
+          <LogoBar logos={logos} direction="left" />
         </div>
       </div>
-
-      {/* Project Image Overlay on Logo Click */}
-      {selectedLogo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center cursor-pointer"
-          style={{
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            backdropFilter: "blur(12px)",
-          }}
-          onClick={() => setSelectedLogo(null)}
-        >
-          {/* Close button */}
-          <button
-            className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center
-                       text-white/60 hover:text-white transition-colors duration-200
-                       bg-white/10 hover:bg-white/20 rounded-full"
-            onClick={() => setSelectedLogo(null)}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-
-          <div
-            className="max-w-5xl max-h-[85vh] rounded-2xl overflow-hidden shadow-2xl cursor-default"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Placeholder project image */}
-            <div className="w-[80vw] max-w-[1000px] h-[50vh] max-h-[600px] bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-white/40 text-lg mb-2">Project Preview</p>
-                <p className="text-white text-2xl font-bold">{selectedLogo.name}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
