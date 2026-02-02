@@ -105,10 +105,10 @@ function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
     const currentZ = startZ + (endZ - startZ) * easedProgress;
 
     // X position: right side (original)
-    const xPos = 4.5;
+    const xPos = 10.5;
 
     // Y position: floating (original)
-    const baseY = -7;
+    const baseY = -9.5;
     const floatY = Math.sin(time * 0.5) * 0.3;
 
     groupRef.current.position.set(xPos, baseY + floatY, currentZ);
