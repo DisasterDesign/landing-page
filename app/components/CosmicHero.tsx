@@ -199,6 +199,7 @@ function AnimatedAtoms({ introProgress, scrollProgress }: AnimatedAtomsProps) {
 
 // ============================================
 // GLASS SPHERE - Large sphere with glow + floating animation
+// Transitions to galaxy orbit mode after collision
 // ============================================
 interface GlassSphereProps {
   position: [number, number, number];
@@ -208,10 +209,13 @@ interface GlassSphereProps {
   phase: number;
   mouseTarget: { x: number; y: number };
   introProgress: number;
+  scrollProgress: number;
   index: number;
+  orbitRadius: number;
+  orbitSpeed: number;
 }
 
-function GlassSphere({ position, radius, color, speed, phase, mouseTarget, introProgress, index }: GlassSphereProps) {
+function GlassSphere({ position, radius, color, speed, phase, mouseTarget, introProgress, scrollProgress, index, orbitRadius, orbitSpeed }: GlassSphereProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const finalPos = useRef({
@@ -235,15 +239,27 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
     if (meshRef.current && glowRef.current) {
       const time = state.clock.elapsedTime;
 
+      // Galaxy mode transition (starts at 45% scroll, complete at 60%)
+      const galaxyStart = 0.45;
+      const galaxyEnd = 0.60;
+      const galaxyProgress = scrollProgress < galaxyStart ? 0 :
+        Math.min(1, (scrollProgress - galaxyStart) / (galaxyEnd - galaxyStart));
+      const easedGalaxy = 1 - Math.pow(1 - galaxyProgress, 3);
+
       const staggerDelay = index * 0.01;
       const localIntro = Math.max(0, Math.min(1, (introProgress - staggerDelay) / (1 - staggerDelay)));
 
       const explosiveEase = (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
       const easedIntro = explosiveEase(localIntro);
 
-      meshRef.current.scale.setScalar(easedIntro);
-      glowRef.current.scale.setScalar(easedIntro);
+      // Size: normal -> 10% in galaxy mode
+      const normalScale = easedIntro;
+      const galaxyScale = easedIntro * 0.1;
+      const currentScale = normalScale + (galaxyScale - normalScale) * easedGalaxy;
+      meshRef.current.scale.setScalar(currentScale);
+      glowRef.current.scale.setScalar(currentScale);
 
+      // Normal floating position
       const currentX = finalPos.current.x * easedIntro;
       const currentY = finalPos.current.y * easedIntro;
       const currentZ = finalPos.current.z * easedIntro;
@@ -255,9 +271,23 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
       const floatY = Math.sin(time * speed + phase) * 18 * floatMultiplier;
       const floatX = Math.cos(time * speed * 0.7 + phase) * 13.5 * floatMultiplier;
 
-      meshRef.current.position.x = currentX + floatX + mouseTarget.x * parallaxStrength * localIntro;
-      meshRef.current.position.y = currentY + floatY - mouseTarget.y * parallaxStrength * localIntro;
-      meshRef.current.position.z = currentZ;
+      const normalPosX = currentX + floatX + mouseTarget.x * parallaxStrength * localIntro;
+      const normalPosY = currentY + floatY - mouseTarget.y * parallaxStrength * localIntro;
+      const normalPosZ = currentZ;
+
+      // Galaxy orbit position - tilted ring around sun (10 degrees tilt like galaxy particles)
+      const orbitAngle = -time * orbitSpeed + phase; // Negative to match galaxy particles rotation direction
+      const tiltAngle = 10 * (Math.PI / 180); // 10 degrees tilt
+      const galaxyPosX = Math.cos(orbitAngle) * orbitRadius;
+      const baseZ = Math.sin(orbitAngle) * orbitRadius;
+      // Rotate around X axis by tiltAngle
+      const galaxyPosY = -baseZ * Math.sin(tiltAngle);
+      const galaxyPosZ = baseZ * Math.cos(tiltAngle);
+
+      // Interpolate between normal and galaxy positions
+      meshRef.current.position.x = normalPosX + (galaxyPosX - normalPosX) * easedGalaxy;
+      meshRef.current.position.y = normalPosY + (galaxyPosY - normalPosY) * easedGalaxy;
+      meshRef.current.position.z = normalPosZ + (galaxyPosZ - normalPosZ) * easedGalaxy;
 
       meshRef.current.rotation.y += 0.002;
       meshRef.current.rotation.x = Math.sin(time * 0.3) * 0.1;
@@ -321,54 +351,235 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
 }
 
 // ============================================
-// GLASS SPHERES - Depth distribution
+// GLASS SPHERES - Depth distribution + Galaxy mode
 // ============================================
-function GlassSpheres({ mouseTarget, introProgress }: { mouseTarget: { x: number; y: number }; introProgress: number }) {
-  const sphereConfigs = useMemo(() => [
-    { position: [-28, -4, -8] as [number, number, number], radius: 3.2, color: "#5588ff", speed: 0.025, phase: 1.8 },
-    { position: [26, 6, -10] as [number, number, number], radius: 2.8, color: "#6677ff", speed: 0.028, phase: 4.3 },
-    { position: [-12, 4, -15] as [number, number, number], radius: 2.2, color: "#5577ff", speed: 0.030, phase: 0 },
-    { position: [14, 8, -18] as [number, number, number], radius: 2.0, color: "#6688ff", speed: 0.035, phase: 5.5 },
-    { position: [10, -6, -20] as [number, number, number], radius: 1.6, color: "#4488ff", speed: 0.045, phase: 2.5 },
-    { position: [-15, -8, -25] as [number, number, number], radius: 1.5, color: "#5599ff", speed: 0.040, phase: 4.2 },
-    { position: [-14, -4, -28] as [number, number, number], radius: 1.2, color: "#6655ff", speed: 0.062, phase: 1.2 },
-    { position: [8, 7, -35] as [number, number, number], radius: 1.0, color: "#5566ff", speed: 0.055, phase: 3.8 },
-    { position: [16, -3, -32] as [number, number, number], radius: 1.1, color: "#4499ff", speed: 0.050, phase: 0.5 },
-    { position: [-10, 10, -38] as [number, number, number], radius: 0.9, color: "#7766ff", speed: 0.058, phase: 2.9 },
-    { position: [-16, 5, -45] as [number, number, number], radius: 0.7, color: "#4477ff", speed: 0.045, phase: 4.5 },
-    { position: [12, -7, -55] as [number, number, number], radius: 0.6, color: "#5588ff", speed: 0.038, phase: 0.8 },
-    { position: [-8, -9, -65] as [number, number, number], radius: 0.5, color: "#6677ff", speed: 0.040, phase: 2.1 },
-    { position: [18, 4, -48] as [number, number, number], radius: 0.65, color: "#5566ff", speed: 0.042, phase: 5.8 },
-    { position: [-18, -6, -58] as [number, number, number], radius: 0.55, color: "#4488ff", speed: 0.035, phase: 1.4 },
-    { position: [6, 12, -62] as [number, number, number], radius: 0.48, color: "#6699ff", speed: 0.048, phase: 3.2 },
-    { position: [14, 6, -60] as [number, number, number], radius: 0.35, color: "#4466ff", speed: 0.030, phase: 5.2 },
-    { position: [-16, -5, -75] as [number, number, number], radius: 0.3, color: "#5577ff", speed: 0.025, phase: 1.6 },
-    { position: [8, -10, -85] as [number, number, number], radius: 0.25, color: "#6655ff", speed: 0.028, phase: 3.4 },
-    { position: [-12, 8, -70] as [number, number, number], radius: 0.32, color: "#4499ff", speed: 0.032, phase: 4.8 },
-    { position: [20, -2, -80] as [number, number, number], radius: 0.28, color: "#5588ff", speed: 0.022, phase: 0.7 },
-    { position: [-6, -14, -90] as [number, number, number], radius: 0.22, color: "#7777ff", speed: 0.030, phase: 2.3 },
-    { position: [-18, 10, -100] as [number, number, number], radius: 0.18, color: "#4488ff", speed: 0.020, phase: 4.0 },
-    { position: [16, -4, -115] as [number, number, number], radius: 0.15, color: "#5566ff", speed: 0.018, phase: 0.3 },
-    { position: [-10, -12, -125] as [number, number, number], radius: 0.12, color: "#7755ff", speed: 0.015, phase: 2.8 },
-    { position: [22, 8, -105] as [number, number, number], radius: 0.16, color: "#4477ff", speed: 0.022, phase: 5.6 },
-    { position: [-20, -8, -110] as [number, number, number], radius: 0.14, color: "#6688ff", speed: 0.020, phase: 1.1 },
-    { position: [8, 14, -120] as [number, number, number], radius: 0.13, color: "#5599ff", speed: 0.018, phase: 3.9 },
-    { position: [20, 12, -145] as [number, number, number], radius: 0.08, color: "#5588ff", speed: 0.012, phase: 1.9 },
-    { position: [-15, -15, -160] as [number, number, number], radius: 0.06, color: "#4477ff", speed: 0.010, phase: 4.7 },
-    { position: [12, 5, -175] as [number, number, number], radius: 0.05, color: "#6666ff", speed: 0.008, phase: 3.1 },
-    { position: [-22, 6, -140] as [number, number, number], radius: 0.09, color: "#5577ff", speed: 0.015, phase: 0.6 },
-    { position: [18, -10, -155] as [number, number, number], radius: 0.07, color: "#4499ff", speed: 0.012, phase: 2.4 },
-    { position: [-8, 18, -165] as [number, number, number], radius: 0.055, color: "#6688ff", speed: 0.010, phase: 5.1 },
-    { position: [25, -6, -170] as [number, number, number], radius: 0.045, color: "#5566ff", speed: 0.009, phase: 1.3 },
-    { position: [-18, -18, -180] as [number, number, number], radius: 0.04, color: "#7788ff", speed: 0.008, phase: 4.0 },
-  ], []);
+function GlassSpheres({ mouseTarget, introProgress, scrollProgress }: { mouseTarget: { x: number; y: number }; introProgress: number; scrollProgress: number }) {
+  const colors = ["#5588ff", "#6677ff", "#5577ff", "#6688ff", "#4488ff", "#5599ff", "#6655ff", "#5566ff", "#4499ff", "#7766ff", "#4477ff", "#7777ff", "#7755ff", "#6699ff", "#4466ff", "#7788ff"];
+
+  const sphereConfigs = useMemo(() => {
+    const configs: Array<{
+      position: [number, number, number];
+      radius: number;
+      color: string;
+      speed: number;
+      phase: number;
+      orbitRadius: number;
+      orbitSpeed: number;
+    }> = [];
+
+    // Original spheres (36)
+    const originalSpheres = [
+      { position: [-28, -4, -8] as [number, number, number], radius: 3.2, speed: 0.025, phase: 1.8 },
+      { position: [26, 6, -10] as [number, number, number], radius: 2.8, speed: 0.028, phase: 4.3 },
+      { position: [-12, 4, -15] as [number, number, number], radius: 2.2, speed: 0.030, phase: 0 },
+      { position: [14, 8, -18] as [number, number, number], radius: 2.0, speed: 0.035, phase: 5.5 },
+      { position: [10, -6, -20] as [number, number, number], radius: 1.6, speed: 0.045, phase: 2.5 },
+      { position: [-15, -8, -25] as [number, number, number], radius: 1.5, speed: 0.040, phase: 4.2 },
+      { position: [-14, -4, -28] as [number, number, number], radius: 1.2, speed: 0.062, phase: 1.2 },
+      { position: [8, 7, -35] as [number, number, number], radius: 1.0, speed: 0.055, phase: 3.8 },
+      { position: [16, -3, -32] as [number, number, number], radius: 1.1, speed: 0.050, phase: 0.5 },
+      { position: [-10, 10, -38] as [number, number, number], radius: 0.9, speed: 0.058, phase: 2.9 },
+      { position: [-16, 5, -45] as [number, number, number], radius: 0.7, speed: 0.045, phase: 4.5 },
+      { position: [12, -7, -55] as [number, number, number], radius: 0.6, speed: 0.038, phase: 0.8 },
+      { position: [-8, -9, -65] as [number, number, number], radius: 0.5, speed: 0.040, phase: 2.1 },
+      { position: [18, 4, -48] as [number, number, number], radius: 0.65, speed: 0.042, phase: 5.8 },
+      { position: [-18, -6, -58] as [number, number, number], radius: 0.55, speed: 0.035, phase: 1.4 },
+      { position: [6, 12, -62] as [number, number, number], radius: 0.48, speed: 0.048, phase: 3.2 },
+      { position: [14, 6, -60] as [number, number, number], radius: 0.35, speed: 0.030, phase: 5.2 },
+      { position: [-16, -5, -75] as [number, number, number], radius: 0.3, speed: 0.025, phase: 1.6 },
+      { position: [8, -10, -85] as [number, number, number], radius: 0.25, speed: 0.028, phase: 3.4 },
+      { position: [-12, 8, -70] as [number, number, number], radius: 0.32, speed: 0.032, phase: 4.8 },
+      { position: [20, -2, -80] as [number, number, number], radius: 0.28, speed: 0.022, phase: 0.7 },
+      { position: [-6, -14, -90] as [number, number, number], radius: 0.22, speed: 0.030, phase: 2.3 },
+      { position: [-18, 10, -100] as [number, number, number], radius: 0.18, speed: 0.020, phase: 4.0 },
+      { position: [16, -4, -115] as [number, number, number], radius: 0.15, speed: 0.018, phase: 0.3 },
+      { position: [-10, -12, -125] as [number, number, number], radius: 0.12, speed: 0.015, phase: 2.8 },
+      { position: [22, 8, -105] as [number, number, number], radius: 0.16, speed: 0.022, phase: 5.6 },
+      { position: [-20, -8, -110] as [number, number, number], radius: 0.14, speed: 0.020, phase: 1.1 },
+      { position: [8, 14, -120] as [number, number, number], radius: 0.13, speed: 0.018, phase: 3.9 },
+      { position: [20, 12, -145] as [number, number, number], radius: 0.08, speed: 0.012, phase: 1.9 },
+      { position: [-15, -15, -160] as [number, number, number], radius: 0.06, speed: 0.010, phase: 4.7 },
+      { position: [12, 5, -175] as [number, number, number], radius: 0.05, speed: 0.008, phase: 3.1 },
+      { position: [-22, 6, -140] as [number, number, number], radius: 0.09, speed: 0.015, phase: 0.6 },
+      { position: [18, -10, -155] as [number, number, number], radius: 0.07, speed: 0.012, phase: 2.4 },
+      { position: [-8, 18, -165] as [number, number, number], radius: 0.055, speed: 0.010, phase: 5.1 },
+      { position: [25, -6, -170] as [number, number, number], radius: 0.045, speed: 0.009, phase: 1.3 },
+      { position: [-18, -18, -180] as [number, number, number], radius: 0.04, speed: 0.008, phase: 4.0 },
+    ];
+
+    // Add original spheres with orbit parameters - random radii (minimum 6 units from sun)
+    originalSpheres.forEach((sphere, i) => {
+      const orbitRadius = 6 + Math.random() * 12; // Random: 6-18 units from sun
+      const orbitSpeed = 0.05; // Same speed for all
+      configs.push({
+        ...sphere,
+        color: colors[i % colors.length],
+        orbitRadius,
+        orbitSpeed,
+      });
+    });
+
+    // Add 3x more spheres (total 4x = 144 spheres) - random radii
+    for (let i = 0; i < 108; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.cos(angle) * (10 + Math.random() * 30);
+      const y = (Math.random() - 0.5) * 40;
+      const z = -10 - Math.random() * 170;
+
+      // Random orbit radius (minimum 6 units from sun)
+      const orbitRadius = 6 + Math.random() * 12; // 6-18 units from sun
+      const orbitSpeed = 0.05; // Same speed
+
+      configs.push({
+        position: [x, y, z] as [number, number, number],
+        radius: 0.03 + Math.random() * 0.5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 0.01 + Math.random() * 0.05,
+        phase: Math.random() * Math.PI * 2,
+        orbitRadius,
+        orbitSpeed,
+      });
+    }
+
+    return configs;
+  }, []);
 
   return (
     <group>
       {sphereConfigs.map((config, index) => (
-        <GlassSphere key={index} {...config} mouseTarget={mouseTarget} introProgress={introProgress} index={index} />
+        <GlassSphere
+          key={index}
+          {...config}
+          mouseTarget={mouseTarget}
+          introProgress={introProgress}
+          scrollProgress={scrollProgress}
+          index={index}
+        />
       ))}
     </group>
+  );
+}
+
+// ============================================
+// GALAXY PARTICLES - Particle disk around sun
+// ============================================
+function GalaxyParticles({ scrollProgress }: { scrollProgress: number }) {
+  const pointsRef = useRef<THREE.Points>(null);
+  const PARTICLE_COUNT = 3000;
+
+  // Galaxy appears after collision
+  const appearStart = 0.45;
+  const appearEnd = 0.65;
+  const progress = scrollProgress < appearStart ? 0 :
+    Math.min(1, (scrollProgress - appearStart) / (appearEnd - appearStart));
+  const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+  // Create particles distributed in a disk
+  const { positions, colors, sizes } = useMemo(() => {
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    const sizes = new Float32Array(PARTICLE_COUNT);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      // Spiral galaxy distribution
+      const radius = 3 + Math.random() * 20; // 3-23 units from center
+      const angle = Math.random() * Math.PI * 2;
+      const spiralOffset = radius * 0.3; // Spiral arms
+      const finalAngle = angle + spiralOffset;
+
+      positions[i * 3] = Math.cos(finalAngle) * radius;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 0.5; // Thin disk
+      positions[i * 3 + 2] = Math.sin(finalAngle) * radius;
+
+      // Color gradient: brighter near center
+      const brightness = 1 - (radius / 23) * 0.5;
+      colors[i * 3] = 0.4 + brightness * 0.4; // R
+      colors[i * 3 + 1] = 0.5 + brightness * 0.3; // G
+      colors[i * 3 + 2] = 0.9 + brightness * 0.1; // B
+
+      sizes[i] = 0.5 + Math.random() * 1.5;
+    }
+
+    return { positions, colors, sizes };
+  }, []);
+
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uOpacity: { value: 0 },
+      uPixelRatio: { value: typeof window !== "undefined" ? Math.min(window.devicePixelRatio, 2) : 1 },
+    }),
+    []
+  );
+
+  useFrame((state) => {
+    if (pointsRef.current) {
+      const material = pointsRef.current.material as THREE.ShaderMaterial;
+      material.uniforms.uTime.value = state.clock.elapsedTime;
+      material.uniforms.uOpacity.value = easedProgress;
+
+      // Tilt galaxy by 10 degrees on X axis
+      pointsRef.current.rotation.x = 10 * (Math.PI / 180); // 10 degrees tilt
+
+      // Slow rotation of entire galaxy
+      pointsRef.current.rotation.y = state.clock.elapsedTime * 0.02;
+    }
+  });
+
+  if (progress <= 0) return null;
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={PARTICLE_COUNT}
+          array={positions}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-color"
+          count={PARTICLE_COUNT}
+          array={colors}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-aSize"
+          count={PARTICLE_COUNT}
+          array={sizes}
+          itemSize={1}
+        />
+      </bufferGeometry>
+      <shaderMaterial
+        uniforms={uniforms}
+        transparent={true}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        vertexColors={true}
+        vertexShader={`
+          attribute float aSize;
+          uniform float uPixelRatio;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          void main() {
+            vColor = color;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = aSize * uPixelRatio * (200.0 / -mvPosition.z) * uOpacity;
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `}
+        fragmentShader={`
+          uniform float uOpacity;
+          varying vec3 vColor;
+          void main() {
+            float dist = length(gl_PointCoord - 0.5);
+            if (dist > 0.5) discard;
+            float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+            gl_FragColor = vec4(vColor, alpha * uOpacity * 0.6);
+          }
+        `}
+      />
+    </points>
   );
 }
 
@@ -587,11 +798,14 @@ function Scene({ introProgress, scrollProgress }: { introProgress: number; scrol
       {/* Galaxy center - appears after collision */}
       <GalaxyCenter scrollProgress={scrollProgress} />
 
+      {/* Galaxy particle disk */}
+      <GalaxyParticles scrollProgress={scrollProgress} />
+
       {/* Animated atoms from v5.glb */}
       <AnimatedAtoms introProgress={introProgress} scrollProgress={scrollProgress} />
 
       {/* Glass spheres with depth and parallax */}
-      <GlassSpheres mouseTarget={mouseTargetRef.current} introProgress={introProgress} />
+      <GlassSpheres mouseTarget={mouseTargetRef.current} introProgress={introProgress} scrollProgress={scrollProgress} />
     </>
   );
 }
