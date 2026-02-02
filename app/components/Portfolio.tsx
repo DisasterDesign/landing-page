@@ -59,7 +59,7 @@ const centerCardStyle: React.CSSProperties = {
 };
 
 // Style for side cards - white glow effect
-const getSideCardStyle = (isLeft: boolean): React.CSSProperties => ({
+const getSideCardStyle = (_isLeft: boolean): React.CSSProperties => ({
   background: "linear-gradient(135deg, rgba(20,20,35,0.9) 0%, rgba(15,15,25,0.95) 100%)",
   backdropFilter: "blur(8px)",
   WebkitBackdropFilter: "blur(8px)",
