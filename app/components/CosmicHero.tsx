@@ -224,6 +224,13 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
     z: position[2],
   });
 
+  // Random scatter direction for dispersal effect
+  const scatterDir = useRef({
+    x: (Math.random() - 0.5) * 2,
+    y: (Math.random() - 0.5) * 2,
+    z: Math.random() * 0.5 + 0.5, // Mostly forward (towards camera)
+  });
+
   // Depth-based blur (DOF effect)
   const zDepth = position[2];
   const focalPoint = -15;
@@ -246,16 +253,24 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
         Math.min(1, (scrollProgress - galaxyStart) / (galaxyEnd - galaxyStart));
       const easedGalaxy = 1 - Math.pow(1 - galaxyProgress, 3);
 
+      // Scatter phase (starts at 70% scroll, complete at 95%)
+      const scatterStart = 0.70;
+      const scatterEnd = 0.95;
+      const scatterProgress = scrollProgress < scatterStart ? 0 :
+        Math.min(1, (scrollProgress - scatterStart) / (scatterEnd - scatterStart));
+      const easedScatter = scatterProgress * scatterProgress; // Quadratic ease-in
+
       const staggerDelay = index * 0.01;
       const localIntro = Math.max(0, Math.min(1, (introProgress - staggerDelay) / (1 - staggerDelay)));
 
       const explosiveEase = (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
       const easedIntro = explosiveEase(localIntro);
 
-      // Size: normal -> 10% in galaxy mode
+      // Size: normal -> 10% in galaxy mode -> fade out in scatter mode
       const normalScale = easedIntro;
       const galaxyScale = easedIntro * 0.1;
-      const currentScale = normalScale + (galaxyScale - normalScale) * easedGalaxy;
+      const preScatterScale = normalScale + (galaxyScale - normalScale) * easedGalaxy;
+      const currentScale = preScatterScale * (1 - easedScatter);
       meshRef.current.scale.setScalar(currentScale);
       glowRef.current.scale.setScalar(currentScale);
 
@@ -285,9 +300,15 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
       const galaxyPosZ = baseZ * Math.cos(tiltAngle);
 
       // Interpolate between normal and galaxy positions
-      meshRef.current.position.x = normalPosX + (galaxyPosX - normalPosX) * easedGalaxy;
-      meshRef.current.position.y = normalPosY + (galaxyPosY - normalPosY) * easedGalaxy;
-      meshRef.current.position.z = normalPosZ + (galaxyPosZ - normalPosZ) * easedGalaxy;
+      const posX = normalPosX + (galaxyPosX - normalPosX) * easedGalaxy;
+      const posY = normalPosY + (galaxyPosY - normalPosY) * easedGalaxy;
+      const posZ = normalPosZ + (galaxyPosZ - normalPosZ) * easedGalaxy;
+
+      // Add scatter offset - fly outward from center
+      const scatterDistance = 80 * easedScatter; // How far to scatter
+      meshRef.current.position.x = posX + scatterDir.current.x * scatterDistance;
+      meshRef.current.position.y = posY + scatterDir.current.y * scatterDistance;
+      meshRef.current.position.z = posZ + scatterDir.current.z * scatterDistance;
 
       meshRef.current.rotation.y += 0.002;
       meshRef.current.rotation.x = Math.sin(time * 0.3) * 0.1;
@@ -298,6 +319,9 @@ function GlassSphere({ position, radius, color, speed, phase, mouseTarget, intro
       glowRef.current.scale.multiplyScalar(pulse);
     }
   });
+
+  // Hide completely after scatter is done (optimization)
+  if (scrollProgress >= 0.95) return null;
 
   return (
     <group>
@@ -474,6 +498,13 @@ function GalaxyParticles({ scrollProgress }: { scrollProgress: number }) {
     Math.min(1, (scrollProgress - appearStart) / (appearEnd - appearStart));
   const easedProgress = 1 - Math.pow(1 - progress, 3);
 
+  // Scatter phase (starts at 70% scroll, complete at 95%)
+  const scatterStart = 0.70;
+  const scatterEnd = 0.95;
+  const scatterProgress = scrollProgress < scatterStart ? 0 :
+    Math.min(1, (scrollProgress - scatterStart) / (scatterEnd - scatterStart));
+  const easedScatter = scatterProgress * scatterProgress;
+
   // Create particles distributed in a disk
   const { positions, colors, sizes } = useMemo(() => {
     const positions = new Float32Array(PARTICLE_COUNT * 3);
@@ -516,17 +547,23 @@ function GalaxyParticles({ scrollProgress }: { scrollProgress: number }) {
     if (pointsRef.current) {
       const material = pointsRef.current.material as THREE.ShaderMaterial;
       material.uniforms.uTime.value = state.clock.elapsedTime;
-      material.uniforms.uOpacity.value = easedProgress;
+      // Fade out during scatter
+      material.uniforms.uOpacity.value = easedProgress * (1 - easedScatter);
 
       // Tilt galaxy by 10 degrees on X axis
       pointsRef.current.rotation.x = 10 * (Math.PI / 180); // 10 degrees tilt
 
       // Slow rotation of entire galaxy
       pointsRef.current.rotation.y = state.clock.elapsedTime * 0.02;
+
+      // Expand outward during scatter
+      const scatterScale = 1 + easedScatter * 3; // Expand to 4x size
+      pointsRef.current.scale.setScalar(scatterScale);
     }
   });
 
-  if (progress <= 0) return null;
+  // Hide before appearing or after scatter is done (optimization)
+  if (progress <= 0 || scrollProgress >= 0.95) return null;
 
   return (
     <points ref={pointsRef}>
@@ -599,14 +636,26 @@ function GalaxyCenter({ scrollProgress }: { scrollProgress: number }) {
   // Eased progress for smooth growth
   const easedProgress = 1 - Math.pow(1 - progress, 3);
 
-  // Subtle pulsation animation
+  // Scatter phase (starts at 70% scroll, complete at 95%)
+  const scatterStart = 0.70;
+  const scatterEnd = 0.95;
+  const scatterProgress = scrollProgress < scatterStart ? 0 :
+    Math.min(1, (scrollProgress - scatterStart) / (scatterEnd - scatterStart));
+  const easedScatter = scatterProgress * scatterProgress;
+
+  // Subtle pulsation animation + scatter fade
   useFrame((state) => {
     timeRef.current = state.clock.elapsedTime;
     if (groupRef.current && progress > 0) {
       const pulse = 1 + Math.sin(timeRef.current * 2) * 0.03;
-      groupRef.current.scale.setScalar(easedProgress * pulse);
+      // Shrink and fade during scatter
+      const scatterFade = 1 - easedScatter;
+      groupRef.current.scale.setScalar(easedProgress * pulse * scatterFade);
     }
   });
+
+  // Hide before appearing or after scatter is done (optimization)
+  if (scrollProgress < 0.35 || scrollProgress >= 0.95) return null;
 
   // Glow from CENTER outward (not rim glow!)
   const createGlowMaterial = (color: string, baseOpacity: number) =>
