@@ -198,62 +198,6 @@ function AnimatedAtoms({ introProgress, scrollProgress }: AnimatedAtomsProps) {
 }
 
 // ============================================
-// ASTRONAUT - Enters from depth on scroll
-// ============================================
-interface AstronautProps {
-  scrollProgress: number;
-}
-
-function Astronaut({ scrollProgress }: AstronautProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  // const { scene } = useGLTF("/astronaut_fix_high.glb");
-  const timeRef = useRef(0);
-
-  // Animation: astronaut enters from z=-50 to z=5 (right side of screen)
-  // Starts at 0% scroll (visible immediately), arrives at 40% scroll
-  const enterStart = 0.0;
-  const enterEnd = 0.40;
-  const progress = scrollProgress < enterStart ? 0 :
-    Math.min(1, (scrollProgress - enterStart) / (enterEnd - enterStart));
-
-  // Ease out cubic for smooth deceleration
-  const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-  useFrame((state) => {
-    if (!groupRef.current) return;
-
-    timeRef.current = state.clock.elapsedTime;
-
-    // Z position: from -30 (far) to 2 (close)
-    const startZ = -30;
-    const endZ = 2;
-    const currentZ = startZ + (endZ - startZ) * easedProgress;
-
-    // X position: right side of screen
-    const xPos = 6;
-
-    // Y position: center with floating
-    const baseY = 0;
-    const floatY = Math.sin(timeRef.current * 0.5) * 0.3;
-
-    groupRef.current.position.set(xPos, baseY + floatY, currentZ);
-
-    // Subtle rotation
-    groupRef.current.rotation.y = timeRef.current * 0.5;
-  });
-
-  // DEBUG: Always visible with red cube
-  return (
-    <group ref={groupRef} position={[6, 0, 0]}>
-      <mesh>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="red" />
-      </mesh>
-    </group>
-  );
-}
-
-// ============================================
 // GLASS SPHERE - Large sphere with glow + floating animation
 // Transitions to galaxy orbit mode after collision
 // ============================================
