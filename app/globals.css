@@ -8,9 +8,9 @@
   --accent: #F37021;
 }
 
-body {
+html, body {
   color: var(--foreground);
-  background: var(--background);
+  background: transparent;
 }
 
 @keyframes lightning-flash {

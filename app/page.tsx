@@ -10,6 +10,7 @@ import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Contact from "./components/Contact";
 import CosmicFixedBackground from "./components/CosmicFixedBackground";
+import LoadingScreen from "./components/LoadingScreen";
 
 // Dynamic import for CosmicHero (cosmic space environment)
 const CosmicHero = dynamic(() => import("./components/CosmicHero"), {
@@ -23,9 +24,14 @@ const CosmicHero = dynamic(() => import("./components/CosmicHero"), {
 
 export default function Home() {
   const [, setScrollProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   return (
     <main className="relative">
+      {/* Loading Screen with logo path animation */}
+      {isLoading && (
+        <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />
+      )}
       {/* Fixed cosmic background for entire site */}
       <CosmicFixedBackground />
 

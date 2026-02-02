@@ -42,17 +42,17 @@ const founders = [
 // Single Logo Item Component
 function LogoItem({
   logo,
-  onHover,
+  onClick,
 }: {
   logo: Logo;
-  onHover: (logo: Logo | null) => void;
+  onClick: (logo: Logo) => void;
 }) {
   return (
     <div
       className="flex-shrink-0 w-24 h-24 mx-6 flex items-center justify-center cursor-pointer
-                 grayscale hover:grayscale-0 opacity-40 hover:opacity-100 transition-all duration-300"
-      onMouseEnter={() => onHover(logo)}
-      onMouseLeave={() => onHover(null)}
+                 grayscale hover:grayscale-0 opacity-40 hover:opacity-100
+                 transition-all duration-300 hover:scale-125"
+      onClick={() => onClick(logo)}
     >
       {/* Placeholder - white box with logo name */}
       <div className="w-20 h-20 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
@@ -67,12 +67,12 @@ function LogoBar({
   logos,
   className,
   direction = "left",
-  onLogoHover,
+  onLogoClick,
 }: {
   logos: Logo[];
   className?: string;
   direction?: "left" | "right";
-  onLogoHover: (logo: Logo | null) => void;
+  onLogoClick: (logo: Logo) => void;
 }) {
   const animationClass = direction === "left" ? "animate-marquee-left" : "animate-marquee-right";
 
@@ -81,7 +81,7 @@ function LogoBar({
       <div className={`flex ${animationClass} hover:[animation-play-state:paused]`}>
         {/* Duplicate logos for seamless infinite scroll */}
         {[...logos, ...logos].map((logo, i) => (
-          <LogoItem key={`${logo.id}-${i}`} logo={logo} onHover={onLogoHover} />
+          <LogoItem key={`${logo.id}-${i}`} logo={logo} onClick={onLogoClick} />
         ))}
       </div>
     </div>
@@ -144,7 +144,7 @@ function FounderPhoto({
 
 // Main Section Component
 export default function FoundersSection() {
-  const [hoveredLogo, setHoveredLogo] = useState<Logo | null>(null);
+  const [selectedLogo, setSelectedLogo] = useState<Logo | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -208,7 +208,7 @@ export default function FoundersSection() {
             transitionDelay: "200ms",
           }}
         >
-          <LogoBar logos={logos} direction="right" onLogoHover={setHoveredLogo} />
+          <LogoBar logos={logos} direction="right" onLogoClick={setSelectedLogo} />
         </div>
       </div>
 
@@ -229,25 +229,41 @@ export default function FoundersSection() {
             transitionDelay: "400ms",
           }}
         >
-          <LogoBar logos={logos} direction="left" onLogoHover={setHoveredLogo} />
+          <LogoBar logos={logos} direction="left" onLogoClick={setSelectedLogo} />
         </div>
       </div>
 
-      {/* Project Image Overlay on Logo Hover */}
-      {hoveredLogo && (
+      {/* Project Image Overlay on Logo Click */}
+      {selectedLogo && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+          className="fixed inset-0 z-50 flex items-center justify-center cursor-pointer"
           style={{
             backgroundColor: "rgba(0, 0, 0, 0.8)",
             backdropFilter: "blur(12px)",
           }}
+          onClick={() => setSelectedLogo(null)}
         >
-          <div className="max-w-5xl max-h-[85vh] rounded-2xl overflow-hidden shadow-2xl">
+          {/* Close button */}
+          <button
+            className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center
+                       text-white/60 hover:text-white transition-colors duration-200
+                       bg-white/10 hover:bg-white/20 rounded-full"
+            onClick={() => setSelectedLogo(null)}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div
+            className="max-w-5xl max-h-[85vh] rounded-2xl overflow-hidden shadow-2xl cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Placeholder project image */}
             <div className="w-[80vw] max-w-[1000px] h-[50vh] max-h-[600px] bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
               <div className="text-center">
                 <p className="text-white/40 text-lg mb-2">Project Preview</p>
-                <p className="text-white text-2xl font-bold">{hoveredLogo.name}</p>
+                <p className="text-white text-2xl font-bold">{selectedLogo.name}</p>
               </div>
             </div>
           </div>
