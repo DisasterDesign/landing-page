@@ -104,11 +104,16 @@ function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
     const endZ = -50;      // Final position (much further back)
     const currentZ = startZ + (endZ - startZ) * easedProgress;
 
-    // X position: right side (original)
-    const xPos = 10.5;
+    // Responsive adjustments based on viewport
+    const viewport = state.viewport;
+    const isMobile = viewport.width < 6;  // ~768px
+    const isTablet = viewport.width < 10; // ~1024px
 
-    // Y position: floating (original)
-    const baseY = -9.5;
+    // X position - responsive (more centered on smaller screens)
+    const xPos = isMobile ? 5 : isTablet ? 7 : 10.5;
+
+    // Y position - responsive (higher on smaller screens)
+    const baseY = isMobile ? -6 : isTablet ? -7.5 : -9.5;
     const floatY = Math.sin(time * 0.5) * 0.3;
 
     groupRef.current.position.set(xPos, baseY + floatY, currentZ);
@@ -118,8 +123,10 @@ function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
     groupRef.current.rotation.x = Math.sin(time * 0.4) * 0.05;
     groupRef.current.rotation.z = Math.sin(time * 0.2) * 0.03;
 
-    // Scale: original values
-    const scale = 25.5 + easedProgress * 15.3; // 25.5 to 40.8
+    // Scale - responsive (smaller on mobile/tablet)
+    const baseScale = isMobile ? 12 : isTablet ? 18 : 25.5;
+    const maxScale = isMobile ? 20 : isTablet ? 28 : 40.8;
+    const scale = baseScale + easedProgress * (maxScale - baseScale);
     groupRef.current.scale.setScalar(scale);
   });
 
