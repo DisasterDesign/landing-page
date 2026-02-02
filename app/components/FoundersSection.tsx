@@ -29,13 +29,13 @@ const founders = [
     id: 1,
     name: "רועי יחזקאל",
     nameSvg: "/roei-name.svg",
-    image: "/roei-photo.jpeg",
+    image: "/roy3d.jpg",
   },
   {
     id: 2,
     name: "אלעד ניסים",
     nameSvg: "/elad-name.svg",
-    image: "/elad-photo.jpg",
+    image: "/elad3d.jpg",
   },
 ];
 
