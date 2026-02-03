@@ -10,6 +10,7 @@ interface Project {
   description?: string;
   gradient: string;
   url: string;
+  video?: string;
 }
 
 const projects: Project[] = [
@@ -19,6 +20,7 @@ const projects: Project[] = [
     description: "AI-powered meditation app",
     gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     url: "https://innercosmos.ai/",
+    video: "/c-video/compressed/INNERCOSMOS.mp4",
   },
   {
     id: "aquatis",
@@ -26,6 +28,7 @@ const projects: Project[] = [
     description: "Water management platform",
     gradient: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
     url: "https://aquatis.ai/",
+    video: "/c-video/compressed/Aquatis.mp4",
   },
   {
     id: "titans",
@@ -33,6 +36,7 @@ const projects: Project[] = [
     description: "Global investment platform",
     gradient: "linear-gradient(135deg, #F37021 0%, #ff6b6b 100%)",
     url: "https://titans.global/",
+    video: "/c-video/compressed/Titans.mp4",
   },
   {
     id: "thirdeye",
@@ -40,6 +44,15 @@ const projects: Project[] = [
     description: "Analytics dashboard",
     gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
     url: "https://3i.titans.global/",
+    video: "/c-video/compressed/3i.mp4",
+  },
+  {
+    id: "dentalcare",
+    name: "Dental Care",
+    description: "Dental clinic website",
+    gradient: "linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%)",
+    url: "#",
+    video: "/c-video/compressed/dental care.mp4",
   },
 ];
 
@@ -239,7 +252,7 @@ export default function Portfolio() {
                   className="absolute w-[380px] cursor-pointer"
                   style={{ ...cardStyle, transformStyle: "preserve-3d" }}
                 >
-                  {/* Placeholder Image */}
+                  {/* Video or Placeholder */}
                   <div
                     className="aspect-video relative overflow-hidden"
                     style={{
@@ -248,11 +261,22 @@ export default function Portfolio() {
                       borderTopRightRadius: style.isSide ? "14px" : "18px",
                     }}
                   >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-white/30 text-6xl font-bold">
-                        {project.name.charAt(0)}
-                      </span>
-                    </div>
+                    {project.video ? (
+                      <video
+                        src={project.video}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white/30 text-6xl font-bold">
+                          {project.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Info */}
@@ -314,7 +338,7 @@ export default function Portfolio() {
             className="block max-w-[350px] mx-auto"
             style={centerCardStyle}
           >
-            {/* Placeholder Image */}
+            {/* Video or Placeholder */}
             <div
               className="aspect-video relative overflow-hidden"
               style={{
@@ -323,11 +347,22 @@ export default function Portfolio() {
                 borderTopRightRadius: "20px",
               }}
             >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-white/30 text-6xl font-bold">
-                  {projects[activeIndex].name.charAt(0)}
-                </span>
-              </div>
+              {projects[activeIndex].video ? (
+                <video
+                  src={projects[activeIndex].video}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-white/30 text-6xl font-bold">
+                    {projects[activeIndex].name.charAt(0)}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Info */}
