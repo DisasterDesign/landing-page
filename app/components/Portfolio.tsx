@@ -1,8 +1,71 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+
+// Video Card component with hover play
+function VideoCard({
+  project,
+  style,
+  cardStyle,
+}: {
+  project: Project;
+  style: { isSide: boolean };
+  cardStyle: React.CSSProperties;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    videoRef.current?.play();
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, []);
+
+  return (
+    <a
+      href={project.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block w-[380px] cursor-pointer group"
+      style={{ ...cardStyle, transformStyle: "preserve-3d" }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Full card video */}
+      <div
+        className="aspect-video relative overflow-hidden"
+        style={{
+          background: project.gradient,
+          borderRadius: style.isSide ? "16px" : "20px",
+        }}
+      >
+        {project.video && (
+          <video
+            ref={videoRef}
+            src={project.video}
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover"
+          />
+        )}
+
+        {/* Project name - small, left side, inside card */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent">
+          <h3 className="text-white text-sm font-medium text-left">
+            {project.name}
+          </h3>
+        </div>
+      </div>
+    </a>
+  );
+}
 
 interface Project {
   id: string;
@@ -145,7 +208,7 @@ export default function Portfolio() {
       return {
         x: 0,
         rotateY: 0,
-        scale: 1.6,
+        scale: 2.0,
         opacity: 1,
         zIndex: 10,
         isSide: false,
@@ -154,7 +217,7 @@ export default function Portfolio() {
     } else if (absD === 1) {
       // Side cards - rotated with 3D effect
       return {
-        x: diff * 420,
+        x: diff * 480,
         rotateY: diff * -35,
         scale: 0.55,
         opacity: 1,
@@ -235,11 +298,8 @@ export default function Portfolio() {
                 : centerCardStyle;
 
               return (
-                <motion.a
+                <motion.div
                   key={project.id}
-                  href={project.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{
                     x: style.x,
@@ -249,46 +309,14 @@ export default function Portfolio() {
                     zIndex: style.zIndex,
                   }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="absolute w-[380px] cursor-pointer"
-                  style={{ ...cardStyle, transformStyle: "preserve-3d" }}
+                  className="absolute"
                 >
-                  {/* Video or Placeholder */}
-                  <div
-                    className="aspect-video relative overflow-hidden"
-                    style={{
-                      background: project.gradient,
-                      borderTopLeftRadius: style.isSide ? "14px" : "18px",
-                      borderTopRightRadius: style.isSide ? "14px" : "18px",
-                    }}
-                  >
-                    {project.video ? (
-                      <video
-                        src={project.video}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-white/30 text-6xl font-bold">
-                          {project.name.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="p-5 text-center">
-                    <h3 className="text-white text-xl font-medium mb-1">
-                      {project.name}
-                    </h3>
-                    {project.description && (
-                      <p className="text-white/50 text-sm">{project.description}</p>
-                    )}
-                  </div>
-                </motion.a>
+                  <VideoCard
+                    project={project}
+                    style={style}
+                    cardStyle={cardStyle}
+                  />
+                </motion.div>
               );
             })}
           </AnimatePresence>
@@ -338,16 +366,15 @@ export default function Portfolio() {
             className="block max-w-[350px] mx-auto"
             style={centerCardStyle}
           >
-            {/* Video or Placeholder */}
+            {/* Full card video */}
             <div
               className="aspect-video relative overflow-hidden"
               style={{
                 background: projects[activeIndex].gradient,
-                borderTopLeftRadius: "20px",
-                borderTopRightRadius: "20px",
+                borderRadius: "20px",
               }}
             >
-              {projects[activeIndex].video ? (
+              {projects[activeIndex].video && (
                 <video
                   src={projects[activeIndex].video}
                   autoPlay
@@ -356,25 +383,14 @@ export default function Portfolio() {
                   playsInline
                   className="w-full h-full object-cover"
                 />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-white/30 text-6xl font-bold">
-                    {projects[activeIndex].name.charAt(0)}
-                  </span>
-                </div>
               )}
-            </div>
 
-            {/* Info */}
-            <div className="p-5 text-center">
-              <h3 className="text-white text-xl font-medium mb-1">
-                {projects[activeIndex].name}
-              </h3>
-              {projects[activeIndex].description && (
-                <p className="text-white/50 text-sm">
-                  {projects[activeIndex].description}
-                </p>
-              )}
+              {/* Project name - small, left side, inside card */}
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent">
+                <h3 className="text-white text-sm font-medium text-left">
+                  {projects[activeIndex].name}
+                </h3>
+              </div>
             </div>
           </a>
         </motion.div>
