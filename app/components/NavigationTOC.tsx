@@ -73,28 +73,49 @@ export default function NavigationTOC() {
     };
   }, []);
 
-  // Active section observer - highlight current section
+  // Active section detection - scroll position based
   useEffect(() => {
-    const observers: IntersectionObserver[] = [];
+    const handleSectionScroll = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
 
-    sections.forEach(({ id }) => {
-      const el = document.getElementById(id);
-      if (!el) return;
+      // Edge case: At very top - always "hero"
+      if (scrollY < windowHeight * 0.5) {
+        setActiveSection("hero");
+        return;
+      }
 
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            setActiveSection(id);
-          }
-        },
-        { threshold: 0.3 }
-      );
+      // Edge case: At very bottom - always "contact"
+      if (scrollY + windowHeight >= documentHeight - 100) {
+        setActiveSection("contact");
+        return;
+      }
 
-      observer.observe(el);
-      observers.push(observer);
-    });
+      // Normal case: Check which section contains viewport center
+      let currentSection = "hero";
+      const viewportCenter = scrollY + windowHeight / 2;
 
-    return () => observers.forEach((o) => o.disconnect());
+      sections.forEach(({ id }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        const elementTop = rect.top + scrollY;
+        const elementBottom = elementTop + rect.height;
+
+        // Section contains the viewport center
+        if (viewportCenter >= elementTop && viewportCenter < elementBottom) {
+          currentSection = id;
+        }
+      });
+
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleSectionScroll, { passive: true });
+    handleSectionScroll(); // Initial check
+    return () => window.removeEventListener("scroll", handleSectionScroll);
   }, []);
 
   const scrollToSection = (id: string) => {

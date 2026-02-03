@@ -54,10 +54,20 @@ export default function Home() {
       {/* העבודות שלנו */}
       <Portfolio />
 
-      {/* צור קשר */}
-      <Contact />
-
-      <Footer />
+      {/* צור קשר + Footer with gradient */}
+      <div
+        style={{
+          background: `
+            linear-gradient(to bottom, transparent 70%, rgba(0, 0, 0, 0.6) 100%),
+            radial-gradient(ellipse at bottom right, rgba(255, 50, 50, 0.4) 0%, transparent 50%),
+            radial-gradient(ellipse 40% 25% at bottom left, rgba(243, 112, 33, 0.15) 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, rgba(243, 112, 33, 0.15) 30%, rgba(243, 112, 33, 0.35) 100%)
+          `,
+        }}
+      >
+        <Contact />
+        <Footer />
+      </div>
     </main>
   );
 }
