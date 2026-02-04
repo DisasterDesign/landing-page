@@ -256,11 +256,11 @@ export default function Portfolio() {
     <section
       ref={sectionRef}
       id="portfolio"
-      className="min-h-[80vh] relative overflow-hidden py-20"
+      className="min-h-[80vh] relative overflow-hidden py-12 sm:py-16 md:py-20"
     >
       {/* Section Title */}
       <div
-        className="flex justify-center mb-28 px-4 transition-all duration-700"
+        className="flex justify-center mb-10 sm:mb-16 md:mb-28 px-4 transition-all duration-700"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "translateY(0)" : "translateY(-30px)",

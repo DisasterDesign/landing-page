@@ -64,7 +64,7 @@ const socialIcons: { [key: string]: () => JSX.Element } = {
 export default function Footer() {
   return (
     <footer className="relative py-6">
-      <div className="container mx-auto px-8">
+      <div className="container mx-auto px-4 sm:px-6 md:px-8">
         {/* Centered Content: Logo above Link Columns */}
         <div className="flex flex-col items-center gap-6 mb-6 md:mb-0">
           {/* Logo */}

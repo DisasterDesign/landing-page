@@ -79,7 +79,7 @@ export default function Contact() {
     <section
       ref={sectionRef}
       id="contact"
-      className="min-h-[70vh] relative overflow-hidden py-20"
+      className="min-h-[70vh] relative overflow-hidden py-12 sm:py-16 md:py-20"
     >
 
       <div className="container mx-auto px-4 flex flex-col items-center justify-center min-h-[60vh] relative z-10">
@@ -103,7 +103,7 @@ export default function Contact() {
 
         {/* Glass Card Container with roll animation */}
         <div
-          className="w-full max-w-3xl p-8 md:p-12 relative"
+          className="w-full max-w-3xl p-4 sm:p-6 md:p-8 lg:p-12 relative"
           style={{
             backgroundColor: animationComplete ? "rgba(255, 255, 255, 0.03)" : "transparent",
             borderRadius: "24px",

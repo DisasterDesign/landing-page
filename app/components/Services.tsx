@@ -54,11 +54,11 @@ export default function Services() {
     <section
       ref={sectionRef}
       id="services"
-      className="min-h-[70vh] relative overflow-hidden py-20"
+      className="min-h-[70vh] relative overflow-hidden py-12 sm:py-16 md:py-20"
     >
       {/* Section Title */}
       <div
-        className="flex justify-center mb-32 px-4 transition-all duration-700"
+        className="flex justify-center mb-12 sm:mb-20 md:mb-32 px-4 transition-all duration-700"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "translateY(0)" : "translateY(-30px)",

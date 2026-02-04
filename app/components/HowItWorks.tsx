@@ -366,7 +366,7 @@ export default function HowItWorks() {
     <section
       ref={sectionRef}
       id="how-it-works"
-      className="min-h-screen relative overflow-hidden py-20"
+      className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20"
     >
       {/* Astronaut 3D Canvas - positioned on right side */}
       <div className="absolute inset-0 pointer-events-none z-20">
@@ -392,7 +392,7 @@ export default function HowItWorks() {
       />
       {/* Section Title */}
       <div
-        className="flex justify-center mb-16 relative z-10"
+        className="flex justify-center mb-8 sm:mb-12 md:mb-16 relative z-10"
         style={{
           opacity: titleProgress,
           transform: `translateY(${(1 - titleProgress) * -30}px)`,
