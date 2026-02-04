@@ -108,6 +108,6 @@ html, body {
 
   section {
     scroll-snap-align: start;
-    scroll-margin-top: 40px;
+    scroll-margin-top: 80px;
   }
 }
