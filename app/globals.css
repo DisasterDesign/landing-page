@@ -110,4 +110,9 @@ html, body {
     scroll-snap-align: start;
     scroll-margin-top: 80px;
   }
+
+  /* Last section - no snap to allow scrolling to footer */
+  section#contact {
+    scroll-snap-align: none;
+  }
 }
