@@ -98,3 +98,15 @@ html, body {
 .animate-fade-in {
   animation: fade-in 0.4s ease-out;
 }
+
+/* Mobile-only scroll snap */
+@media (max-width: 767px) {
+  html {
+    scroll-snap-type: y proximity;
+    scroll-behavior: smooth;
+  }
+
+  section {
+    scroll-snap-align: start;
+  }
+}
