@@ -21,6 +21,7 @@ export default function NavigationTOC() {
   const [activeSection, setActiveSection] = useState("hero");
   const [showText, setShowText] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(false);
   // Always white text - all sections are dark
   const navRef = useRef<HTMLDivElement>(null);
 
@@ -86,10 +87,13 @@ export default function NavigationTOC() {
         return;
       }
 
-      // Edge case: At very bottom - always "contact"
+      // Edge case: At very bottom - always "contact" and hide nav
       if (scrollY + windowHeight >= documentHeight - 100) {
         setActiveSection("contact");
+        setIsAtBottom(true);
         return;
+      } else {
+        setIsAtBottom(false);
       }
 
       // Normal case: Check which section contains viewport center
@@ -134,9 +138,13 @@ export default function NavigationTOC() {
           ? "right-8 bottom-8"
           : "left-1/2 -translate-x-1/2 top-[15%]"
       }`}
+      style={{
+        opacity: isAtBottom ? 0 : 1,
+        pointerEvents: isAtBottom ? "none" : "auto",
+      }}
     >
       {/* Content */}
-      <ul className="flex flex-col gap-3 relative min-w-[290px]">
+      <ul className="flex flex-col gap-3 relative min-w-[250px] sm:min-w-[290px]">
         {sections.map(({ id, label, numeral, svg, width, height }, index) => {
           const isVisible = showText && !isTransitioning;
           const isActive = activeSection === id;
