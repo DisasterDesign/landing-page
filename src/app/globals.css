@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-pink: #E503A2;
+  --color-cyan: #01FFFF;
+  --color-black: #000000;
+  --color-white: #FFFFFF;
+  --color-pink-light: #FF2DBF;
+  --color-pink-dark: #B80282;
+  --color-cyan-dark: #00CCCC;
+  --color-gray-900: #111111;
+  --color-gray-800: #1A1A1A;
+  --color-gray-700: #2A2A2A;
+  --color-gray-600: #3A3A3A;
+  --color-gray-500: #666666;
+  --color-gray-400: #999999;
+  --color-gray-300: #CCCCCC;
+  --font-anomalia: "Anomalia", system-ui, sans-serif;
+}
+
+@font-face {
+  font-family: "Anomalia";
+  src: url("/fonts/Anomalia/anomalias.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Anomalia";
+  src: url("/fonts/Anomalia/anomalia-light-aaa (1).ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Anomalia";
+  src: url("/fonts/Anomalia/AnomaliaMLv2AAA-UltraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #000000;
+  color: #FFFFFF;
+  font-family: "Anomalia", system-ui, sans-serif;
+  cursor: none;
+  overflow-x: hidden;
+}
+
+@media (pointer: coarse) {
+  body {
+    cursor: auto;
+  }
+}
+
+::selection {
+  background-color: #E503A2;
+  color: #FFFFFF;
+}
+
+:focus-visible {
+  outline: 2px solid #01FFFF;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E503A2;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FF2DBF;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #E503A2 #000000;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

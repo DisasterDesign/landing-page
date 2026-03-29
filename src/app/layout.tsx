@@ -1,0 +1,43 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: {
+    default: "Fuzion Webz | סטודיו לעיצוב ובניית אתרים",
+    template: "%s | Fuzion Webz",
+  },
+  description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים. אנחנו יוצרים חוויות דיגיטליות שממירות מבקרים ללקוחות.",
+  metadataBase: new URL("https://fuzionwebz.com"),
+  openGraph: {
+    type: "website",
+    locale: "he_IL",
+    siteName: "Fuzion Webz",
+    title: "Fuzion Webz | סטודיו לעיצוב ובניית אתרים",
+    description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "https://fuzionwebz.com",
+    languages: {
+      "he-IL": "https://fuzionwebz.com",
+    },
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="he" dir="rtl" className="h-full antialiased">
+      <body className="min-h-full flex flex-col font-anomalia">{children}</body>
+    </html>
+  );
+}

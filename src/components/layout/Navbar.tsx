@@ -1,0 +1,101 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
+import { useScrollDirection } from "@/hooks/useScrollDirection";
+import { NAV_ITEMS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import MagneticButton from "@/components/animations/MagneticButton";
+import MobileMenu from "./MobileMenu";
+
+export default function Navbar() {
+  const scrollDirection = useScrollDirection();
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <>
+      <motion.header
+        className={cn(
+          "fixed top-0 left-0 right-0 z-50 transition-colors duration-300",
+          scrolled ? "bg-black/90 backdrop-blur-md border-b border-gray-800/50" : "bg-transparent"
+        )}
+        animate={{
+          y: scrollDirection === "down" && scrolled ? -100 : 0,
+        }}
+        transition={{ duration: 0.3 }}
+      >
+        <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="relative z-10" data-cursor="pointer">
+            <Image
+              src="/logo-white.svg"
+              alt="Fuzion Webz"
+              width={120}
+              height={40}
+              priority
+              className="h-8 w-auto"
+            />
+          </Link>
+
+          <ul className="hidden lg:flex items-center gap-8">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="relative text-sm text-gray-300 hover:text-white transition-colors duration-300 group"
+                  data-cursor="pointer"
+                >
+                  {item.label}
+                  <span className="absolute -bottom-1 right-0 w-0 h-[2px] bg-pink transition-all duration-300 group-hover:w-full" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden lg:block">
+            <MagneticButton>
+              <Link
+                href="/#contact"
+                className="bg-pink text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-pink-light hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-all duration-300"
+              >
+                בואו נדבר
+              </Link>
+            </MagneticButton>
+          </div>
+
+          <button
+            className="lg:hidden relative z-10 w-8 h-8 flex flex-col items-center justify-center gap-1.5"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "סגור תפריט" : "פתח תפריט"}
+            data-cursor="pointer"
+          >
+            <motion.span
+              className="block w-6 h-0.5 bg-white"
+              animate={menuOpen ? { rotate: 45, y: 4 } : { rotate: 0, y: 0 }}
+            />
+            <motion.span
+              className="block w-6 h-0.5 bg-white"
+              animate={menuOpen ? { opacity: 0 } : { opacity: 1 }}
+            />
+            <motion.span
+              className="block w-6 h-0.5 bg-white"
+              animate={menuOpen ? { rotate: -45, y: -4 } : { rotate: 0, y: 0 }}
+            />
+          </button>
+        </nav>
+      </motion.header>
+
+      <AnimatePresence>
+        {menuOpen && <MobileMenu onClose={() => setMenuOpen(false)} />}
+      </AnimatePresence>
+    </>
+  );
+}
