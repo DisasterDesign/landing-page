@@ -12,8 +12,14 @@ export default function HeroGlass() {
     const container = containerRef.current;
 
     import("./scene").then(({ initScene, destroyScene }) => {
-      initScene(container);
-      cleanupRef.current = destroyScene;
+      try {
+        initScene(container);
+        cleanupRef.current = destroyScene;
+      } catch (e) {
+        console.error("HeroGlass init failed:", e);
+      }
+    }).catch((e) => {
+      console.error("HeroGlass import failed:", e);
     });
 
     return () => {
@@ -26,7 +32,7 @@ export default function HeroGlass() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 overflow-hidden z-[2] pointer-events-none"
+      className="absolute inset-0 overflow-hidden z-[10] pointer-events-none"
       aria-hidden="true"
     />
   );

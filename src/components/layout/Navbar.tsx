@@ -51,10 +51,10 @@ export default function Navbar() {
             <Image
               src="/logo-white.svg"
               alt="Fuzion Webz"
-              width={220}
-              height={56}
+              width={440}
+              height={112}
               priority
-              className="h-14 w-auto"
+              className="h-28 w-auto"
             />
           </Link>
 
