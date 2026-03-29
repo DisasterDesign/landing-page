@@ -77,10 +77,10 @@ export default function Loader() {
           onAnimationComplete={handleAnimationComplete}
         >
           <motion.div
-            className="relative w-[200px] h-[200px] md:w-[280px] md:h-[280px]"
+            className="relative w-[400px] h-[400px] md:w-[560px] md:h-[560px]"
             animate={
               isFlying
-                ? { scale: 0.12, x: "30vw", y: "-38vh" }
+                ? { scale: 0.1, x: "40vw", y: "-42vh" }
                 : { scale: 1, x: 0, y: 0 }
             }
             transition={{ duration: FLY_DURATION, ease: [0.76, 0, 0.24, 1] }}
