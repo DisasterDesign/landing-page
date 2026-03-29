@@ -43,7 +43,7 @@ export default function Contact() {
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 
   return (
-    <section id="contact" className="py-24 md:py-32 px-6">
+    <section id="contact" className="relative bg-black py-24 md:py-32 px-6">
       <Toaster
         position="top-center"
         toastOptions={{

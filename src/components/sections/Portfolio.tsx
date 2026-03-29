@@ -38,7 +38,7 @@ export default function Portfolio() {
   }, []);
 
   return (
-    <section id="portfolio" className="py-24 md:py-32">
+    <section id="portfolio" className="relative bg-black py-24 md:py-32">
       <div className="px-6 mb-16 max-w-7xl mx-auto">
         <ScrollReveal>
           <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center" data-text="העבודות שלנו">

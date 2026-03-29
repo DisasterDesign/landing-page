@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-24 md:py-32 px-6">
+    <section id="pricing" className="relative bg-black py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
           <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="מסלולי שירות">

@@ -22,7 +22,7 @@ export default function Hero() {
   const title = "FUZION WEBZ";
 
   return (
-    <section className="relative h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative h-screen flex items-center justify-center overflow-hidden bg-transparent">
       {/* Floating decorations */}
       <ParallaxLayer speed={0.3} className="absolute top-20 right-20 opacity-30">
         <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
