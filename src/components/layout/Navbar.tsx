@@ -47,7 +47,7 @@ export default function Navbar() {
         transition={{ duration: 0.3 }}
       >
         <nav className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link href="/" className="relative z-10" data-cursor="pointer">
+          <Link href="/" id="navbar-logo" className="relative z-10 transition-opacity duration-300" data-cursor="pointer">
             <Image
               src="/logo-white.svg"
               alt="Fuzion Webz"

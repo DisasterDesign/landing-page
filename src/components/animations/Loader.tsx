@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PATHS } from "./LogoSVG";
 
@@ -15,6 +15,8 @@ const FADE_DURATION = 0.5;
 export default function Loader() {
   const [show, setShow] = useState(false);
   const [phase, setPhase] = useState<Phase>("draw");
+  const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0, scale: 0.1 });
+  const logoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -24,6 +26,8 @@ export default function Loader() {
       return;
     }
     setShow(true);
+    // Hide navbar logo while loader is active
+    document.documentElement.classList.add("loader-active");
   }, []);
 
   useEffect(() => {
@@ -36,7 +40,29 @@ export default function Loader() {
       return () => clearTimeout(timer);
     }
     if (phase === "chromatic") {
-      const timer = setTimeout(() => setPhase("fly"), CHROMATIC_DURATION * 1000);
+      const timer = setTimeout(() => {
+        // Calculate exact navbar logo position before flying
+        const navLogo = document.getElementById("navbar-logo");
+        const loaderLogo = logoContainerRef.current;
+        if (navLogo && loaderLogo) {
+          const navRect = navLogo.getBoundingClientRect();
+          const loaderRect = loaderLogo.getBoundingClientRect();
+
+          const navCenterX = navRect.left + navRect.width / 2;
+          const navCenterY = navRect.top + navRect.height / 2;
+          const loaderCenterX = loaderRect.left + loaderRect.width / 2;
+          const loaderCenterY = loaderRect.top + loaderRect.height / 2;
+
+          const targetScale = navRect.height / loaderRect.height;
+
+          setFlyTarget({
+            x: navCenterX - loaderCenterX,
+            y: navCenterY - loaderCenterY,
+            scale: targetScale,
+          });
+        }
+        setPhase("fly");
+      }, CHROMATIC_DURATION * 1000);
       return () => clearTimeout(timer);
     }
     if (phase === "fly") {
@@ -46,6 +72,7 @@ export default function Loader() {
     if (phase === "fadeout") {
       const timer = setTimeout(() => {
         sessionStorage.setItem("fuzion-loaded", "true");
+        document.documentElement.classList.remove("loader-active");
         setPhase("done");
       }, FADE_DURATION * 1000);
       return () => clearTimeout(timer);
@@ -77,10 +104,11 @@ export default function Loader() {
           onAnimationComplete={handleAnimationComplete}
         >
           <motion.div
-            className="relative w-[400px] h-[400px] md:w-[560px] md:h-[560px]"
+            ref={logoContainerRef}
+            className="relative w-[700px] h-[700px] md:w-[1000px] md:h-[1000px]"
             animate={
               isFlying
-                ? { scale: 0.1, x: "40vw", y: "-42vh" }
+                ? { scale: flyTarget.scale, x: flyTarget.x, y: flyTarget.y }
                 : { scale: 1, x: 0, y: 0 }
             }
             transition={{ duration: FLY_DURATION, ease: [0.76, 0, 0.24, 1] }}

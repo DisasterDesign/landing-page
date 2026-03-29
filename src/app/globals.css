@@ -94,6 +94,11 @@ body {
   scrollbar-color: #E503A2 #000000;
 }
 
+/* Loader — hide navbar logo during animation */
+html.loader-active #navbar-logo {
+  opacity: 0 !important;
+}
+
 /* Chromatic Aberration Effect */
 .chromatic-hover {
   position: relative;
