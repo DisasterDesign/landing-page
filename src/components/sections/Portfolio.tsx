@@ -41,8 +41,8 @@ export default function Portfolio() {
     <section id="portfolio" className="py-24 md:py-32">
       <div className="px-6 mb-16 max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center">
-            העבודות <span className="text-cyan">שלנו</span>
+          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center" data-text="העבודות שלנו">
+            העבודות שלנו
           </h2>
         </ScrollReveal>
       </div>
@@ -63,7 +63,7 @@ export default function Portfolio() {
                   </span>
                 </div>
               </div>
-              <span className="text-xs text-cyan font-bold uppercase tracking-wider">{project.category}</span>
+              <span className="text-xs text-white/60 font-bold uppercase tracking-wider">{project.category}</span>
               <h3 className="text-2xl font-bold mt-1">{project.title}</h3>
               <p className="text-gray-400 mt-1">{project.description}</p>
             </div>
@@ -73,7 +73,8 @@ export default function Portfolio() {
           <div className="shrink-0 w-[40vw] flex items-center justify-center">
             <a
               href="/portfolio"
-              className="text-2xl font-bold text-pink hover:text-pink-light transition-colors group"
+              className="chromatic-hover text-2xl font-bold text-white transition-colors group"
+              data-text="לכל העבודות ←"
               data-cursor="pointer"
             >
               לכל העבודות

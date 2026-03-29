@@ -31,7 +31,7 @@ export default function Button({
         variant === "secondary" &&
           "border-2 border-white text-white rounded-full hover:border-cyan hover:text-cyan hover:shadow-[0_0_20px_rgba(1,255,255,0.2)] active:scale-95",
         variant === "ghost" &&
-          "text-white hover:text-pink active:scale-95",
+          "text-white hover:opacity-80 active:scale-95",
         className
       )}
       data-cursor="pointer"

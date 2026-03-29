@@ -56,7 +56,8 @@ export default function Hero() {
       <div className="relative z-10 text-center px-6">
         <h1
           ref={headlineRef}
-          className="text-6xl sm:text-7xl md:text-8xl lg:text-[120px] font-extrabold leading-none tracking-tighter"
+          className="chromatic-hover chromatic-always text-6xl sm:text-7xl md:text-8xl lg:text-[120px] font-extrabold leading-none tracking-tighter"
+          data-text={title}
           style={{ perspective: "600px" }}
         >
           {title.split("").map((char, i) => (

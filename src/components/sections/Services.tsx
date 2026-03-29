@@ -49,8 +49,8 @@ export default function Services() {
     <section id="services" className="py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20">
-            השירותים <span className="text-pink">שלנו</span>
+          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="השירותים שלנו">
+            השירותים שלנו
           </h2>
         </ScrollReveal>
 
@@ -63,7 +63,8 @@ export default function Services() {
                 <p className="text-gray-400 leading-relaxed">{service.description}</p>
                 <a
                   href={`/#contact?service=${service.id}`}
-                  className="inline-block mt-4 text-pink text-sm font-bold hover:text-pink-light transition-colors group"
+                  className="chromatic-hover inline-block mt-4 text-white text-sm font-bold transition-colors group"
+                  data-text="לפרטים נוספים ←"
                 >
                   לפרטים נוספים
                   <span className="inline-block mr-1 transition-transform group-hover:-translate-x-1">←</span>

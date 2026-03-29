@@ -15,8 +15,8 @@ export default function AboutUs() {
     <section id="about" className="py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20">
-            מי <span className="text-cyan">אנחנו?</span>
+          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="מי אנחנו?">
+            מי אנחנו?
           </h2>
         </ScrollReveal>
 
@@ -33,7 +33,7 @@ export default function AboutUs() {
                 </div>
 
                 <h3 className="text-2xl font-bold mb-1">{member.nameHe}</h3>
-                <p className="text-pink text-sm font-bold mb-4">{member.roleHe}</p>
+                <p className="text-gray-400 text-sm font-bold mb-4">{member.roleHe}</p>
                 <p className="text-gray-400 leading-relaxed">{member.bio}</p>
               </div>
             </ScrollReveal>
@@ -42,8 +42,8 @@ export default function AboutUs() {
 
         {/* Values */}
         <ScrollReveal>
-          <h3 className="text-3xl md:text-4xl font-extrabold text-center mb-12">
-            הערכים <span className="text-pink">שלנו</span>
+          <h3 className="chromatic-hover text-3xl md:text-4xl font-extrabold text-center mb-12" data-text="הערכים שלנו">
+            הערכים שלנו
           </h3>
         </ScrollReveal>
 
@@ -51,7 +51,7 @@ export default function AboutUs() {
           {values.map((value, i) => (
             <ScrollReveal key={value.number} delay={i * 0.1}>
               <div className="text-center md:text-right">
-                <span className="text-5xl font-extrabold text-pink/30">{value.number}</span>
+                <span className="text-5xl font-extrabold text-white/20">{value.number}</span>
                 <h4 className="text-xl font-bold mt-2 mb-2">{value.title}</h4>
                 <p className="text-gray-400">{value.description}</p>
               </div>

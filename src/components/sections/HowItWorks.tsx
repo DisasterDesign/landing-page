@@ -8,8 +8,8 @@ export default function HowItWorks() {
     <section id="how-it-works" className="py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20">
-            איך זה <span className="text-pink">עובד?</span>
+          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="איך זה עובד?">
+            איך זה עובד?
           </h2>
         </ScrollReveal>
 
@@ -30,10 +30,10 @@ export default function HowItWorks() {
                   }`}
                 >
                   <div className="flex-1 text-center md:text-right">
-                    <span className="text-5xl md:text-6xl font-extrabold text-pink opacity-60">
+                    <span className="text-5xl md:text-6xl font-extrabold text-white opacity-30">
                       {step.number}
                     </span>
-                    <h3 className="text-2xl md:text-3xl font-bold mt-2 mb-3">
+                    <h3 className="chromatic-hover text-2xl md:text-3xl font-bold mt-2 mb-3" data-text={step.title}>
                       {step.title}
                     </h3>
                     <p className="text-gray-400 text-lg max-w-md mx-auto md:mx-0">

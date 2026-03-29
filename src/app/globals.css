@@ -47,7 +47,7 @@ html {
 }
 
 body {
-  background-color: #000000;
+  background-color: #0a0a0a;
   color: #FFFFFF;
   font-family: "Anomalia", system-ui, sans-serif;
   cursor: none;
@@ -94,6 +94,58 @@ body {
   scrollbar-color: #E503A2 #000000;
 }
 
+/* Chromatic Aberration Effect */
+.chromatic-hover {
+  position: relative;
+  display: inline-block;
+}
+.chromatic-hover::before,
+.chromatic-hover::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+.chromatic-hover::before {
+  color: #E503A2;
+  z-index: -1;
+}
+.chromatic-hover::after {
+  color: #01FFFF;
+  z-index: -1;
+}
+.chromatic-hover:hover::before {
+  opacity: 0.7;
+  transform: translate(-3px, 2px);
+}
+.chromatic-hover:hover::after {
+  opacity: 0.7;
+  transform: translate(3px, -2px);
+}
+
+/* Always-active chromatic (for hero) */
+.chromatic-always::before {
+  opacity: 0.5;
+  transform: translate(-2px, 1px);
+}
+.chromatic-always::after {
+  opacity: 0.5;
+  transform: translate(2px, -1px);
+}
+.chromatic-always:hover::before {
+  opacity: 0.8;
+  transform: translate(-4px, 3px);
+}
+.chromatic-always:hover::after {
+  opacity: 0.8;
+  transform: translate(4px, -3px);
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -103,5 +155,12 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .chromatic-hover::before,
+  .chromatic-hover::after,
+  .chromatic-always::before,
+  .chromatic-always::after {
+    display: none !important;
   }
 }

@@ -54,7 +54,7 @@ export default function Navbar() {
                   data-cursor="pointer"
                 >
                   {item.label}
-                  <span className="absolute -bottom-1 right-0 w-0 h-[2px] bg-pink transition-all duration-300 group-hover:w-full" />
+                  <span className="absolute -bottom-1 right-0 w-0 h-[2px] bg-gradient-to-r from-pink to-cyan transition-all duration-300 group-hover:w-full" />
                 </Link>
               </li>
             ))}
@@ -64,7 +64,8 @@ export default function Navbar() {
             <MagneticButton>
               <Link
                 href="/#contact"
-                className="bg-pink text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-pink-light hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-all duration-300"
+                className="chromatic-hover border-2 border-white text-white px-6 py-2.5 rounded-full text-sm font-bold hover:border-gray-400 transition-all duration-300"
+                data-text="בואו נדבר"
               >
                 בואו נדבר
               </Link>

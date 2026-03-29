@@ -53,8 +53,8 @@ export default function Contact() {
 
       <div className="max-w-4xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-5xl md:text-6xl lg:text-8xl font-extrabold text-center mb-4">
-            בואו <span className="text-pink">נדבר</span>
+          <h2 className="chromatic-hover text-5xl md:text-6xl lg:text-8xl font-extrabold text-center mb-4" data-text="בואו נדבר">
+            בואו נדבר
           </h2>
           <p className="text-gray-400 text-center text-lg mb-16">
             ספרו לנו על הפרויקט שלכם ונחזור אליכם בהקדם
@@ -120,7 +120,8 @@ export default function Contact() {
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-pink hover:text-pink-light transition-colors font-bold"
+                className="chromatic-hover flex items-center gap-2 text-white transition-colors font-bold"
+                data-text="דברו איתנו בוואטסאפ"
                 data-cursor="pointer"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">

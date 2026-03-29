@@ -10,8 +10,8 @@ export default function Pricing() {
     <section id="pricing" className="py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20">
-            מסלולי <span className="text-pink">שירות</span>
+          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="מסלולי שירות">
+            מסלולי שירות
           </h2>
         </ScrollReveal>
 
@@ -79,14 +79,15 @@ export default function Pricing() {
         {/* Add-ons */}
         <ScrollReveal>
           <div className="text-center">
-            <h3 className="text-2xl font-bold mb-6">
-              בתשלום <span className="text-cyan">נוסף</span>
+            <h3 className="chromatic-hover text-2xl font-bold mb-6" data-text="בתשלום נוסף">
+              בתשלום נוסף
             </h3>
             <div className="flex flex-wrap justify-center gap-3">
               {PRICING_ADDONS.map((addon) => (
                 <span
                   key={addon}
-                  className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-full text-sm text-gray-300 hover:border-cyan/30 hover:text-cyan transition-all duration-300"
+                  className="chromatic-hover px-4 py-2 bg-gray-900 border border-gray-800 rounded-full text-sm text-gray-300 hover:border-gray-600 transition-all duration-300"
+                  data-text={addon}
                 >
                   {addon}
                 </span>

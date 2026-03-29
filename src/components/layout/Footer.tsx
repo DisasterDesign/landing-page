@@ -29,7 +29,7 @@ export default function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-pink transition-colors text-sm"
+                    className="text-gray-400 hover:text-white transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -46,7 +46,7 @@ export default function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-pink transition-colors text-sm"
+                    className="text-gray-400 hover:text-white transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -63,7 +63,7 @@ export default function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-pink transition-colors text-sm"
+                    className="text-gray-400 hover:text-white transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -82,7 +82,7 @@ export default function Footer() {
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-500 hover:text-pink transition-colors hover:scale-110 transform duration-200 text-sm capitalize"
+                className="text-gray-500 hover:text-white transition-colors hover:scale-110 transform duration-200 text-sm capitalize"
                 aria-label={name}
               >
                 {name}
