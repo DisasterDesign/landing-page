@@ -46,15 +46,15 @@ export default function Navbar() {
         }}
         transition={{ duration: 0.3 }}
       >
-        <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <nav className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <Link href="/" className="relative z-10" data-cursor="pointer">
             <Image
               src="/logo-white.svg"
               alt="Fuzion Webz"
-              width={160}
-              height={40}
+              width={220}
+              height={56}
               priority
-              className="h-10 w-auto"
+              className="h-14 w-auto"
             />
           </Link>
 

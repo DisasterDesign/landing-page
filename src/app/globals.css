@@ -47,7 +47,7 @@ html {
 }
 
 body {
-  background-color: #0a0a0a;
+  background-color: white;
   color: #FFFFFF;
   font-family: "Anomalia", system-ui, sans-serif;
   cursor: none;
@@ -146,6 +146,25 @@ body {
   transform: translate(4px, -3px);
 }
 
+/* SVG Path Draw Animation */
+@keyframes drawPath {
+  0% {
+    stroke-dashoffset: 3000;
+    fill: transparent;
+    stroke-width: 2;
+  }
+  70% {
+    stroke-dashoffset: 0;
+    fill: transparent;
+    stroke-width: 2;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    fill: var(--path-fill, white);
+    stroke-width: 0;
+  }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -162,5 +181,11 @@ body {
   .chromatic-always::before,
   .chromatic-always::after {
     display: none !important;
+  }
+
+  .loader-path {
+    animation: none !important;
+    fill: var(--path-fill, white) !important;
+    stroke-width: 0 !important;
   }
 }

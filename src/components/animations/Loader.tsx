@@ -2,12 +2,19 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PATHS } from "./LogoSVG";
 
-type Phase = "reveal" | "chromatic-in" | "chromatic-out" | "fly" | "fadeout" | "done";
+type Phase = "draw" | "chromatic" | "fly" | "fadeout" | "done";
+
+const DRAW_DURATION = 2;
+const STAGGER = 0.05;
+const CHROMATIC_DURATION = 0.5;
+const FLY_DURATION = 0.8;
+const FADE_DURATION = 0.5;
 
 export default function Loader() {
   const [show, setShow] = useState(false);
-  const [phase, setPhase] = useState<Phase>("reveal");
+  const [phase, setPhase] = useState<Phase>("draw");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -19,30 +26,46 @@ export default function Loader() {
     setShow(true);
   }, []);
 
-  const nextPhase = useCallback(() => {
-    setPhase((p) => {
-      switch (p) {
-        case "reveal": return "chromatic-in";
-        case "chromatic-in": return "chromatic-out";
-        case "chromatic-out": return "fly";
-        case "fly": return "fadeout";
-        case "fadeout":
-          sessionStorage.setItem("fuzion-loaded", "true");
-          return "done";
-        default: return p;
-      }
-    });
-  }, []);
-
   useEffect(() => {
-    if (phase === "done") setShow(false);
-  }, [phase]);
+    if (!show) return;
+
+    const totalDrawTime = (DRAW_DURATION + STAGGER * (PATHS.length - 1)) * 1000;
+
+    if (phase === "draw") {
+      const timer = setTimeout(() => setPhase("chromatic"), totalDrawTime);
+      return () => clearTimeout(timer);
+    }
+    if (phase === "chromatic") {
+      const timer = setTimeout(() => setPhase("fly"), CHROMATIC_DURATION * 1000);
+      return () => clearTimeout(timer);
+    }
+    if (phase === "fly") {
+      const timer = setTimeout(() => setPhase("fadeout"), FLY_DURATION * 1000);
+      return () => clearTimeout(timer);
+    }
+    if (phase === "fadeout") {
+      const timer = setTimeout(() => {
+        sessionStorage.setItem("fuzion-loaded", "true");
+        setPhase("done");
+      }, FADE_DURATION * 1000);
+      return () => clearTimeout(timer);
+    }
+    if (phase === "done") {
+      setShow(false);
+    }
+  }, [show, phase]);
+
+  const handleAnimationComplete = useCallback(() => {
+    // Phase transitions handled by timers
+  }, []);
 
   if (!show) return null;
 
-  const isChromaticIn = phase === "chromatic-in";
+  const isDrawing = phase === "draw";
+  const isChromatic = phase === "chromatic";
   const isFlying = phase === "fly" || phase === "fadeout" || phase === "done";
   const isFading = phase === "fadeout" || phase === "done";
+  const drawComplete = !isDrawing;
 
   return (
     <AnimatePresence>
@@ -50,10 +73,8 @@ export default function Loader() {
         <motion.div
           className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
           animate={{ opacity: isFading ? 0 : 1 }}
-          transition={{ duration: 0.4 }}
-          onAnimationComplete={() => {
-            if (phase === "fadeout") nextPhase();
-          }}
+          transition={{ duration: FADE_DURATION }}
+          onAnimationComplete={handleAnimationComplete}
         >
           <motion.div
             className="relative w-[200px] h-[200px] md:w-[280px] md:h-[280px]"
@@ -62,64 +83,87 @@ export default function Loader() {
                 ? { scale: 0.12, x: "30vw", y: "-38vh" }
                 : { scale: 1, x: 0, y: 0 }
             }
-            transition={{ duration: 0.8, ease: [0.76, 0, 0.24, 1] }}
-            onAnimationComplete={() => {
-              if (phase === "fly") nextPhase();
-            }}
+            transition={{ duration: FLY_DURATION, ease: [0.76, 0, 0.24, 1] }}
           >
-            {/* Pink chromatic layer */}
-            <motion.img
-              src="/logo-white.svg"
-              alt=""
-              className="absolute inset-0 w-full h-full object-contain"
-              style={{
-                filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)",
-              }}
-              animate={{
-                opacity: isChromaticIn ? 0.7 : 0,
-                x: isChromaticIn ? -4 : 0,
-                y: isChromaticIn ? 2 : 0,
-              }}
-              transition={{ duration: 0.3 }}
-              aria-hidden="true"
-            />
+            {/* Chromatic pink layer */}
+            {isChromatic && (
+              <motion.div
+                className="absolute inset-0"
+                initial={{ opacity: 0, x: -4, y: 2 }}
+                animate={{ opacity: [0, 0.7, 0], x: [-4, -4, 0], y: [2, 2, 0] }}
+                transition={{ duration: CHROMATIC_DURATION, ease: "easeInOut" }}
+              >
+                <svg viewBox="0 0 1080 1080" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)" }}>
+                  <defs>
+                    <clipPath id="loaderClipPink">
+                      <rect width="700" height="226" fill="white" transform="translate(211 427)" />
+                    </clipPath>
+                  </defs>
+                  <g clipPath="url(#loaderClipPink)">
+                    {PATHS.map((p, i) => (
+                      <path key={i} d={p.d} fill={p.fill} />
+                    ))}
+                  </g>
+                </svg>
+              </motion.div>
+            )}
 
-            {/* Cyan chromatic layer */}
-            <motion.img
-              src="/logo-white.svg"
-              alt=""
-              className="absolute inset-0 w-full h-full object-contain"
-              style={{
-                filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)",
-              }}
-              animate={{
-                opacity: isChromaticIn ? 0.7 : 0,
-                x: isChromaticIn ? 4 : 0,
-                y: isChromaticIn ? -2 : 0,
-              }}
-              transition={{ duration: 0.3 }}
-              onAnimationComplete={() => {
-                if (phase === "chromatic-in") {
-                  setTimeout(() => nextPhase(), 300);
-                } else if (phase === "chromatic-out") {
-                  nextPhase();
-                }
-              }}
-              aria-hidden="true"
-            />
+            {/* Chromatic cyan layer */}
+            {isChromatic && (
+              <motion.div
+                className="absolute inset-0"
+                initial={{ opacity: 0, x: 4, y: -2 }}
+                animate={{ opacity: [0, 0.7, 0], x: [4, 4, 0], y: [-2, -2, 0] }}
+                transition={{ duration: CHROMATIC_DURATION, ease: "easeInOut" }}
+              >
+                <svg viewBox="0 0 1080 1080" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)" }}>
+                  <defs>
+                    <clipPath id="loaderClipCyan">
+                      <rect width="700" height="226" fill="white" transform="translate(211 427)" />
+                    </clipPath>
+                  </defs>
+                  <g clipPath="url(#loaderClipCyan)">
+                    {PATHS.map((p, i) => (
+                      <path key={i} d={p.d} fill={p.fill} />
+                    ))}
+                  </g>
+                </svg>
+              </motion.div>
+            )}
 
-            {/* Main logo — clip-path wipe reveal */}
-            <motion.img
-              src="/logo-white.svg"
-              alt="Fuzion Webz"
-              className="absolute inset-0 w-full h-full object-contain"
-              initial={{ clipPath: "inset(0 100% 0 0)" }}
-              animate={{ clipPath: "inset(0 0% 0 0)" }}
-              transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
-              onAnimationComplete={() => {
-                if (phase === "reveal") nextPhase();
-              }}
-            />
+            {/* Main logo - draw animation then filled */}
+            <svg
+              viewBox="0 0 1080 1080"
+              xmlns="http://www.w3.org/2000/svg"
+              className="absolute inset-0 w-full h-full"
+            >
+              <defs>
+                <clipPath id="loaderClip0">
+                  <rect width="700" height="226" fill="white" transform="translate(211 427)" />
+                </clipPath>
+              </defs>
+              <g clipPath="url(#loaderClip0)">
+                {PATHS.map((p, i) => (
+                  <path
+                    key={i}
+                    d={p.d}
+                    className="loader-path"
+                    style={{
+                      ["--path-fill" as string]: p.fill,
+                      fill: drawComplete ? p.fill : "transparent",
+                      stroke: drawComplete ? "none" : "white",
+                      strokeWidth: drawComplete ? 0 : 2,
+                      strokeDasharray: drawComplete ? "none" : 3000,
+                      strokeDashoffset: drawComplete ? 0 : 3000,
+                      animation: drawComplete
+                        ? "none"
+                        : `drawPath ${DRAW_DURATION}s ease forwards`,
+                      animationDelay: drawComplete ? "0s" : `${i * STAGGER}s`,
+                    }}
+                  />
+                ))}
+              </g>
+            </svg>
           </motion.div>
         </motion.div>
       )}
