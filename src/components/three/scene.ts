@@ -1,73 +1,196 @@
 import * as THREE from "three";
 import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 
-// The white "F" path from icon-white.svg
-const F_PATH = "M376.55 804.39C371.89 803.07 367.22 801.81 362.58 800.43C292.76 779.68 267.41 698.92 312.81 641.93C313.42 641.16 313.96 640.35 314.79 639.21C302.84 625.06 294.52 609.08 291.47 590.69C281.98 533.25 319.69 485.97 369.47 476C376.65 474.56 384.17 474.32 391.53 474.31C485.43 474.2 579.33 474.24 673.23 474.24C676.18 474.24 679.14 474.24 683.27 474.24C682.04 470.99 681.28 468.27 680.02 465.79C661.09 428.59 630.89 408.82 588.9 408.6C524.41 408.26 459.91 408.48 395.41 408.53C376.39 408.55 358.01 405.8 341.33 396.05C309.9 377.67 292.14 350.61 290.38 313.93C289.79 301.65 290.29 289.32 290.29 276.44C292.73 276.29 294.87 276.04 297.01 276.04C428.97 276.02 560.92 275.95 692.88 276.06C739.68 276.1 782.41 315.21 789.04 361.52C797.2 418.51 752.39 474.72 690.33 474.32C688.63 474.31 686.93 474.54 686.01 474.6C687.16 486.5 689.19 498.16 689.26 509.83C689.55 560.35 646.66 605.17 595.94 605.88C528 606.83 460.04 606.29 392.09 606.41C362.2 606.46 336.74 616.83 315.83 639.28C332.95 657.66 353.56 669.86 378.59 670.98C412.63 672.5 446.76 671.85 480.85 672.12C483.78 672.14 486.7 672.12 489.46 672.12C500.47 720.7 480.9 769.91 441.26 791.79C430.91 797.5 418.93 800.27 407.7 804.38H376.56L376.55 804.39Z";
+// The white "F" path from icon-black.svg (the base shape)
+const F_PATH = "M382.837 794.39C378.356 793.122 373.865 791.911 369.404 790.584C302.269 770.644 277.894 693.034 321.548 638.267C322.135 637.527 322.654 636.748 323.452 635.653C311.962 622.055 303.962 606.698 301.029 589.025C291.904 533.826 328.163 488.39 376.029 478.809C382.933 477.425 390.163 477.194 397.24 477.185C487.529 477.079 577.817 477.118 668.106 477.118C670.942 477.118 673.788 477.118 677.76 477.118C676.577 473.994 675.846 471.38 674.635 468.997C656.433 433.248 627.394 414.249 587.019 414.038C525.01 413.711 462.99 413.923 400.971 413.971C382.683 413.99 365.01 411.347 348.971 401.977C318.75 384.314 301.673 358.31 299.981 323.06C299.413 311.259 299.894 299.41 299.894 287.033C302.24 286.889 304.298 286.648 306.356 286.648C433.24 286.629 560.115 286.562 687 286.668C732 286.706 773.087 324.291 779.462 368.794C787.308 423.561 744.221 477.579 684.548 477.194C682.913 477.185 681.279 477.406 680.394 477.464C681.5 488.899 683.452 500.105 683.519 511.319C683.798 559.869 642.558 602.941 593.788 603.623C528.462 604.536 463.115 604.017 397.779 604.132C369.038 604.18 344.558 614.146 324.452 635.72C340.913 653.383 360.731 665.107 384.798 666.184C417.529 667.644 450.346 667.02 483.125 667.279C485.942 667.298 488.75 667.279 491.404 667.279C501.99 713.964 483.173 761.255 445.058 782.281C435.106 787.769 423.587 790.431 412.788 794.38H382.846L382.837 794.39Z";
+
+// 4D Simplex Noise (from Buzzworthy)
+const noise4GLSL = `
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+float mod289(float x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+float permute(float x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float taylorInvSqrt(float r){return 1.79284291400159-0.85373472095314*r;}
+vec4 grad4(float j,vec4 ip){
+  const vec4 ones=vec4(1.0,1.0,1.0,-1.0);
+  vec4 p,s;
+  p.xyz=floor(fract(vec3(j)*ip.xyz)*7.0)*ip.z-1.0;
+  p.w=1.5-dot(abs(p.xyz),ones.xyz);
+  s=vec4(lessThan(p,vec4(0.0)));
+  p.xyz=p.xyz+(s.xyz*2.0-1.0)*s.www;
+  return p;
+}
+#define F4 0.309016994374947451
+float snoise(vec4 v){
+  const vec4 C=vec4(0.138196601125011,0.276393202250021,0.414589803375032,-0.447213595499958);
+  vec4 i=floor(v+dot(v,vec4(F4)));
+  vec4 x0=v-i+dot(i,C.xxxx);
+  vec4 i0;vec3 isX=step(x0.yzw,x0.xxx);vec3 isYZ=step(x0.zww,x0.yyz);
+  i0.x=isX.x+isX.y+isX.z;i0.yzw=1.0-isX;
+  i0.y+=isYZ.x+isYZ.y;i0.zw+=1.0-isYZ.xy;i0.z+=isYZ.z;i0.w+=1.0-isYZ.z;
+  vec4 i3=clamp(i0,0.0,1.0);vec4 i2=clamp(i0-1.0,0.0,1.0);vec4 i1=clamp(i0-2.0,0.0,1.0);
+  vec4 x1=x0-i1+C.xxxx;vec4 x2=x0-i2+C.yyyy;vec4 x3=x0-i3+C.zzzz;vec4 x4=x0+C.wwww;
+  i=mod289(i);
+  float j0=permute(permute(permute(permute(i.w)+i.z)+i.y)+i.x);
+  vec4 j1=permute(permute(permute(permute(i.w+vec4(i1.w,i2.w,i3.w,1.0))+i.z+vec4(i1.z,i2.z,i3.z,1.0))+i.y+vec4(i1.y,i2.y,i3.y,1.0))+i.x+vec4(i1.x,i2.x,i3.x,1.0));
+  vec4 ip=vec4(1.0/294.0,1.0/49.0,1.0/7.0,0.0);
+  vec4 p0=grad4(j0,ip);vec4 p1=grad4(j1.x,ip);vec4 p2=grad4(j1.y,ip);vec4 p3=grad4(j1.z,ip);vec4 p4=grad4(j1.w,ip);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;p4*=taylorInvSqrt(dot(p4,p4));
+  vec3 m0=max(0.6-vec3(dot(x0,x0),dot(x1,x1),dot(x2,x2)),0.0);
+  vec2 m1=max(0.6-vec2(dot(x3,x3),dot(x4,x4)),0.0);
+  m0=m0*m0;m1=m1*m1;
+  return 49.0*(dot(m0*m0,vec3(dot(p0,x0),dot(p1,x1),dot(p2,x2)))+dot(m1*m1,vec2(dot(p3,x3),dot(p4,x4))));
+}
+`;
+
+// Vertex shader — based on Buzzworthy's approach with noise distortion
+const vertexShader = `
+${noise4GLSL}
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vN;
+varying vec3 eyeVector;
+varying vec3 worldNormal;
+
+uniform float u_time;
+uniform vec3 u_camPos;
+uniform float u_speed1;
+uniform float u_freq1;
+uniform float u_amp1;
+
+float tangentFactor = 0.005;
+
+vec3 orthogonal(vec3 v) {
+  return normalize(abs(v.x) > abs(v.z) ? vec3(-v.y, v.x, 0.0) : vec3(0.0, -v.z, v.y));
+}
+
+vec3 distorted(vec3 p) {
+  return p * (1.0 + snoise(vec4(p * u_freq1, u_time * 0.0001 * u_speed1)) * 0.05 * u_amp1);
+}
+
+void main() {
+  vUv = uv;
+  vNormal = normal;
+  vPosition = position;
+
+  vec3 dispPos = distorted(position);
+  vec3 tangent1 = orthogonal(normal);
+  vec3 tangent2 = normalize(cross(normal, tangent1));
+  vec3 nearby1 = position + tangent1 * tangentFactor;
+  vec3 nearby2 = position + tangent2 * tangentFactor;
+  vec3 distorted1 = distorted(nearby1);
+  vec3 distorted2 = distorted(nearby2);
+  vNormal = normalize(cross(distorted1 - dispPos, distorted2 - dispPos));
+
+  vec4 p = vec4(position, 1.0);
+  vec3 e = normalize(vec3(modelViewMatrix * p));
+  vec3 n = normalize(normalMatrix * vNormal);
+  vec3 r = reflect(e, n);
+  float m = 2.0 * sqrt(pow(r.x, 2.0) + pow(r.y, 2.0) + pow(r.z + 1.0, 2.0));
+  vN = r.xy / m + 0.5;
+
+  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+  eyeVector = normalize(worldPosition.xyz - u_camPos);
+  worldNormal = normalize(modelViewMatrix * vec4(vNormal, 0.0)).xyz;
+
+  vec4 modelViewPosition = modelViewMatrix * vec4(dispPos, 1.0);
+  gl_Position = projectionMatrix * modelViewPosition;
+}
+`;
+
+// Fragment shader — refraction, fresnel, matcap style lighting
+const fragmentShader = `
+uniform vec2 u_res;
+uniform float u_ior;
+uniform float u_blur;
+uniform vec3 u_refColor;
+uniform float u_lightfac;
+uniform float pi;
+
+varying vec2 vN;
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+varying vec3 eyeVector;
+varying vec3 worldNormal;
+
+float fresnel(vec3 eyeVector, vec3 worldNormal) {
+  return pow(1.0 + dot(eyeVector, worldNormal), 3.0);
+}
+
+void main() {
+  // Matcap-style lighting from normals
+  vec3 matCapCol = vec3(0.4 + vN.x * 0.3, 0.4 + vN.y * 0.3, 0.45);
+
+  vec2 uv = gl_FragCoord.xy / u_res;
+  vec3 normal = worldNormal;
+  vec3 refracted = refract(eyeVector, normal, 1.0 / u_ior);
+  uv += refracted.xy;
+
+  // Dark background refraction simulation
+  vec3 bgCol = vec3(0.02, 0.02, 0.03);
+  vec3 tintedRefr = mix(bgCol, vec3(0.05), 0.1);
+  vec3 matCapLayer = tintedRefr * (matCapCol + 0.4);
+  vec3 outCol = mix(matCapLayer, u_refColor, fresnel(eyeVector, normal));
+
+  outCol *= u_lightfac;
+
+  gl_FragColor = vec4(outCol, 0.92);
+}
+`;
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
-let mesh: THREE.Mesh | null = null;
+let meshGroup: THREE.Group | null = null;
+let shaderMat: THREE.ShaderMaterial | null = null;
 let animationId: number | null = null;
-let mouseX = 0;
-let mouseY = 0;
-let scrollProgress = 0;
 
-function createEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  pmremGenerator.compileEquirectangularShader();
-
-  // Create a simple dark environment with subtle color accents
-  const envScene = new THREE.Scene();
-  envScene.background = new THREE.Color(0x050505);
-
-  // Add colored area lights to the environment
-  const pinkLight = new THREE.PointLight(0xe503a2, 2, 50);
-  pinkLight.position.set(-10, 5, -10);
-  envScene.add(pinkLight);
-
-  const cyanLight = new THREE.PointLight(0x01ffff, 2, 50);
-  cyanLight.position.set(10, -5, -10);
-  envScene.add(cyanLight);
-
-  const whiteLight = new THREE.PointLight(0xffffff, 1, 50);
-  whiteLight.position.set(0, 10, 10);
-  envScene.add(whiteLight);
-
-  const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
-  pmremGenerator.dispose();
-  return envMap;
-}
+// Camera parallax (from Buzzworthy — exact values)
+const mousePos = { x: 0, y: 0 };
+const parallaxIntensity = 0.004;
+const parallaxEase = 0.025;
+let initCameraZ = 15;
 
 function createGeometry(): THREE.BufferGeometry | null {
   const loader = new SVGLoader();
-  const svgData = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><path d="${F_PATH}"/></svg>`;
-  const result = loader.parse(svgData);
+  const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><path d="${F_PATH}"/></svg>`;
+  const result = loader.parse(svgMarkup);
 
   const shapes: THREE.Shape[] = [];
   for (const path of result.paths) {
     const pathShapes = SVGLoader.createShapes(path);
     shapes.push(...pathShapes);
   }
-
   if (shapes.length === 0) return null;
 
   const isMobile = window.innerWidth < 768;
 
   const geometry = new THREE.ExtrudeGeometry(shapes, {
-    depth: 80,
+    depth: 60,
     bevelEnabled: true,
-    bevelThickness: 4,
-    bevelSize: 3,
-    bevelSegments: isMobile ? 1 : 3,
-    curveSegments: isMobile ? 6 : 12,
+    bevelThickness: 3,
+    bevelSize: 2,
+    bevelSegments: isMobile ? 2 : 4,
+    curveSegments: isMobile ? 8 : 16,
   });
 
   geometry.center();
+  geometry.computeVertexNormals();
 
-  // Scale down to reasonable Three.js units
-  const scale = 0.012;
-  geometry.scale(scale, -scale, scale);
+  // Scale to fit ~5 units (like Buzzworthy's icosahedron radius of 2.5)
+  const box = new THREE.Box3().setFromBufferAttribute(
+    geometry.getAttribute("position") as THREE.BufferAttribute
+  );
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = 5 / maxDim;
+  geometry.scale(scale, -scale, scale); // -Y to flip SVG coordinate system
 
   return geometry;
 }
@@ -75,18 +198,13 @@ function createGeometry(): THREE.BufferGeometry | null {
 export function initScene(container: HTMLElement) {
   // WebGL check
   const testCanvas = document.createElement("canvas");
-  if (
-    !testCanvas.getContext("webgl2") &&
-    !testCanvas.getContext("webgl")
-  ) {
-    return;
-  }
+  if (!testCanvas.getContext("webgl2") && !testCanvas.getContext("webgl")) return;
 
   const width = container.clientWidth;
   const height = container.clientHeight;
   const isMobile = width < 768;
 
-  // Renderer
+  // Renderer — match Buzzworthy
   renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: true,
@@ -94,136 +212,134 @@ export function initScene(container: HTMLElement) {
   });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.setClearColor(0x000000, 0);
   container.appendChild(renderer.domElement);
 
   // Scene
   scene = new THREE.Scene();
 
-  // Camera
+  // Camera — match Buzzworthy (PerspectiveCamera, FOV 30)
+  initCameraZ = isMobile ? 28 : 15;
   camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 1000);
-  camera.position.z = isMobile ? 28 : 15;
-
-  // Environment map
-  const envMap = createEnvMap(renderer);
-
-  // Material — glass/refraction
-  const material = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    metalness: 0.0,
-    roughness: 0.05,
-    transmission: 0.95,
-    thickness: 2.0,
-    ior: 1.45,
-    envMap,
-    envMapIntensity: 1.5,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.1,
-    transparent: true,
-    opacity: 0.95,
-    side: THREE.DoubleSide,
-  });
+  camera.position.z = initCameraZ;
 
   // Geometry
   const geometry = createGeometry();
   if (!geometry) return;
 
-  mesh = new THREE.Mesh(geometry, material);
-  scene.add(mesh);
+  // Shader material — like Buzzworthy's honey ball
+  shaderMat = new THREE.ShaderMaterial({
+    uniforms: {
+      u_res: { value: new THREE.Vector2(width, height) },
+      u_time: { value: 0 },
+      u_camPos: { value: camera.position },
+      u_speed1: { value: 9.18 },
+      u_freq1: { value: 0.55 },
+      u_amp1: { value: 2.4 },
+      u_ior: { value: 1.45 },
+      u_blur: { value: 0.5 },
+      u_refColor: { value: new THREE.Color(0x1a1a2e) },
+      u_lightfac: { value: 1.0 },
+      pi: { value: Math.PI },
+    },
+    vertexShader,
+    fragmentShader,
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
 
-  // Lights
-  const ambient = new THREE.AmbientLight(0x404040, 0.5);
-  scene.add(ambient);
+  // Mesh in rotator group (like Buzzworthy)
+  meshGroup = new THREE.Group();
+  const mesh = new THREE.Mesh(geometry, shaderMat);
+  mesh.name = "GlassF";
+  meshGroup.add(mesh);
+  scene.add(meshGroup);
 
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  keyLight.position.set(5, 5, 5);
-  scene.add(keyLight);
-
-  const pinkLight = new THREE.PointLight(0xe503a2, 0.3, 20);
-  pinkLight.position.set(-5, 2, 3);
-  scene.add(pinkLight);
-
-  const cyanLight = new THREE.PointLight(0x01ffff, 0.3, 20);
-  cyanLight.position.set(5, -2, 3);
-  scene.add(cyanLight);
-
-  // Mouse tracking
-  const handleMouseMove = (e: MouseEvent) => {
-    mouseX = (e.clientX / width - 0.5) * 2;
-    mouseY = (e.clientY / height - 0.5) * 2;
+  // Mouse tracking (Buzzworthy exact approach)
+  const onMouseMove = (e: MouseEvent) => {
+    mousePos.x = (e.clientX - window.innerWidth / 2) * parallaxIntensity;
+    mousePos.y = (e.clientY - window.innerHeight / 2) * parallaxIntensity;
   };
-  window.addEventListener("mousemove", handleMouseMove);
+  window.addEventListener("mousemove", onMouseMove);
 
-  // Scroll tracking on #smooth-content
+  // Scroll tracking
   const scrollContainer = document.getElementById("smooth-content");
-  const handleScroll = () => {
+  let scrollProgress = 0;
+  const onScroll = () => {
     if (scrollContainer) {
       scrollProgress = scrollContainer.scrollTop / window.innerHeight;
     }
   };
-  scrollContainer?.addEventListener("scroll", handleScroll, { passive: true });
+  scrollContainer?.addEventListener("scroll", onScroll, { passive: true });
 
   // Resize
-  const handleResize = () => {
+  const onResize = () => {
     if (!renderer || !camera) return;
     const w = container.clientWidth;
     const h = container.clientHeight;
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    if (shaderMat) {
+      shaderMat.uniforms.u_res.value.set(w, h);
+    }
   };
-  window.addEventListener("resize", handleResize);
+  window.addEventListener("resize", onResize);
 
-  // Reduced motion check
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)"
-  ).matches;
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Animation loop
+  let lastTime = performance.now();
   function animate() {
     animationId = requestAnimationFrame(animate);
-    if (!mesh || !camera || !renderer || !scene) return;
+    if (!meshGroup || !camera || !renderer || !scene || !shaderMat) return;
+
+    const now = performance.now();
+    const dt = (now - lastTime) * 0.001;
+    lastTime = now;
+
+    // Update shader time
+    shaderMat.uniforms.u_time.value += dt;
+    shaderMat.uniforms.u_camPos.value = camera.position;
 
     if (!prefersReducedMotion) {
-      // Slow rotation
-      mesh.rotation.y += 0.003;
-      mesh.rotation.x = Math.sin(Date.now() * 0.0005) * 0.05;
+      // Slow rotation (like Buzzworthy)
+      meshGroup.rotation.y += 0.003;
 
-      // Mouse parallax
-      const targetX = mouseX * 0.5;
-      const targetY = -mouseY * 0.3;
-      camera.position.x += (targetX - camera.position.x) * 0.05;
-      camera.position.y += (targetY - camera.position.y) * 0.05;
+      // Camera parallax (exact Buzzworthy approach)
+      camera.position.x += (mousePos.x - camera.position.x) * parallaxEase;
+      camera.position.y += (mousePos.y - camera.position.y) * parallaxEase;
+      camera.position.z += (initCameraZ - camera.position.z) * parallaxEase;
       camera.lookAt(0, 0, 0);
     }
 
-    // Scroll fade/scale
+    // Scroll: scale down and fade
     const scale = Math.max(0.3, 1 - scrollProgress * 0.3);
-    mesh.scale.setScalar(scale);
-    (mesh.material as THREE.MeshPhysicalMaterial).opacity = Math.max(
-      0,
-      0.95 - scrollProgress * 1.5
-    );
+    meshGroup.scale.setScalar(scale);
+    shaderMat.opacity = Math.max(0, 1 - scrollProgress * 1.5);
 
     renderer.render(scene, camera);
   }
 
   animate();
 
-  // Store cleanup refs
+  // Store cleanup
   (container as HTMLElement & { _cleanup?: () => void })._cleanup = () => {
-    window.removeEventListener("mousemove", handleMouseMove);
-    window.removeEventListener("resize", handleResize);
-    scrollContainer?.removeEventListener("scroll", handleScroll);
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("resize", onResize);
+    scrollContainer?.removeEventListener("scroll", onScroll);
   };
 }
 
 export function destroyScene() {
   if (animationId) cancelAnimationFrame(animationId);
-  if (mesh) {
-    mesh.geometry.dispose();
-    (mesh.material as THREE.Material).dispose();
+  if (meshGroup) {
+    meshGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        child.material.dispose();
+      }
+    });
   }
   if (renderer) {
     renderer.dispose();
@@ -232,6 +348,7 @@ export function destroyScene() {
   renderer = null;
   scene = null;
   camera = null;
-  mesh = null;
+  meshGroup = null;
+  shaderMat = null;
   animationId = null;
 }
