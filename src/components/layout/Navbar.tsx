@@ -1,31 +1,44 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { NAV_ITEMS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import MagneticButton from "@/components/animations/MagneticButton";
 import MobileMenu from "./MobileMenu";
 
 export default function Navbar() {
-  const scrollDirection = useScrollDirection();
+  const [scrollDirection, setScrollDirection] = useState<"up" | "down">("up");
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const prevScroll = useRef(0);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const scrollContainer = document.getElementById("smooth-content");
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const currentScroll = scrollContainer.scrollTop;
+      setScrolled(currentScroll > 50);
+      if (currentScroll > prevScroll.current && currentScroll > 80) {
+        setScrollDirection("down");
+      } else if (currentScroll < prevScroll.current) {
+        setScrollDirection("up");
+      }
+      prevScroll.current = currentScroll;
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
     <>
       <motion.header
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 transition-colors duration-300",
+          "sticky top-0 left-0 right-0 z-50 transition-colors duration-300",
           scrolled ? "bg-black/90 backdrop-blur-md border-b border-gray-800/50" : "bg-transparent"
         )}
         animate={{
@@ -38,10 +51,10 @@ export default function Navbar() {
             <Image
               src="/logo-white.svg"
               alt="Fuzion Webz"
-              width={120}
+              width={160}
               height={40}
               priority
-              className="h-8 w-auto"
+              className="h-10 w-auto"
             />
           </Link>
 

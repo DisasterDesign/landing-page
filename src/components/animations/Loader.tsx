@@ -1,72 +1,128 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
+import { useEffect, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+type Phase = "reveal" | "chromatic-in" | "chromatic-out" | "fly" | "fadeout" | "done";
 
 export default function Loader() {
-  const [show, setShow] = useState(true);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const logoRef = useRef<HTMLDivElement>(null);
-  const pinkRef = useRef<HTMLImageElement>(null);
-  const cyanRef = useRef<HTMLImageElement>(null);
-  const mainRef = useRef<HTMLImageElement>(null);
+  const [show, setShow] = useState(false);
+  const [phase, setPhase] = useState<Phase>("reveal");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    if (sessionStorage.getItem("fuzion-loaded")) {
-      setShow(false);
-      return;
-    }
-
+    if (sessionStorage.getItem("fuzion-loaded")) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       sessionStorage.setItem("fuzion-loaded", "true");
-      setShow(false);
       return;
     }
-
-    const tl = gsap.timeline({
-      onComplete: () => {
-        sessionStorage.setItem("fuzion-loaded", "true");
-        setShow(false);
-      },
-    });
-
-    tl.fromTo(
-      mainRef.current,
-      { opacity: 0, scale: 0.8 },
-      { opacity: 1, scale: 1, duration: 0.8, ease: "power2.out" }
-    );
-
-    tl.to(pinkRef.current, { opacity: 0.7, x: -4, y: 2, duration: 0.3, ease: "power2.out" }, "+=0.2");
-    tl.to(cyanRef.current, { opacity: 0.7, x: 4, y: -2, duration: 0.3, ease: "power2.out" }, "<");
-    tl.to([pinkRef.current, cyanRef.current], { opacity: 0, x: 0, y: 0, duration: 0.3, ease: "power2.in" }, "+=0.3");
-
-    tl.to(logoRef.current, {
-      scale: 0.15,
-      x: "30vw",
-      y: "-35vh",
-      duration: 0.8,
-      ease: "power3.inOut",
-    }, "+=0.1");
-
-    tl.to(overlayRef.current, { opacity: 0, duration: 0.4, ease: "power2.out" }, "-=0.2");
-
-    return () => { tl.kill(); };
+    setShow(true);
   }, []);
+
+  const nextPhase = useCallback(() => {
+    setPhase((p) => {
+      switch (p) {
+        case "reveal": return "chromatic-in";
+        case "chromatic-in": return "chromatic-out";
+        case "chromatic-out": return "fly";
+        case "fly": return "fadeout";
+        case "fadeout":
+          sessionStorage.setItem("fuzion-loaded", "true");
+          return "done";
+        default: return p;
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (phase === "done") setShow(false);
+  }, [phase]);
 
   if (!show) return null;
 
+  const isChromaticIn = phase === "chromatic-in";
+  const isFlying = phase === "fly" || phase === "fadeout" || phase === "done";
+  const isFading = phase === "fadeout" || phase === "done";
+
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
-      <div ref={logoRef} className="relative w-[200px] h-[200px] md:w-[280px] md:h-[280px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={pinkRef} src="/logo-white.svg" alt="" className="absolute inset-0 w-full h-full object-contain opacity-0" style={{ filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)" }} aria-hidden="true" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={cyanRef} src="/logo-white.svg" alt="" className="absolute inset-0 w-full h-full object-contain opacity-0" style={{ filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)" }} aria-hidden="true" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={mainRef} src="/logo-white.svg" alt="Fuzion Webz" className="absolute inset-0 w-full h-full object-contain opacity-0" />
-      </div>
-    </div>
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
+          animate={{ opacity: isFading ? 0 : 1 }}
+          transition={{ duration: 0.4 }}
+          onAnimationComplete={() => {
+            if (phase === "fadeout") nextPhase();
+          }}
+        >
+          <motion.div
+            className="relative w-[200px] h-[200px] md:w-[280px] md:h-[280px]"
+            animate={
+              isFlying
+                ? { scale: 0.12, x: "30vw", y: "-38vh" }
+                : { scale: 1, x: 0, y: 0 }
+            }
+            transition={{ duration: 0.8, ease: [0.76, 0, 0.24, 1] }}
+            onAnimationComplete={() => {
+              if (phase === "fly") nextPhase();
+            }}
+          >
+            {/* Pink chromatic layer */}
+            <motion.img
+              src="/logo-white.svg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain"
+              style={{
+                filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)",
+              }}
+              animate={{
+                opacity: isChromaticIn ? 0.7 : 0,
+                x: isChromaticIn ? -4 : 0,
+                y: isChromaticIn ? 2 : 0,
+              }}
+              transition={{ duration: 0.3 }}
+              aria-hidden="true"
+            />
+
+            {/* Cyan chromatic layer */}
+            <motion.img
+              src="/logo-white.svg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain"
+              style={{
+                filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)",
+              }}
+              animate={{
+                opacity: isChromaticIn ? 0.7 : 0,
+                x: isChromaticIn ? 4 : 0,
+                y: isChromaticIn ? -2 : 0,
+              }}
+              transition={{ duration: 0.3 }}
+              onAnimationComplete={() => {
+                if (phase === "chromatic-in") {
+                  setTimeout(() => nextPhase(), 300);
+                } else if (phase === "chromatic-out") {
+                  nextPhase();
+                }
+              }}
+              aria-hidden="true"
+            />
+
+            {/* Main logo — clip-path wipe reveal */}
+            <motion.img
+              src="/logo-white.svg"
+              alt="Fuzion Webz"
+              className="absolute inset-0 w-full h-full object-contain"
+              initial={{ clipPath: "inset(0 100% 0 0)" }}
+              animate={{ clipPath: "inset(0 0% 0 0)" }}
+              transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
+              onAnimationComplete={() => {
+                if (phase === "reveal") nextPhase();
+              }}
+            />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

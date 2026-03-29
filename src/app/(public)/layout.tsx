@@ -20,7 +20,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       </a>
 
       {/* Frame background */}
-      <div className="fixed inset-0 z-0 bg-[#0a0a0a]" />
+      <div className="fixed inset-0 z-0 bg-[#111111]" />
 
       {/* Content container */}
       <div className="fixed inset-[5px] md:inset-[10px] z-[1] rounded-[12px] md:rounded-[20px] overflow-hidden bg-black">

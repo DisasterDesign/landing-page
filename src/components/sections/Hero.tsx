@@ -1,33 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import gsap from "gsap";
 import MagneticButton from "@/components/animations/MagneticButton";
 import ParallaxLayer from "@/components/animations/ParallaxLayer";
 
+const letterVariants = {
+  hidden: { opacity: 0, y: 80, rotateX: 90 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    rotateX: 0,
+    transition: {
+      delay: 0.3 + i * 0.05,
+      duration: 0.8,
+      ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
+    },
+  }),
+};
+
 export default function Hero() {
-  const headlineRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    if (!headlineRef.current) return;
-
-    const letters = headlineRef.current.querySelectorAll(".letter");
-    gsap.fromTo(
-      letters,
-      { opacity: 0, y: 80, rotateX: 90 },
-      {
-        opacity: 1,
-        y: 0,
-        rotateX: 0,
-        duration: 0.8,
-        stagger: 0.05,
-        ease: "power3.out",
-        delay: 0.3,
-      }
-    );
-  }, []);
-
   const title = "FUZION WEBZ";
 
   return (
@@ -54,22 +45,25 @@ export default function Hero() {
 
       {/* Content */}
       <div className="relative z-10 text-center px-6">
-        <h1
-          ref={headlineRef}
+        <motion.h1
           className="chromatic-hover chromatic-always text-6xl sm:text-7xl md:text-8xl lg:text-[120px] font-extrabold leading-none tracking-tighter"
           data-text={title}
           style={{ perspective: "600px" }}
+          initial="hidden"
+          animate="visible"
         >
           {title.split("").map((char, i) => (
-            <span
+            <motion.span
               key={i}
-              className="letter inline-block opacity-0"
+              className="inline-block"
+              custom={i}
+              variants={letterVariants}
               style={{ display: char === " " ? "inline" : undefined }}
             >
               {char === " " ? "\u00A0" : char}
-            </span>
+            </motion.span>
           ))}
-        </h1>
+        </motion.h1>
 
         <motion.p
           className="mt-6 text-lg md:text-xl text-gray-300 max-w-lg mx-auto"
