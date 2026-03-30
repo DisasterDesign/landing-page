@@ -237,7 +237,7 @@ function createGeometry(): THREE.BufferGeometry | null {
   const size = new THREE.Vector3();
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 5 / maxDim;
+  const scale = (5 / maxDim) * 0.6; // 40% smaller
   geometry.scale(scale, -scale, scale);
 
   return geometry;
@@ -305,6 +305,8 @@ export function initScene(container: HTMLElement) {
   const mesh = new THREE.Mesh(geometry, shaderMat);
   mesh.name = "GlassF";
   meshGroup.add(mesh);
+  // Desktop: shift left (negative X in screen space)
+  meshGroup.position.x = isMobile ? 0 : -3;
   scene.add(meshGroup);
 
   // Mouse (Buzzworthy exact approach)
@@ -354,9 +356,6 @@ export function initScene(container: HTMLElement) {
     shaderMat.uniforms.u_camPos.value = camera.position;
 
     if (!prefersReducedMotion) {
-      // Slow rotation
-      meshGroup.rotation.y += 0.003;
-
       // Camera parallax (Buzzworthy exact)
       camera.position.x += (mousePos.x - camera.position.x) * parallaxEase;
       camera.position.y += (mousePos.y - camera.position.y) * parallaxEase;
