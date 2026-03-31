@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import toast, { Toaster } from "react-hot-toast";
 
 interface Project {
   id: string;
@@ -22,6 +23,20 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleDelete = async (e: React.MouseEvent, projectId: string, projectName: string) => {
+    e.preventDefault(); // Don't navigate to project detail
+    e.stopPropagation();
+    if (!window.confirm(`למחוק את הפרויקט "${projectName}"? פעולה זו לא ניתנת לביטול.`)) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      toast.success("הפרויקט נמחק");
+    } catch {
+      toast.error("שגיאה במחיקה");
+    }
+  };
 
   useEffect(() => {
     async function fetchProjects() {
@@ -58,6 +73,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-center" toastOptions={{ style: { background: "#1A1A1A", color: "#fff", border: "1px solid #2A2A2A" } }} />
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">פרויקטים</h2>
         <Link
@@ -107,11 +123,22 @@ export default function ProjectsPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <span>{taskCount} משימות</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span>{taskCount} משימות</span>
+                  </div>
+                  <button
+                    onClick={(e) => handleDelete(e, project.id, project.name)}
+                    className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                    title="מחק פרויקט"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </Link>
             );
