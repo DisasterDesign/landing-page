@@ -29,7 +29,7 @@ export default function ProjectsPage() {
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          setProjects(Array.isArray(data) ? data : data.projects || []);
+          setProjects(Array.isArray(data) ? data : data.data || data.projects || []);
         }
       } catch (err) {
         console.error("Failed to fetch projects:", err);

@@ -44,6 +44,7 @@ export const createProjectSchema = z.object({
   name: z.string().min(1, "Name is required"),
   client: z.string().optional(),
   description: z.string().optional(),
+  status: z.enum(["ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]).optional(),
 });
 
 export const updateProjectSchema = z.object({

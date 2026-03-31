@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -199,11 +200,11 @@ export default function TasksPage() {
 
       if (tasksRes.ok) {
         const data = await tasksRes.json();
-        setTasks(Array.isArray(data) ? data : data.tasks || []);
+        setTasks(Array.isArray(data) ? data : data.data || data.tasks || []);
       }
       if (projectsRes.ok) {
         const data = await projectsRes.json();
-        setProjects(Array.isArray(data) ? data : data.projects || []);
+        setProjects(Array.isArray(data) ? data : data.data || data.projects || []);
       }
       if (usersRes.ok) {
         const data = await usersRes.json();
@@ -318,6 +319,15 @@ export default function TasksPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-2xl font-bold">משימות</h2>
+        <Link
+          href="/admin/tasks/new"
+          className="flex items-center gap-2 px-4 py-2 bg-pink hover:bg-pink-dark text-white font-bold rounded-xl transition-colors text-sm"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          הוסף משימה
+        </Link>
       </div>
 
       {/* Filters */}
