@@ -196,6 +196,20 @@ model FontStyle {
   updatedAt DateTime @updatedAt
 }
 
+model Client {
+  id        String   @id @default(cuid())
+  number    Int      @default(autoincrement())
+  name      String
+  status    String   @default("")
+  notes     String?
+  amount    Float?
+  expense   Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([number])
+}
+
 model FontOrder {
   id            String        @id @default(cuid())
   customerName  String
