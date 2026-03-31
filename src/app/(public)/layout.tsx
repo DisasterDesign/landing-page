@@ -45,6 +45,26 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           />
         </Link>
 
+        {/* Top nav — page links, centered */}
+        <nav dir="ltr" className="absolute top-6 left-1/2 -translate-x-1/2 z-[20] hidden lg:flex items-center gap-7">
+          {[
+            { label: "ראשי", href: "/" },
+            { label: "עבודות", href: "/#portfolio" },
+            { label: "בלוג", href: "/blog" },
+            { label: "פונטים", href: "/fonts" },
+            { label: "אודות", href: "/about" },
+          ].map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-[13px] text-gray-400 hover:text-white transition-colors duration-200"
+              data-cursor="pointer"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
         {/* Fixed CTA — top right, always visible */}
         <Link
           href="/#contact"
