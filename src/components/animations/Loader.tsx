@@ -170,8 +170,7 @@ export default function Loader() {
                       strokeDashoffset: drawComplete ? 0 : 3000,
                       animation: drawComplete
                         ? "none"
-                        : `drawPath ${DRAW_DURATION}s ease forwards`,
-                      animationDelay: drawComplete ? "0s" : `${i * STAGGER}s`,
+                        : `drawPath ${DRAW_DURATION}s ease ${i * STAGGER}s forwards`,
                     }}
                   />
                 ))}

@@ -54,12 +54,12 @@ export default function FontStoreClient() {
 
     setLoading(true);
     fetch(url)
-      .then((res) => res.json())
+      .then((res) => res.ok ? res.json() : [])
       .then((data) => {
-        setFonts(data);
+        setFonts(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setFonts([]); setLoading(false); });
   }, [activeCategory]);
 
   const getMinPrice = (font: FontFamily) => {

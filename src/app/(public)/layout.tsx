@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
+import TopNav from "@/components/layout/TopNav";
 import Footer from "@/components/layout/Footer";
 import CustomCursor from "@/components/animations/CustomCursor";
 import GridBackground from "@/components/animations/GridBackground";
@@ -45,23 +46,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           />
         </Link>
 
-        {/* Top nav — page links, centered */}
-        <nav dir="ltr" className="absolute top-6 left-1/2 -translate-x-1/2 z-[20] hidden lg:flex items-center gap-7">
-          {[
-            { label: "דף הבית", href: "/" },
-            { label: "חנות פונטים", href: "/fonts" },
-            { label: "בלוג", href: "/blog" },
-          ].map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-[13px] text-gray-400 hover:text-white transition-colors duration-200"
-              data-cursor="pointer"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        {/* Top nav — page links, centered, with active underline */}
+        <TopNav />
 
         {/* Fixed CTA — top right, always visible */}
         <Link

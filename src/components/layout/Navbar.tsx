@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import MobileMenu from "./MobileMenu";
 
@@ -18,6 +19,8 @@ export default function Navbar() {
   const [activeSection, setActiveSection] = useState("hero");
   const [loaded, setLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const isHomepage = pathname === "/";
 
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 800);
@@ -69,8 +72,8 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Desktop: vertical left sidebar */}
-      <motion.nav
+      {/* Desktop: vertical sidebar — homepage only */}
+      {isHomepage && <motion.nav
         className="hidden lg:flex flex-col items-end justify-center gap-7 absolute right-4 top-0 bottom-0 z-[20]"
         initial={{ x: 60, opacity: 0 }}
         animate={loaded ? { x: 0, opacity: 1 } : { x: 60, opacity: 0 }}
@@ -134,7 +137,7 @@ export default function Navbar() {
             </motion.button>
           );
         })}
-      </motion.nav>
+      </motion.nav>}
 
       {/* Mobile hamburger — absolute in content container */}
       <button
