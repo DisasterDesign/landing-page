@@ -37,7 +37,7 @@ export default function AccessibilityWidget() {
       {/* Toggle button */}
       <button
         onClick={() => setOpen(!open)}
-        className="absolute bottom-6 right-6 z-[20] w-11 h-11 bg-black border border-white/30 rounded-full flex items-center justify-center hover:border-white/70 hover:bg-white/5 transition-all duration-300 group"
+        className="absolute bottom-6 right-6 z-[20] w-11 h-11 bg-black border border-white/30 rounded-full flex items-center justify-center hover:border-white/70 hover:bg-white/5 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all duration-300 group"
         aria-label="תפריט נגישות"
         aria-pressed={open}
         aria-expanded={open}

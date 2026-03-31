@@ -112,7 +112,7 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
             <span className="text-gray-400 text-sm">נו, אתר בקיצור!</span>
             <a
               href={`/#contact?service=${service.id}`}
-              className="mt-6 inline-flex items-center gap-2 border border-white/20 text-white text-sm px-6 py-2.5 rounded-full hover:border-white/50 transition-all duration-300"
+              className="mt-6 inline-flex items-center gap-2 border border-white/20 text-white text-sm px-6 py-2.5 rounded-full hover:border-white/50 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all duration-300"
             >
               בואו נדבר
               <span className="text-pink">←</span>

@@ -65,7 +65,7 @@ export default function Pricing() {
                     "block text-center py-3 rounded-full font-bold transition-all duration-300",
                     tier.recommended
                       ? "bg-pink text-white hover:bg-pink-light hover:shadow-[0_0_30px_rgba(229,3,162,0.4)]"
-                      : "border-2 border-white text-white hover:border-cyan hover:text-cyan"
+                      : "border-2 border-white text-white hover:border-cyan hover:text-cyan hover:shadow-[0_0_20px_rgba(229,3,162,0.3)]"
                   )}
                   data-cursor="pointer"
                 >

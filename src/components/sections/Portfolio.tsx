@@ -205,7 +205,7 @@ export default function Portfolio() {
       <div dir="ltr" className="flex items-center justify-center gap-4 mt-10">
         <button
           onClick={prev}
-          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all"
+          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
           aria-label="פרויקט קודם"
           data-cursor="pointer"
         >
@@ -228,7 +228,7 @@ export default function Portfolio() {
         </div>
         <button
           onClick={next}
-          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all"
+          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
           aria-label="פרויקט הבא"
           data-cursor="pointer"
         >

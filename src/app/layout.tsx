@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   icons: {
-    icon: "/icon-favicon.svg",
+    icon: "/fabicon.png",
   },
   title: {
     default: "Fuzion Webz | סטודיו לעיצוב ובניית אתרים",

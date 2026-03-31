@@ -27,11 +27,11 @@ export default function Button({
         size === "lg" && "px-10 py-4 text-lg",
         // Variant
         variant === "primary" &&
-          "bg-pink text-white rounded-full hover:bg-pink-light hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] active:scale-95",
+          "bg-pink text-white rounded-full hover:bg-pink-light hover:shadow-[0_0_40px_rgba(229,3,162,0.5)] active:scale-95",
         variant === "secondary" &&
-          "border-2 border-white text-white rounded-full hover:border-cyan hover:text-cyan hover:shadow-[0_0_20px_rgba(1,255,255,0.2)] active:scale-95",
+          "border-2 border-white text-white rounded-full hover:border-cyan hover:text-cyan hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] active:scale-95",
         variant === "ghost" &&
-          "text-white hover:opacity-80 active:scale-95",
+          "text-white hover:opacity-80 hover:shadow-[0_0_20px_rgba(229,3,162,0.2)] active:scale-95",
         className
       )}
       data-cursor="pointer"

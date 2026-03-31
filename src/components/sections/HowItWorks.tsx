@@ -436,7 +436,7 @@ export default function HowItWorks() {
             backgroundColor: "transparent",
             borderRadius: "24px",
             boxShadow: borderComplete
-              ? "0 0 60px rgba(229, 3, 162, 0.15), 0 0 120px rgba(1, 255, 255, 0.08)"
+              ? "0 0 80px rgba(229, 3, 162, 0.3), 0 0 160px rgba(1, 255, 255, 0.15)"
               : "none",
             transition: "box-shadow 0.8s ease-out",
           }}

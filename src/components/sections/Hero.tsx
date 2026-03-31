@@ -99,7 +99,7 @@ export default function Hero() {
               <MagneticButton>
                 <a
                   href="#contact"
-                  className="group inline-flex items-center gap-3 border border-white/20 text-white/80 px-8 py-3.5 rounded-full text-base hover:border-white/50 hover:text-white transition-all duration-300"
+                  className="group inline-flex items-center gap-3 border border-white/20 text-white/80 px-8 py-3.5 rounded-full text-base hover:border-white/50 hover:text-white hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
                 >
                   בואו נדבר
                   <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1 text-pink">←</span>

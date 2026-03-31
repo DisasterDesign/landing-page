@@ -10,7 +10,7 @@ export default function WhatsAppButton() {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="absolute bottom-6 left-6 z-[20] w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/60 hover:bg-white/5 transition-all duration-300 group"
+      className="absolute bottom-6 left-6 z-[20] w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/60 hover:bg-white/5 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all duration-300 group"
       aria-label="שלח הודעה בוואטסאפ"
       data-cursor="pointer"
     >

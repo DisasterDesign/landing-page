@@ -55,7 +55,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         {/* Fixed CTA — top right, always visible */}
         <Link
           href="/#contact"
-          className="absolute top-5 right-6 md:right-10 z-[20] hidden lg:inline-flex items-center gap-2 border border-white/30 text-white text-xs tracking-wide px-5 py-2.5 rounded-full hover:border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all duration-300"
+          className="absolute top-5 right-6 md:right-10 z-[20] hidden lg:inline-flex items-center gap-2 border border-white/30 text-white text-xs tracking-wide px-5 py-2.5 rounded-full hover:border-white hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
           data-cursor="pointer"
         >
           דברו איתנו
