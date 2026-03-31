@@ -55,7 +55,7 @@ export default function AccessibilityWidget() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="absolute bottom-20 right-6 z-[25] w-56 bg-black border border-white/20 rounded-2xl p-5 flex flex-col gap-4"
+            className="absolute bottom-20 right-6 z-[25] w-48 sm:w-56 bg-black border border-white/20 rounded-2xl p-5 flex flex-col gap-4"
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -69,13 +69,13 @@ export default function AccessibilityWidget() {
               <div className="flex gap-2">
                 <button
                   onClick={() => applyFontSize(Math.max(80, fontSize - 10))}
-                  className="w-7 h-7 border border-white/20 rounded-full text-white text-xs hover:border-white/50 transition-colors"
+                  className="w-9 h-9 border border-white/20 rounded-full text-white text-xs hover:border-white/50 transition-colors"
                 >
                   א-
                 </button>
                 <button
                   onClick={() => applyFontSize(Math.min(140, fontSize + 10))}
-                  className="w-7 h-7 border border-white/20 rounded-full text-white text-xs hover:border-white/50 transition-colors"
+                  className="w-9 h-9 border border-white/20 rounded-full text-white text-xs hover:border-white/50 transition-colors"
                 >
                   א+
                 </button>

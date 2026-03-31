@@ -177,7 +177,7 @@ export default function Portfolio() {
 
       {/* Dots + Arrows — forced LTR so left arrow is visually left */}
       <div dir="ltr" className="flex items-center justify-center gap-4 mt-10">
-        <button onClick={prev} className="w-9 h-9 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
+        <button onClick={prev} className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
           <span className="text-white text-sm">←</span>
         </button>
         <div className="flex gap-3">
@@ -186,13 +186,13 @@ export default function Portfolio() {
               key={i}
               onClick={() => setActiveIndex(i)}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === activeIndex ? "bg-white w-8" : "bg-white/20 w-1.5 hover:bg-white/40"
+                i === activeIndex ? "bg-white w-8" : "bg-white/20 w-2 hover:bg-white/40"
               }`}
               data-cursor="pointer"
             />
           ))}
         </div>
-        <button onClick={next} className="w-9 h-9 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
+        <button onClick={next} className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
           <span className="text-white text-sm">→</span>
         </button>
       </div>

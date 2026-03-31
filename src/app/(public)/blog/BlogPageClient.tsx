@@ -71,7 +71,7 @@ export default function BlogPageClient() {
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold text-center mb-6">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-extrabold text-center mb-6">
               ה<span className="text-pink">בלוג</span>
             </h1>
           </ScrollReveal>
@@ -139,7 +139,7 @@ export default function BlogPageClient() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
               {posts.map((post, i) => (
                 <ScrollReveal key={post.id} delay={i * 0.08}>
                   <Link href={`/blog/${post.slug}`} className="group block">
@@ -213,7 +213,7 @@ export default function BlogPageClient() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
+                    className={`w-11 h-11 rounded-full text-sm font-medium transition-colors ${
                       page === p
                         ? "bg-pink text-white"
                         : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"

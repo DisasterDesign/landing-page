@@ -141,11 +141,11 @@ function ValuesStepper() {
               <div className="relative inline-block">
                 {isActive && (
                   <>
-                    <span className="absolute text-5xl md:text-6xl font-extrabold text-[#C80084] opacity-50" style={{ transform: "translate(-2px, 1px)" }} aria-hidden="true">{value.number}</span>
-                    <span className="absolute text-5xl md:text-6xl font-extrabold text-[#00D0CE] opacity-50" style={{ transform: "translate(2px, -1px)" }} aria-hidden="true">{value.number}</span>
+                    <span className="absolute text-4xl sm:text-5xl md:text-6xl font-extrabold text-[#C80084] opacity-50" style={{ transform: "translate(-2px, 1px)" }} aria-hidden="true">{value.number}</span>
+                    <span className="absolute text-4xl sm:text-5xl md:text-6xl font-extrabold text-[#00D0CE] opacity-50" style={{ transform: "translate(2px, -1px)" }} aria-hidden="true">{value.number}</span>
                   </>
                 )}
-                <span className={`relative text-5xl md:text-6xl font-extrabold ${isActive ? "text-white" : "text-white/10"} transition-colors duration-500`}>
+                <span className={`relative text-4xl sm:text-5xl md:text-6xl font-extrabold ${isActive ? "text-white" : "text-white/10"} transition-colors duration-500`}>
                   {value.number}
                 </span>
               </div>

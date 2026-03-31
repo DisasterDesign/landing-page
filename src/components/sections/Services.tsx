@@ -84,7 +84,7 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
         />
         {/* Main card */}
         <motion.div
-          className="relative bg-black rounded-[18px] p-8 h-full flex flex-col transition-colors duration-400"
+          className="relative bg-black rounded-[18px] p-5 md:p-8 h-full flex flex-col transition-colors duration-400"
           animate={{
             borderColor: hovered ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0)",
             borderWidth: "1px",
@@ -134,7 +134,7 @@ export default function Services() {
           </h2>
         </ScrollReveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
           {SERVICES.map((service, i) => (
             <ServiceCard key={service.id} service={service} index={i} />
           ))}

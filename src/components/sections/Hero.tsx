@@ -30,7 +30,7 @@ export default function Hero() {
           animate="visible"
         >
           <span
-            className="block text-[clamp(5rem,17vw,15rem)] chromatic-hover chromatic-always"
+            className="block text-[clamp(3rem,13vw,15rem)] chromatic-hover chromatic-always"
             data-text="FUZION WEBZ"
           >
             {"FUZION".split("").map((char, i) => (
@@ -51,7 +51,7 @@ export default function Hero() {
 
         {/* Tagline under title */}
         <motion.p
-          className="text-center text-[11px] md:text-[13px] tracking-[0.35em] uppercase text-gray-500 mt-5"
+          className="text-center text-[10px] sm:text-[11px] md:text-[13px] tracking-[0.35em] uppercase text-gray-500 mt-5"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8, duration: 0.6 }}
@@ -66,7 +66,7 @@ export default function Hero() {
         <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
 
           {/* Col 1 — 3D (shows on RIGHT in RTL) */}
-          <div className="relative h-[300px] md:h-[400px] lg:h-[550px]">
+          <div className="relative h-[250px] sm:h-[300px] md:h-[400px] lg:h-[550px]">
             <HeroGlass />
           </div>
 

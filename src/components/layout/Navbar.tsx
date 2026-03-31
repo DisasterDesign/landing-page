@@ -141,7 +141,7 @@ export default function Navbar() {
 
       {/* Mobile hamburger — absolute in content container */}
       <button
-        className="lg:hidden absolute top-5 left-16 z-[25] w-8 h-8 flex flex-col items-center justify-center gap-1.5"
+        className="lg:hidden absolute top-5 right-5 z-[25] w-8 h-8 flex flex-col items-center justify-center gap-1.5"
         onClick={() => setMenuOpen(!menuOpen)}
         aria-label={menuOpen ? "סגור תפריט" : "פתח תפריט"}
         data-cursor="pointer"
@@ -178,7 +178,7 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.05 }}
-                  className="text-2xl font-anomalia text-white hover:opacity-60 transition-opacity"
+                  className="text-xl font-anomalia text-white hover:opacity-60 transition-opacity"
                 >
                   {section.label}
                 </motion.button>

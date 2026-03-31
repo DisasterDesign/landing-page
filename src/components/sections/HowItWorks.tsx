@@ -405,7 +405,7 @@ export default function HowItWorks() {
       >
         <SvgHowItWorks
           style={{
-            width: "clamp(280px, 30vw, 456px)",
+            width: "clamp(200px, 50vw, 456px)",
             height: "auto",
             filter: "brightness(0) invert(1)",
           }}
@@ -541,7 +541,7 @@ export default function HowItWorks() {
           width={311}
           height={23}
           style={{
-            width: "clamp(220px, 28vw, 311px)",
+            width: "clamp(180px, 45vw, 311px)",
             height: "auto",
             filter: "brightness(0) invert(1)",
           }}

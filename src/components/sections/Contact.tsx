@@ -53,7 +53,7 @@ export default function Contact() {
 
       <div className="max-w-4xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover text-5xl md:text-6xl lg:text-8xl font-extrabold text-center mb-4" data-text="בואו נדבר">
+          <h2 className="chromatic-hover text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-extrabold text-center mb-4" data-text="בואו נדבר">
             בואו נדבר
           </h2>
           <p className="text-gray-400 text-center text-lg mb-16">
@@ -63,7 +63,7 @@ export default function Contact() {
 
         <ScrollReveal delay={0.2}>
           <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
               <Input
                 label="שם מלא"
                 type="text"
@@ -80,7 +80,7 @@ export default function Contact() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
               <Input
                 label="טלפון"
                 type="tel"

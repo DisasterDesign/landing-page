@@ -5,8 +5,8 @@ import { FOOTER_LINKS, SOCIAL_LINKS, SITE_NAME } from "@/lib/constants";
 export default function Footer() {
   return (
     <footer className="relative border-t border-pink/30">
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-12">
           {/* Logo & Description */}
           <div className="lg:col-span-1">
             <Image

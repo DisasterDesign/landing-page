@@ -15,12 +15,12 @@ export default function Pricing() {
           </h2>
         </ScrollReveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-16">
           {PRICING_TIERS.map((tier, i) => (
             <ScrollReveal key={tier.id} delay={i * 0.1}>
               <div
                 className={cn(
-                  "relative bg-gray-900 border rounded-2xl p-8 transition-all duration-300 h-full flex flex-col",
+                  "relative bg-gray-900 border rounded-2xl p-5 md:p-8 transition-all duration-300 h-full flex flex-col",
                   tier.recommended
                     ? "border-pink shadow-[0_0_40px_rgba(229,3,162,0.2)] md:-translate-y-4"
                     : "border-gray-800 hover:border-gray-700"
@@ -34,7 +34,7 @@ export default function Pricing() {
 
                 <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
                 <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl md:text-5xl font-extrabold text-pink">
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-pink">
                     {tier.price}
                   </span>
                   <span className="text-gray-400">{tier.currency}/{tier.period}</span>
