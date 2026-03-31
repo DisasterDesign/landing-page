@@ -105,7 +105,7 @@ export default function Loader() {
         >
           <motion.div
             ref={logoContainerRef}
-            className="relative w-[700px] h-[700px] md:w-[1000px] md:h-[1000px]"
+            className="relative w-[80vw] max-w-[700px] aspect-[700/226]"
             animate={
               isFlying
                 ? { scale: flyTarget.scale, x: flyTarget.x, y: flyTarget.y }
@@ -121,13 +121,8 @@ export default function Loader() {
                 animate={{ opacity: [0, 0.7, 0], x: [-4, -4, 0], y: [2, 2, 0] }}
                 transition={{ duration: CHROMATIC_DURATION, ease: "easeInOut" }}
               >
-                <svg viewBox="0 0 1080 1080" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)" }}>
-                  <defs>
-                    <clipPath id="loaderClipPink">
-                      <rect width="700" height="226" fill="white" transform="translate(211 427)" />
-                    </clipPath>
-                  </defs>
-                  <g clipPath="url(#loaderClipPink)">
+                <svg viewBox="0 0 700 226" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(15%) sepia(95%) saturate(6000%) hue-rotate(310deg) brightness(95%) contrast(105%)" }}>
+                  <g>
                     {PATHS.map((p, i) => (
                       <path key={i} d={p.d} fill={p.fill} />
                     ))}
@@ -144,13 +139,8 @@ export default function Loader() {
                 animate={{ opacity: [0, 0.7, 0], x: [4, 4, 0], y: [-2, -2, 0] }}
                 transition={{ duration: CHROMATIC_DURATION, ease: "easeInOut" }}
               >
-                <svg viewBox="0 0 1080 1080" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)" }}>
-                  <defs>
-                    <clipPath id="loaderClipCyan">
-                      <rect width="700" height="226" fill="white" transform="translate(211 427)" />
-                    </clipPath>
-                  </defs>
-                  <g clipPath="url(#loaderClipCyan)">
+                <svg viewBox="0 0 700 226" className="w-full h-full" style={{ filter: "brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(5000%) hue-rotate(140deg) brightness(105%) contrast(105%)" }}>
+                  <g>
                     {PATHS.map((p, i) => (
                       <path key={i} d={p.d} fill={p.fill} />
                     ))}
@@ -161,16 +151,11 @@ export default function Loader() {
 
             {/* Main logo - draw animation then filled */}
             <svg
-              viewBox="0 0 1080 1080"
+              viewBox="0 0 700 226"
               xmlns="http://www.w3.org/2000/svg"
               className="absolute inset-0 w-full h-full"
             >
-              <defs>
-                <clipPath id="loaderClip0">
-                  <rect width="700" height="226" fill="white" transform="translate(211 427)" />
-                </clipPath>
-              </defs>
-              <g clipPath="url(#loaderClip0)">
+              <g>
                 {PATHS.map((p, i) => (
                   <path
                     key={i}

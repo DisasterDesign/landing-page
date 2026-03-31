@@ -19,7 +19,7 @@ export default function MobileMenu({ onClose }: MobileMenuProps) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-40 bg-black flex flex-col items-center justify-center"
+      className="absolute inset-0 z-[30] bg-black flex flex-col items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

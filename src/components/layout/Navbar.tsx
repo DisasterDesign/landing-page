@@ -1,114 +1,165 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import Image from "next/image";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { NAV_ITEMS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import MagneticButton from "@/components/animations/MagneticButton";
 import MobileMenu from "./MobileMenu";
 
+const SECTIONS = [
+  { id: "hero", label: "ראשי", href: "#" },
+  { id: "how-it-works", label: "תהליך", href: "#how-it-works" },
+  { id: "about", label: "אודות", href: "#about" },
+  { id: "services", label: "שירותים", href: "#services" },
+  { id: "portfolio", label: "עבודות", href: "#portfolio" },
+  { id: "pricing", label: "מחירים", href: "#pricing" },
+  { id: "contact", label: "צור קשר", href: "#contact" },
+];
+
 export default function Navbar() {
-  const [scrollDirection, setScrollDirection] = useState<"up" | "down">("up");
-  const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState("hero");
+  const [loaded, setLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const prevScroll = useRef(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoaded(true), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const scrollContainer = document.getElementById("smooth-content");
     if (!scrollContainer) return;
 
     const handleScroll = () => {
-      const currentScroll = scrollContainer.scrollTop;
-      setScrolled(currentScroll > 50);
-      if (currentScroll > prevScroll.current && currentScroll > 80) {
-        setScrollDirection("down");
-      } else if (currentScroll < prevScroll.current) {
-        setScrollDirection("up");
+      const viewH = scrollContainer.clientHeight;
+      let current = "hero";
+      for (const section of SECTIONS) {
+        const el = section.id === "hero"
+          ? scrollContainer.querySelector("section")
+          : document.getElementById(section.id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const top = rect.top - containerRect.top;
+          if (top < viewH * 0.5) current = section.id;
+        }
       }
-      prevScroll.current = currentScroll;
+      setActiveSection(current);
     };
 
     scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const handleClick = (href: string) => {
+    setMenuOpen(false);
+    const scrollContainer = document.getElementById("smooth-content");
+    if (!scrollContainer) return;
+    if (href === "#") {
+      scrollContainer.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const target = document.querySelector(href);
+    if (target) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offset = targetRect.top - containerRect.top + scrollContainer.scrollTop;
+      scrollContainer.scrollTo({ top: offset, behavior: "smooth" });
+    }
+  };
+
   return (
     <>
-      <motion.header
-        className={cn(
-          "sticky top-0 left-0 right-0 z-50 transition-colors duration-300",
-          scrolled ? "bg-black/90 backdrop-blur-md border-b border-gray-800/50" : "bg-transparent"
-        )}
-        animate={{
-          y: scrollDirection === "down" && scrolled ? -100 : 0,
-        }}
-        transition={{ duration: 0.3 }}
+      {/* Desktop: vertical left sidebar */}
+      <motion.nav
+        className="hidden lg:flex flex-col items-end justify-center gap-7 absolute right-4 top-0 bottom-0 z-[20]"
+        initial={{ x: 60, opacity: 0 }}
+        animate={loaded ? { x: 0, opacity: 1 } : { x: 60, opacity: 0 }}
+        transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
       >
-        <nav className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link href="/" id="navbar-logo" className="relative z-10 transition-opacity duration-300" data-cursor="pointer">
-            <Image
-              src="/logo-white.svg"
-              alt="Fuzion Webz"
-              width={880}
-              height={224}
-              priority
-              className="h-56 w-auto"
-            />
-          </Link>
-
-          <ul className="hidden lg:flex items-center gap-8">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="relative text-sm text-gray-300 hover:text-white transition-colors duration-300 group"
-                  data-cursor="pointer"
-                >
-                  {item.label}
-                  <span className="absolute -bottom-1 right-0 w-0 h-[2px] bg-gradient-to-r from-pink to-cyan transition-all duration-300 group-hover:w-full" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-
-          <div className="hidden lg:block">
-            <MagneticButton>
-              <Link
-                href="/#contact"
-                className="chromatic-hover border-2 border-white text-white px-6 py-2.5 rounded-full text-sm font-bold hover:border-gray-400 transition-all duration-300"
-                data-text="בואו נדבר"
+        {SECTIONS.map((section, i) => {
+          const isActive = activeSection === section.id;
+          return (
+            <motion.button
+              key={section.id}
+              onClick={() => handleClick(section.href)}
+              dir="ltr"
+              className="group flex items-center w-full"
+              initial={{ opacity: 0, x: 20 }}
+              animate={loaded ? { opacity: 1, x: 0 } : {}}
+              transition={{ delay: 0.8 + i * 0.07, duration: 0.4 }}
+              data-cursor="pointer"
+              aria-label={section.label}
+            >
+              {/* Label — left side (inner) */}
+              <motion.span
+                className="text-white whitespace-nowrap flex-1 text-right pr-3"
+                animate={{ fontSize: isActive ? "22px" : "14px", opacity: isActive ? 1 : 0.25 }}
+                whileHover={{ fontSize: "22px", opacity: 1 }}
+                transition={{ duration: 0.25 }}
               >
-                בואו נדבר
-              </Link>
-            </MagneticButton>
-          </div>
+                {section.label}
+              </motion.span>
+              {/* Dot — right side (outer, near edge), fixed position */}
+              <div className="w-4 flex items-center justify-center shrink-0">
+                <motion.span
+                  className="block rounded-full bg-white"
+                  animate={{ width: isActive ? 14 : 5, height: isActive ? 14 : 5 }}
+                  whileHover={{ width: 14, height: 14 }}
+                  transition={{ duration: 0.25 }}
+                />
+              </div>
+            </motion.button>
+          );
+        })}
+      </motion.nav>
 
-          <button
-            className="lg:hidden relative z-10 w-8 h-8 flex flex-col items-center justify-center gap-1.5"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label={menuOpen ? "סגור תפריט" : "פתח תפריט"}
-            data-cursor="pointer"
-          >
-            <motion.span
-              className="block w-6 h-0.5 bg-white"
-              animate={menuOpen ? { rotate: 45, y: 4 } : { rotate: 0, y: 0 }}
-            />
-            <motion.span
-              className="block w-6 h-0.5 bg-white"
-              animate={menuOpen ? { opacity: 0 } : { opacity: 1 }}
-            />
-            <motion.span
-              className="block w-6 h-0.5 bg-white"
-              animate={menuOpen ? { rotate: -45, y: -4 } : { rotate: 0, y: 0 }}
-            />
-          </button>
-        </nav>
-      </motion.header>
+      {/* Mobile hamburger — absolute in content container */}
+      <button
+        className="lg:hidden absolute top-5 left-16 z-[25] w-8 h-8 flex flex-col items-center justify-center gap-1.5"
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label={menuOpen ? "סגור תפריט" : "פתח תפריט"}
+        data-cursor="pointer"
+      >
+        <motion.span
+          className="block w-6 h-[1px] bg-white"
+          animate={menuOpen ? { rotate: 45, y: 3.5 } : { rotate: 0, y: 0 }}
+        />
+        <motion.span
+          className="block w-4 h-[1px] bg-white ml-auto"
+          animate={menuOpen ? { opacity: 0 } : { opacity: 1 }}
+        />
+        <motion.span
+          className="block w-6 h-[1px] bg-white"
+          animate={menuOpen ? { rotate: -45, y: -3.5 } : { rotate: 0, y: 0 }}
+        />
+      </button>
 
+      {/* Mobile menu — covers entire content container */}
       <AnimatePresence>
-        {menuOpen && <MobileMenu onClose={() => setMenuOpen(false)} />}
+        {menuOpen && (
+          <motion.div
+            className="lg:hidden absolute inset-0 z-[25] bg-black flex flex-col items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <nav className="flex flex-col items-center gap-8">
+              {SECTIONS.map((section, i) => (
+                <motion.button
+                  key={section.id}
+                  onClick={() => handleClick(section.href)}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + i * 0.05 }}
+                  className="text-2xl font-anomalia text-white hover:opacity-60 transition-opacity"
+                >
+                  {section.label}
+                </motion.button>
+              ))}
+            </nav>
+          </motion.div>
+        )}
       </AnimatePresence>
     </>
   );

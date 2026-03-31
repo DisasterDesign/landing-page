@@ -1,207 +1,50 @@
 import * as THREE from "three";
 import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 
-// The white "F" path from icon-black.svg
 const F_PATH = "M382.837 794.39C378.356 793.122 373.865 791.911 369.404 790.584C302.269 770.644 277.894 693.034 321.548 638.267C322.135 637.527 322.654 636.748 323.452 635.653C311.962 622.055 303.962 606.698 301.029 589.025C291.904 533.826 328.163 488.39 376.029 478.809C382.933 477.425 390.163 477.194 397.24 477.185C487.529 477.079 577.817 477.118 668.106 477.118C670.942 477.118 673.788 477.118 677.76 477.118C676.577 473.994 675.846 471.38 674.635 468.997C656.433 433.248 627.394 414.249 587.019 414.038C525.01 413.711 462.99 413.923 400.971 413.971C382.683 413.99 365.01 411.347 348.971 401.977C318.75 384.314 301.673 358.31 299.981 323.06C299.413 311.259 299.894 299.41 299.894 287.033C302.24 286.889 304.298 286.648 306.356 286.648C433.24 286.629 560.115 286.562 687 286.668C732 286.706 773.087 324.291 779.462 368.794C787.308 423.561 744.221 477.579 684.548 477.194C682.913 477.185 681.279 477.406 680.394 477.464C681.5 488.899 683.452 500.105 683.519 511.319C683.798 559.869 642.558 602.941 593.788 603.623C528.462 604.536 463.115 604.017 397.779 604.132C369.038 604.18 344.558 614.146 324.452 635.72C340.913 653.383 360.731 665.107 384.798 666.184C417.529 667.644 450.346 667.02 483.125 667.279C485.942 667.298 488.75 667.279 491.404 667.279C501.99 713.964 483.173 761.255 445.058 782.281C435.106 787.769 423.587 790.431 412.788 794.38H382.846L382.837 794.39Z";
-
-// 4D Simplex Noise (from Buzzworthy)
-const noise4GLSL = `
-vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
-float mod289(float x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
-float permute(float x){return mod289(((x*34.0)+1.0)*x);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
-float taylorInvSqrt(float r){return 1.79284291400159-0.85373472095314*r;}
-vec4 grad4(float j,vec4 ip){
-  const vec4 ones=vec4(1.0,1.0,1.0,-1.0);
-  vec4 p,s;
-  p.xyz=floor(fract(vec3(j)*ip.xyz)*7.0)*ip.z-1.0;
-  p.w=1.5-dot(abs(p.xyz),ones.xyz);
-  s=vec4(lessThan(p,vec4(0.0)));
-  p.xyz=p.xyz+(s.xyz*2.0-1.0)*s.www;
-  return p;
-}
-#define F4 0.309016994374947451
-float snoise(vec4 v){
-  const vec4 C=vec4(0.138196601125011,0.276393202250021,0.414589803375032,-0.447213595499958);
-  vec4 i=floor(v+dot(v,vec4(F4)));
-  vec4 x0=v-i+dot(i,C.xxxx);
-  vec4 i0;vec3 isX=step(x0.yzw,x0.xxx);vec3 isYZ=step(x0.zww,x0.yyz);
-  i0.x=isX.x+isX.y+isX.z;i0.yzw=1.0-isX;
-  i0.y+=isYZ.x+isYZ.y;i0.zw+=1.0-isYZ.xy;i0.z+=isYZ.z;i0.w+=1.0-isYZ.z;
-  vec4 i3=clamp(i0,0.0,1.0);vec4 i2=clamp(i0-1.0,0.0,1.0);vec4 i1=clamp(i0-2.0,0.0,1.0);
-  vec4 x1=x0-i1+C.xxxx;vec4 x2=x0-i2+C.yyyy;vec4 x3=x0-i3+C.zzzz;vec4 x4=x0+C.wwww;
-  i=mod289(i);
-  float j0=permute(permute(permute(permute(i.w)+i.z)+i.y)+i.x);
-  vec4 j1=permute(permute(permute(permute(i.w+vec4(i1.w,i2.w,i3.w,1.0))+i.z+vec4(i1.z,i2.z,i3.z,1.0))+i.y+vec4(i1.y,i2.y,i3.y,1.0))+i.x+vec4(i1.x,i2.x,i3.x,1.0));
-  vec4 ip=vec4(1.0/294.0,1.0/49.0,1.0/7.0,0.0);
-  vec4 p0=grad4(j0,ip);vec4 p1=grad4(j1.x,ip);vec4 p2=grad4(j1.y,ip);vec4 p3=grad4(j1.z,ip);vec4 p4=grad4(j1.w,ip);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;p4*=taylorInvSqrt(dot(p4,p4));
-  vec3 m0=max(0.6-vec3(dot(x0,x0),dot(x1,x1),dot(x2,x2)),0.0);
-  vec2 m1=max(0.6-vec2(dot(x3,x3),dot(x4,x4)),0.0);
-  m0=m0*m0;m1=m1*m1;
-  return 49.0*(dot(m0*m0,vec3(dot(p0,x0),dot(p1,x1),dot(p2,x2)))+dot(m1*m1,vec2(dot(p3,x3),dot(p4,x4))));
-}
-`;
-
-// Vertex shader — EXACT Buzzworthy approach
-const vertexShader = `
-${noise4GLSL}
-
-varying vec2 vUv;
-varying vec3 vNormal;
-varying vec3 vPosition;
-varying vec2 vN;
-varying vec3 eyeVector;
-varying vec3 worldNormal;
-
-uniform float u_time;
-uniform vec3 u_camPos;
-uniform float u_speed1;
-uniform float u_freq1;
-uniform float u_amp1;
-
-float tangentFactor = 0.005;
-
-vec3 orthogonal(vec3 v) {
-  return normalize(abs(v.x) > abs(v.z) ? vec3(-v.y, v.x, 0.0) : vec3(0.0, -v.z, v.y));
-}
-
-vec3 distorted(vec3 p) {
-  return p * (1.0 + snoise(vec4(p * u_freq1, u_time * 0.0001 * u_speed1)) * 0.05 * u_amp1);
-}
-
-void main() {
-  vUv = uv;
-  vNormal = normal;
-  vPosition = position;
-
-  vec3 dispPos = distorted(position);
-  vec3 tangent1 = orthogonal(normal);
-  vec3 tangent2 = normalize(cross(normal, tangent1));
-  vec3 nearby1 = position + tangent1 * tangentFactor;
-  vec3 nearby2 = position + tangent2 * tangentFactor;
-  vec3 distorted1 = distorted(nearby1);
-  vec3 distorted2 = distorted(nearby2);
-  vNormal = normalize(cross(distorted1 - dispPos, distorted2 - dispPos));
-
-  vec4 p = vec4(position, 1.0);
-  vec3 e = normalize(vec3(modelViewMatrix * p));
-  vec3 n = normalize(normalMatrix * vNormal);
-  vec3 r = reflect(e, n);
-  float m = 2.0 * sqrt(pow(r.x, 2.0) + pow(r.y, 2.0) + pow(r.z + 1.0, 2.0));
-  vN = r.xy / m + 0.5;
-
-  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-  eyeVector = normalize(worldPosition.xyz - u_camPos);
-  worldNormal = normalize(modelViewMatrix * vec4(vNormal, 0.0)).xyz;
-
-  vec4 modelViewPosition = modelViewMatrix * vec4(dispPos, 1.0);
-  gl_Position = projectionMatrix * modelViewPosition;
-}
-`;
-
-// Fragment shader — EXACT Buzzworthy formula (matcap + refraction + fresnel)
-const fragmentShader = `
-uniform sampler2D u_matCap;
-uniform float pi;
-uniform vec2 u_res;
-uniform float u_ior;
-uniform float u_tintInt;
-uniform float u_lightfac;
-uniform vec3 u_targColor;
-uniform vec3 u_refColor;
-
-varying vec2 vN;
-varying vec3 vNormal;
-varying vec3 vPosition;
-varying vec2 vUv;
-varying vec3 eyeVector;
-varying vec3 worldNormal;
-
-float fresnel(vec3 eyeVec, vec3 worldNorm) {
-  return pow(1.0 + dot(eyeVec, worldNorm), 3.0);
-}
-
-void main() {
-  // Sample matcap texture using reflected normal UV
-  vec4 matCapCol = texture2D(u_matCap, vN);
-
-  // Refraction UV offset
-  vec2 uv = gl_FragCoord.xy / u_res;
-  vec3 normal = worldNormal;
-  vec3 refracted = refract(eyeVector, normal, 1.0 / u_ior);
-  uv += refracted.xy;
-
-  // Simulate dark background behind the object
-  vec4 bgCol = vec4(0.02, 0.02, 0.03, 1.0);
-
-  // Tint the refracted layer (Buzzworthy formula)
-  vec4 tintedRefrLayer = mix(bgCol, vec4(u_targColor, 1.0), u_tintInt);
-
-  // Apply matcap: multiply refracted layer by (matcap + 0.4)
-  vec4 matCapLayer = tintedRefrLayer * (matCapCol + 0.4);
-
-  // Blend with reflection color using fresnel
-  vec4 outCol = mix(matCapLayer, vec4(u_refColor, 1.0), fresnel(eyeVector, normal));
-
-  // Apply lighting factor
-  outCol *= u_lightfac;
-
-  gl_FragColor = outCol;
-}
-`;
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let meshGroup: THREE.Group | null = null;
-let shaderMat: THREE.ShaderMaterial | null = null;
+let glassMesh: THREE.Mesh | null = null;
 let animationId: number | null = null;
+let raycaster: THREE.Raycaster | null = null;
+let pointer = new THREE.Vector2();
+let isHovered = false;
+let hoverScale = 1;
 
-// Camera parallax — EXACT Buzzworthy values
 const mousePos = { x: 0, y: 0 };
 const parallaxIntensity = 0.004;
 const parallaxEase = 0.025;
 let initCameraZ = 15;
 
-// Generate a procedural matcap texture (glossy sphere look)
-function createMatcapTexture(): THREE.CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+function createEnvMap(r: THREE.WebGLRenderer): THREE.Texture {
+  const pmrem = new THREE.PMREMGenerator(r);
+  pmrem.compileEquirectangularShader();
 
-  // Dark center, bright edges — classic matcap for glass
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2;
+  const envScene = new THREE.Scene();
+  envScene.background = new THREE.Color(0x080808);
 
-  // Base gradient: dark center to bright edge
-  const grad = ctx.createRadialGradient(cx * 0.7, cy * 0.6, 0, cx, cy, r);
-  grad.addColorStop(0, "#f5f0e8");   // Bright warm highlight
-  grad.addColorStop(0.3, "#b0a89a"); // Mid warm
-  grad.addColorStop(0.6, "#4a4540"); // Dark warm
-  grad.addColorStop(0.85, "#2a2520"); // Very dark
-  grad.addColorStop(1, "#1a1510");   // Edge
+  const pink = new THREE.PointLight(0xe503a2, 3, 50);
+  pink.position.set(-8, 4, -8);
+  envScene.add(pink);
 
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
+  const cyan = new THREE.PointLight(0x01ffff, 3, 50);
+  cyan.position.set(8, -4, -8);
+  envScene.add(cyan);
 
-  // Add a secondary highlight (top-right)
-  const grad2 = ctx.createRadialGradient(cx * 1.3, cy * 0.4, 0, cx, cy, r * 0.8);
-  grad2.addColorStop(0, "rgba(255, 248, 240, 0.4)");
-  grad2.addColorStop(0.4, "rgba(200, 190, 175, 0.15)");
-  grad2.addColorStop(1, "rgba(0, 0, 0, 0)");
+  const white = new THREE.PointLight(0xffffff, 2, 50);
+  white.position.set(0, 8, 8);
+  envScene.add(white);
 
-  ctx.fillStyle = grad2;
-  ctx.fillRect(0, 0, size, size);
+  const warm = new THREE.PointLight(0xffeedd, 1.5, 40);
+  warm.position.set(4, 6, 4);
+  envScene.add(warm);
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+  const tex = pmrem.fromScene(envScene, 0.04).texture;
+  pmrem.dispose();
+  return tex;
 }
 
 function createGeometry(): THREE.BufferGeometry | null {
@@ -210,14 +53,19 @@ function createGeometry(): THREE.BufferGeometry | null {
   const result = loader.parse(svgMarkup);
 
   const shapes: THREE.Shape[] = [];
+  console.log("[3D] SVG paths parsed:", result.paths.length);
   for (const path of result.paths) {
-    const pathShapes = SVGLoader.createShapes(path);
-    shapes.push(...pathShapes);
+    const s = SVGLoader.createShapes(path);
+    console.log("[3D] path shapes:", s.length);
+    shapes.push(...s);
   }
-  if (shapes.length === 0) return null;
+  console.log("[3D] total shapes:", shapes.length);
+  if (shapes.length === 0) {
+    console.error("[3D] No shapes from SVG — geometry failed");
+    return null;
+  }
 
   const isMobile = window.innerWidth < 768;
-
   const geometry = new THREE.ExtrudeGeometry(shapes, {
     depth: 60,
     bevelEnabled: true,
@@ -230,14 +78,13 @@ function createGeometry(): THREE.BufferGeometry | null {
   geometry.center();
   geometry.computeVertexNormals();
 
-  // Scale to ~5 units (Buzzworthy icosahedron = radius 2.5)
   const box = new THREE.Box3().setFromBufferAttribute(
     geometry.getAttribute("position") as THREE.BufferAttribute
   );
   const size = new THREE.Vector3();
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = (5 / maxDim) * 0.6; // 40% smaller
+  const scale = (5 / maxDim) * 0.6;
   geometry.scale(scale, -scale, scale);
 
   return geometry;
@@ -251,80 +98,89 @@ export function initScene(container: HTMLElement) {
   const height = container.clientHeight;
   const isMobile = width < 768;
 
-  // Renderer — match Buzzworthy
   renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: true,
     powerPreference: "high-performance",
   });
-  renderer.autoClear = false; // Buzzworthy uses autoClear: false
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
 
-  // Camera — match Buzzworthy exactly
   initCameraZ = isMobile ? 28 : 15;
   camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 1000);
   camera.position.z = initCameraZ;
 
+  // Environment map for glass reflections/refractions
+  const envMap = createEnvMap(renderer);
+
   // Geometry
   const geometry = createGeometry();
-  if (!geometry) return;
+  if (!geometry) {
+    console.error("[3D] geometry creation failed — aborting");
+    return;
+  }
+  console.log("[3D] geometry OK, vertices:", geometry.getAttribute("position").count);
 
-  // Matcap texture
-  const matcapTexture = createMatcapTexture();
-
-  // Shader material — EXACT Buzzworthy uniform values
-  shaderMat = new THREE.ShaderMaterial({
-    uniforms: {
-      u_matCap: { value: matcapTexture },
-      u_res: { value: new THREE.Vector2(width, height) },
-      u_time: { value: 0 },
-      u_camPos: { value: camera.position },
-      u_speed1: { value: 9.18 },     // Buzzworthy exact
-      u_freq1: { value: 0.55 },      // Buzzworthy exact
-      u_amp1: { value: 2.4 },        // Buzzworthy exact
-      u_ior: { value: 1.030 },       // Buzzworthy exact (NOT 1.45)
-      u_tintInt: { value: 0.05 },    // Buzzworthy exact
-      u_lightfac: { value: 1.0 },    // Buzzworthy exact
-      u_refColor: { value: new THREE.Color(0xedece2) }, // Buzzworthy exact (warm off-white)
-      u_targColor: { value: new THREE.Color(0x323232) }, // Buzzworthy exact
-      pi: { value: Math.PI },
-    },
-    vertexShader,
-    fragmentShader,
+  // Glass material
+  const material = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    metalness: 0.1,
+    roughness: 0.0,
+    transmission: 0.7,
+    thickness: 2.5,
+    ior: 1.45,
+    envMap,
+    envMapIntensity: 3.0,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.0,
     transparent: true,
+    opacity: 0.85,
     side: THREE.DoubleSide,
+    attenuationColor: new THREE.Color(0xd0c8ff),
+    attenuationDistance: 0.5,
   });
 
-  // Mesh in rotator group (like Buzzworthy)
+  // Mesh
   meshGroup = new THREE.Group();
-  const mesh = new THREE.Mesh(geometry, shaderMat);
-  mesh.name = "GlassF";
-  meshGroup.add(mesh);
-  // Desktop: shift left (negative X in screen space)
+  glassMesh = new THREE.Mesh(geometry, material);
+  glassMesh.name = "GlassF";
+  meshGroup.add(glassMesh);
   meshGroup.position.x = isMobile ? 0 : -3;
   scene.add(meshGroup);
 
-  // Mouse (Buzzworthy exact approach)
+  // Lights — bright enough for glass to be visible on black bg
+  scene.add(new THREE.AmbientLight(0x666666, 1.0));
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(5, 5, 5);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.8);
+  fill.position.set(-3, -2, 4);
+  scene.add(fill);
+  const pinkL = new THREE.PointLight(0xe503a2, 1.5, 30);
+  pinkL.position.set(-5, 2, 3);
+  scene.add(pinkL);
+  const cyanL = new THREE.PointLight(0x01ffff, 1.5, 30);
+  cyanL.position.set(5, -2, 3);
+  scene.add(cyanL);
+
+  // Raycaster for hover interaction
+  raycaster = new THREE.Raycaster();
+
+  // Mouse
   const onMouseMove = (e: MouseEvent) => {
+    const rect = container.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     mousePos.x = (e.clientX - window.innerWidth / 2) * parallaxIntensity;
     mousePos.y = (e.clientY - window.innerHeight / 2) * parallaxIntensity;
   };
-  window.addEventListener("mousemove", onMouseMove);
-
-  // Scroll
-  const scrollContainer = document.getElementById("smooth-content");
-  let scrollProgress = 0;
-  const onScroll = () => {
-    if (scrollContainer) {
-      scrollProgress = scrollContainer.scrollTop / window.innerHeight;
-    }
-  };
-  scrollContainer?.addEventListener("scroll", onScroll, { passive: true });
+  container.addEventListener("mousemove", onMouseMove);
 
   // Resize
   const onResize = () => {
@@ -334,50 +190,55 @@ export function initScene(container: HTMLElement) {
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    if (shaderMat) {
-      shaderMat.uniforms.u_res.value.set(w, h);
-    }
   };
   window.addEventListener("resize", onResize);
 
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Animation loop
-  let lastTime = performance.now();
   function animate() {
     animationId = requestAnimationFrame(animate);
-    if (!meshGroup || !camera || !renderer || !scene || !shaderMat) return;
+    if (!meshGroup || !camera || !renderer || !scene || !glassMesh) return;
 
-    const now = performance.now();
-    const dt = (now - lastTime) * 0.001;
-    lastTime = now;
+    // Raycaster hover detection
+    if (raycaster) {
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(glassMesh);
+      isHovered = intersects.length > 0;
+    }
 
-    shaderMat.uniforms.u_time.value += dt;
-    shaderMat.uniforms.u_camPos.value = camera.position;
+    // Hover: smooth scale pulse
+    const targetScale = isHovered ? 1.08 : 1.0;
+    hoverScale += (targetScale - hoverScale) * 0.08;
+    glassMesh.scale.setScalar(hoverScale);
 
+    // Hover: subtle rotation following mouse
+    if (isHovered && !prefersReducedMotion) {
+      const targetRotX = pointer.y * 0.15;
+      const targetRotY = pointer.x * 0.15;
+      glassMesh.rotation.x += (targetRotX - glassMesh.rotation.x) * 0.05;
+      glassMesh.rotation.y += (targetRotY - glassMesh.rotation.y) * 0.05;
+    } else if (!prefersReducedMotion) {
+      glassMesh.rotation.x += (0 - glassMesh.rotation.x) * 0.03;
+      glassMesh.rotation.y += (0 - glassMesh.rotation.y) * 0.03;
+    }
+
+    // Camera parallax
     if (!prefersReducedMotion) {
-      // Camera parallax (Buzzworthy exact)
       camera.position.x += (mousePos.x - camera.position.x) * parallaxEase;
       camera.position.y += (mousePos.y - camera.position.y) * parallaxEase;
       camera.position.z += (initCameraZ - camera.position.z) * parallaxEase;
       camera.lookAt(0, 0, 0);
     }
 
-    // Scroll fade
-    const scale = Math.max(0.3, 1 - scrollProgress * 0.3);
-    meshGroup.scale.setScalar(scale);
-    shaderMat.opacity = Math.max(0, 1 - scrollProgress * 1.5);
-
-    renderer.clear();
     renderer.render(scene, camera);
   }
 
   animate();
 
   (container as HTMLElement & { _cleanup?: () => void })._cleanup = () => {
-    window.removeEventListener("mousemove", onMouseMove);
+    container.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("resize", onResize);
-    scrollContainer?.removeEventListener("scroll", onScroll);
   };
 }
 
@@ -387,7 +248,7 @@ export function destroyScene() {
     meshGroup.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.dispose();
-        child.material.dispose();
+        (child.material as THREE.Material).dispose();
       }
     });
   }
@@ -399,6 +260,7 @@ export function destroyScene() {
   scene = null;
   camera = null;
   meshGroup = null;
-  shaderMat = null;
+  glassMesh = null;
   animationId = null;
+  raycaster = null;
 }

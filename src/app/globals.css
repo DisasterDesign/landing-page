@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
+  --default-font-family: "Anomalia", system-ui, sans-serif;
+  --font-sans: "Anomalia", system-ui, sans-serif;
   --color-pink: #E503A2;
   --color-cyan: #01FFFF;
   --color-black: #000000;
@@ -20,16 +22,8 @@
 
 @font-face {
   font-family: "Anomalia";
-  src: url("/fonts/Anomalia/anomalias.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Anomalia";
-  src: url("/fonts/Anomalia/anomalia-light-aaa (1).ttf") format("truetype");
-  font-weight: 300;
+  src: url("/fonts/Anomalia/anomalia-light.ttf") format("truetype");
+  font-weight: 100 400;
   font-style: normal;
   font-display: swap;
 }
@@ -37,13 +31,17 @@
 @font-face {
   font-family: "Anomalia";
   src: url("/fonts/Anomalia/AnomaliaMLv2AAA-UltraBold.ttf") format("truetype");
-  font-weight: 800;
+  font-weight: 500 900;
   font-style: normal;
   font-display: swap;
 }
 
 html {
   scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+  font-family: "Anomalia", system-ui, sans-serif !important;
 }
 
 body {
@@ -89,7 +87,7 @@ body {
 }
 
 /* Firefox scrollbar */
-* {
+html, body, div, span, p, a, button, input, select, textarea, li, ul, nav, header, footer, section, h1, h2, h3, h4, h5, h6 {
   scrollbar-width: thin;
   scrollbar-color: #E503A2 #000000;
 }
@@ -193,4 +191,30 @@ html.loader-active #navbar-logo {
     fill: var(--path-fill, white) !important;
     stroke-width: 0 !important;
   }
+}
+
+/* Accessibility: high contrast mode */
+html.high-contrast * {
+  border-color: white !important;
+}
+html.high-contrast body,
+html.high-contrast .bg-black,
+html.high-contrast [class*="bg-gray"] {
+  background-color: #000 !important;
+}
+html.high-contrast p,
+html.high-contrast span,
+html.high-contrast a,
+html.high-contrast li,
+html.high-contrast h1,
+html.high-contrast h2,
+html.high-contrast h3,
+html.high-contrast h4 {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+/* Accessibility: grayscale mode */
+html.grayscale-mode {
+  filter: grayscale(1);
 }

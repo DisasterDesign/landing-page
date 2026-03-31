@@ -1,55 +1,547 @@
 "use client";
 
-import { PROCESS_STEPS } from "@/lib/constants";
-import ScrollReveal from "@/components/animations/ScrollReveal";
+import Image from "next/image";
+import { useState, useEffect, useRef, Suspense, ComponentType } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useGLTF, Environment } from "@react-three/drei";
+import * as THREE from "three";
+import SvgHowItWorks from "@/components/svg/SvgHowItWorks";
+import SvgAbout from "@/components/svg/SvgAbout";
+import SvgProjects from "@/components/svg/SvgProjects";
+import SvgOurMembers from "@/components/svg/SvgOurMembers";
+import SvgContactNav from "@/components/svg/SvgContactNav";
+import SvgCta from "@/components/svg/SvgCta";
+import SvgWhereIdeas from "@/components/svg/SvgWhereIdeas";
+import SvgReality from "@/components/svg/SvgReality";
+import SvgMakeIt from "@/components/svg/SvgMakeIt";
 
-export default function HowItWorks() {
+// Wireframe element definitions with actual SVG sizes
+interface WireframeElement {
+  id: string;
+  SvgComponent: ComponentType<React.SVGProps<SVGSVGElement> & { className?: string }>;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  hasShadow?: boolean;
+  whiteShadow?: boolean;
+  backgroundColor?: string;
+  invertColors?: boolean;
+}
+
+// Final positions for all elements (navbar items scaled to 70%, evenly spaced with 30px gaps)
+const elements: WireframeElement[] = [
+  // Navbar items - scaled to 70% with even 30px spacing
+  { id: "about", SvgComponent: SvgAbout, x: 436, y: 32, width: 39, height: 11, invertColors: true },
+  { id: "projects", SvgComponent: SvgProjects, x: 505, y: 32, width: 52, height: 12, invertColors: true },
+  { id: "members", SvgComponent: SvgOurMembers, x: 587, y: 32, width: 87, height: 11, invertColors: true },
+  { id: "contact", SvgComponent: SvgContactNav, x: 704, y: 32, width: 50, height: 11, invertColors: true },
+  // CTA button - right side (75% of 164x50 = 123x38) with shadow
+  { id: "letsTalk", SvgComponent: SvgCta, x: 1047, y: 20, width: 123, height: 38, hasShadow: true },
+
+  // Main title - "Where ideas become" (50% of 724x256 = 362x128) - vertically centered
+  { id: "titleMain", SvgComponent: SvgWhereIdeas, x: 80, y: 267, width: 362, height: 128 },
+  // "reality" in dark color (50% size) - with spacing
+  { id: "titleReality", SvgComponent: SvgReality, x: 80, y: 437, width: 193, height: 62 },
+
+  // CTA button - centered horizontally, lower position
+  { id: "makeIt", SvgComponent: SvgMakeIt, x: 499, y: 600, width: 192, height: 62, whiteShadow: true },
+];
+
+// Animation timing (30% faster)
+const BORDER_ANIMATION_DURATION = 560; // ms
+const CURSOR_MOVE_DURATION = 280; // ms for cursor to move
+const DRAG_DURATION = 375; // ms for dragging element to final position
+const PAUSE_BETWEEN_ELEMENTS = 95; // ms pause between elements
+
+// Order of elements to animate
+// letsTalk → projects → about → members → contact → titleMain → titleReality → makeIt
+const ANIMATION_ORDER = [4, 1, 0, 2, 3, 5, 6, 7];
+
+// Frame dimensions
+const FRAME_WIDTH = 1190;
+const FRAME_HEIGHT = 765;
+
+// Scattered position type
+interface ScatteredPosition {
+  x: number;
+  y: number;
+  rotation: number;
+}
+
+// Generate random scattered positions within the frame
+function generateScatteredPositions(): ScatteredPosition[] {
+  const padding = 80;
+  return elements.map((el) => ({
+    x: padding + Math.random() * (FRAME_WIDTH - el.width - padding * 2),
+    y: padding + Math.random() * (FRAME_HEIGHT - el.height - padding * 2),
+    rotation: (Math.random() - 0.5) * 30, // -15 to +15 degrees
+  }));
+}
+
+// ============================================
+// ASTRONAUT 3D - Enters from depth on scroll
+// ============================================
+function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const { scene } = useGLTF("/v10.glb");
+  const scrollRef = useRef(scrollProgress);
+
+  // Update ref when prop changes
+  scrollRef.current = scrollProgress;
+
+  useFrame((state) => {
+    if (!groupRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    // Get latest scroll progress from ref
+    const currentScroll = scrollRef.current;
+
+    // Animation: astronaut enters from very far back
+    // Starts at 0% scroll, completes at 50%
+    const enterStart = 0.0;
+    const enterEnd = 0.5;
+    const progress = currentScroll < enterStart ? 0 :
+      Math.min(1, (currentScroll - enterStart) / (enterEnd - enterStart));
+
+    // Ease out cubic for smooth deceleration
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+    // Z position: starts far back, ends at final position
+    const startZ = -3000; // Far back (visible with far: 6000)
+    const endZ = -50;      // Final position (much further back)
+    const currentZ = startZ + (endZ - startZ) * easedProgress;
+
+    // Hide on mobile/tablet (viewport.width < 10 is roughly < 1024px)
+    const viewport = state.viewport;
+    const isSmallScreen = viewport.width < 10;
+
+    if (isSmallScreen) {
+      groupRef.current.visible = false;
+      return;
+    }
+    groupRef.current.visible = true;
+
+    // Desktop only - X position
+    const xPos = 10.5;
+
+    // Desktop only - Y position
+    const baseY = -9.5;
+    const floatY = Math.sin(time * 0.5) * 0.3;
+
+    groupRef.current.position.set(xPos, baseY + floatY, currentZ);
+
+    // Subtle rotation
+    groupRef.current.rotation.y = Math.sin(time * 0.3) * 0.2 - 0.5;
+    groupRef.current.rotation.x = Math.sin(time * 0.4) * 0.05;
+    groupRef.current.rotation.z = Math.sin(time * 0.2) * 0.03;
+
+    // Desktop scale
+    const scale = 25.5 + easedProgress * 15.3; // 25.5 to 40.8
+    groupRef.current.scale.setScalar(scale);
+  });
+
   return (
-    <section id="how-it-works" className="relative bg-black py-24 md:py-32 px-6">
-      <div className="max-w-7xl mx-auto">
-        <ScrollReveal>
-          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="איך זה עובד?">
-            איך זה עובד?
-          </h2>
-        </ScrollReveal>
+    <group ref={groupRef} position={[4, -1, -30]}>
+      <primitive object={scene} />
+    </group>
+  );
+}
 
-        <div className="relative">
-          {/* Connecting line */}
-          <div className="hidden md:block absolute top-0 bottom-0 right-1/2 w-[2px] bg-gradient-to-b from-pink via-cyan to-pink opacity-20" />
+// Astronaut Scene wrapper
+function AstronautScene({ scrollProgress }: { scrollProgress: number }) {
+  return (
+    <>
+      <ambientLight intensity={0.6} />
+      <pointLight position={[5, 5, 5]} intensity={1} />
+      <pointLight position={[-5, -5, 5]} intensity={0.5} color="#6644ff" />
+      <Environment files="/rosendal_park_sunset_puresky_1k.hdr" />
+      <Astronaut3D scrollProgress={scrollProgress} />
+    </>
+  );
+}
 
-          <div className="space-y-16 md:space-y-24">
-            {PROCESS_STEPS.map((step, index) => (
-              <ScrollReveal
-                key={step.number}
-                delay={index * 0.1}
-                direction={index % 2 === 0 ? "right" : "left"}
+// Cursor SVG Component
+function CursorSVG() {
+  return (
+    <svg width="24" height="32" viewBox="0 0 24 32" fill="none">
+      <path
+        d="M5.65685 0L24 18.3431L14.1421 18.3431L18.3137 27.3137L13.6569 29.6569L9.48528 20.6863L5.65685 24.5147L5.65685 0Z"
+        fill="#1F1F1F"
+        stroke="white"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+// Main Component
+export default function HowItWorks() {
+  const [borderComplete, setBorderComplete] = useState(false);
+  const [visibleElements, setVisibleElements] = useState<Set<number>>(new Set());
+  const [isVisible, setIsVisible] = useState(false);
+  const [scatteredPositions, setScatteredPositions] = useState<ScatteredPosition[]>([]);
+  const [cursorPosition, setCursorPosition] = useState({ x: FRAME_WIDTH + 50, y: FRAME_HEIGHT / 2 });
+  const [showCursor, setShowCursor] = useState(false);
+  const [placedElements, setPlacedElements] = useState<Set<number>>(new Set());
+  const [isDragging, setIsDragging] = useState(false);
+  const [currentAnimationIndex, setCurrentAnimationIndex] = useState(-1); // -1 = not started
+  const [scale, setScale] = useState(1);
+  const [titleProgress, setTitleProgress] = useState(0);
+  const [bottomTextProgress, setBottomTextProgress] = useState(0);
+  const [astronautProgress, setAstronautProgress] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const outerContainerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // Combined scroll handler for tear state and text animations
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollContainer = document.getElementById("smooth-content");
+      const windowHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
+
+      // === Title and bottom text animations ===
+      if (!sectionRef.current) return;
+
+      const rect = sectionRef.current.getBoundingClientRect();
+      let titleProg = 0;
+      let bottomProg = 0;
+
+      // Section is in viewport
+      if (rect.top < windowHeight && rect.bottom > 0) {
+        // Title animation
+        const titleEntryStart = windowHeight * 0.6;
+        const titleEntryEnd = windowHeight * 0.3;
+        const titleEntry = rect.top < titleEntryStart
+          ? Math.min(1, (titleEntryStart - rect.top) / (titleEntryStart - titleEntryEnd))
+          : 0;
+
+        const titleExitStart = windowHeight * 0.5;
+        const titleExitEnd = windowHeight * 0.1;
+        const titleExit = rect.bottom > titleExitEnd
+          ? rect.bottom < titleExitStart
+            ? (rect.bottom - titleExitEnd) / (titleExitStart - titleExitEnd)
+            : 1
+          : 0;
+
+        titleProg = Math.min(titleEntry, titleExit);
+
+        // Bottom text animation
+        const entryStart = windowHeight * 0.5;
+        const entryEnd = windowHeight * 0.2;
+        const entryProgress = rect.top < entryStart
+          ? Math.min(1, (entryStart - rect.top) / (entryStart - entryEnd))
+          : 0;
+
+        const exitStart = windowHeight * 0.6;
+        const exitEnd = windowHeight * 0.2;
+        const exitProgress = rect.bottom > exitStart
+          ? 1
+          : rect.bottom < exitEnd
+            ? 0
+            : (rect.bottom - exitEnd) / (exitStart - exitEnd);
+
+        bottomProg = Math.min(entryProgress, exitProgress);
+
+        // Astronaut scroll progress (0 to 1 based on section visibility)
+        const sectionHeight = rect.height;
+        const scrolledIntoSection = windowHeight - rect.top;
+        const astroProgress = Math.max(0, Math.min(1, scrolledIntoSection / (sectionHeight + windowHeight)));
+        setAstronautProgress(astroProgress);
+      }
+
+      setTitleProgress(titleProg);
+      setBottomTextProgress(bottomProg);
+    };
+
+    const scrollContainer = document.getElementById("smooth-content");
+    const target = scrollContainer || window;
+    target.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => target.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Initialize scattered positions on mount
+  useEffect(() => {
+    setScatteredPositions(generateScatteredPositions());
+  }, []);
+
+  // Calculate scale based on container width
+  useEffect(() => {
+    const calculateScale = () => {
+      if (!outerContainerRef.current) return;
+      const containerWidth = outerContainerRef.current.offsetWidth;
+      const newScale = Math.min(containerWidth / FRAME_WIDTH, 1);
+      setScale(newScale);
+    };
+
+    calculateScale();
+    window.addEventListener("resize", calculateScale);
+    return () => window.removeEventListener("resize", calculateScale);
+  }, []);
+
+  // Intersection Observer - start/reset animation when section enters/exits
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          // Section entered - start animation
+          setIsVisible(true);
+        } else if (isVisible) {
+          // Section left - reset all animation states
+          setIsVisible(false);
+          setBorderComplete(false);
+          setVisibleElements(new Set());
+          setShowCursor(false);
+          setPlacedElements(new Set());
+          setIsDragging(false);
+          setCurrentAnimationIndex(-1);
+          // Generate new scattered positions for next time
+          setScatteredPositions(generateScatteredPositions());
+        }
+      },
+      { threshold: 0.2 }
+    );
+
+    const section = document.getElementById("how-it-works");
+    if (section) observer.observe(section);
+
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  // Border animation complete - show elements and start cursor animation
+  useEffect(() => {
+    if (isVisible && scatteredPositions.length > 0) {
+      // Border complete
+      const borderTimer = setTimeout(() => {
+        setBorderComplete(true);
+      }, BORDER_ANIMATION_DURATION);
+
+      // Show all elements at once after border completes
+      const showElementsTimer = setTimeout(() => {
+        setVisibleElements(new Set(elements.map((_, i) => i)));
+      }, BORDER_ANIMATION_DURATION);
+
+      // Show cursor and start first animation
+      const cursorTimer = setTimeout(() => {
+        setShowCursor(true);
+        setCurrentAnimationIndex(0);
+      }, BORDER_ANIMATION_DURATION + 200);
+
+      return () => {
+        clearTimeout(borderTimer);
+        clearTimeout(showElementsTimer);
+        clearTimeout(cursorTimer);
+      };
+    }
+  }, [isVisible, scatteredPositions]);
+
+  // Sequential animation for each element
+  useEffect(() => {
+    if (currentAnimationIndex < 0 || currentAnimationIndex >= ANIMATION_ORDER.length) return;
+    if (scatteredPositions.length === 0) return;
+
+    const elementIndex = ANIMATION_ORDER[currentAnimationIndex];
+    const element = elements[elementIndex];
+    const scattered = scatteredPositions[elementIndex];
+
+    if (!scattered) return;
+
+    // Step 1: Move cursor to scattered position
+    setIsDragging(false);
+    setCursorPosition({ x: scattered.x, y: scattered.y });
+
+    // Step 2: After reaching element, drag to final position
+    const dragTimer = setTimeout(() => {
+      setIsDragging(true);
+      setCursorPosition({ x: element.x, y: element.y });
+      setPlacedElements((prev) => new Set([...Array.from(prev), elementIndex]));
+    }, CURSOR_MOVE_DURATION + PAUSE_BETWEEN_ELEMENTS);
+
+    // Step 3: Move to next element
+    const nextTimer = setTimeout(() => {
+      setCurrentAnimationIndex((prev) => prev + 1);
+    }, CURSOR_MOVE_DURATION + PAUSE_BETWEEN_ELEMENTS + DRAG_DURATION + PAUSE_BETWEEN_ELEMENTS);
+
+    return () => {
+      clearTimeout(dragTimer);
+      clearTimeout(nextTimer);
+    };
+  }, [currentAnimationIndex, scatteredPositions]);
+
+  // Frame perimeter for SVG path animation
+  const perimeter = 2 * (FRAME_WIDTH + FRAME_HEIGHT);
+
+  return (
+    <section
+      ref={sectionRef}
+      id="how-it-works"
+      className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20 bg-black"
+    >
+      {/* 3D element removed */}
+
+      {/* Concrete texture overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          opacity: 0.03,
+          mixBlendMode: "multiply",
+        }}
+      />
+      {/* Section Title */}
+      <div
+        className="flex justify-center mb-8 sm:mb-12 md:mb-16 relative z-10"
+        style={{
+          opacity: titleProgress,
+          transform: `translateY(${(1 - titleProgress) * -30}px)`,
+          transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
+        }}
+      >
+        <SvgHowItWorks
+          style={{
+            width: "clamp(280px, 30vw, 456px)",
+            height: "auto",
+            filter: "brightness(0) invert(1)",
+          }}
+        />
+        <h2 className="sr-only">איך זה עובד?</h2>
+      </div>
+
+      {/* Outer Container - responsive width, scaled height */}
+      <div
+        ref={outerContainerRef}
+        className="relative mx-auto z-10"
+        style={{
+          width: "min(81vw, 1190px)",
+          height: FRAME_HEIGHT * scale,
+          opacity: 1,
+          transition: "opacity 0.2s ease-out",
+        }}
+      >
+        {/* Inner Container - fixed size, scaled down, centered */}
+        <div
+          ref={containerRef}
+          className="absolute left-1/2"
+          style={{
+            width: FRAME_WIDTH,
+            height: FRAME_HEIGHT,
+            transform: `translateX(-50%) scale(${scale})`,
+            transformOrigin: "top center",
+            backgroundColor: "transparent",
+            borderRadius: "24px",
+            boxShadow: borderComplete
+              ? "0 0 60px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)"
+              : "none",
+            transition: "box-shadow 0.8s ease-out",
+          }}
+        >
+          {/* Animated Border SVG */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ overflow: "visible" }}
+          >
+            <rect
+              x="0.5"
+              y="0.5"
+              width={FRAME_WIDTH - 1}
+              height={FRAME_HEIGHT - 1}
+              rx="24"
+              ry="24"
+              fill="none"
+              stroke="rgba(31, 31, 31, 0.15)"
+              strokeWidth="1"
+              style={{
+                strokeDasharray: perimeter,
+                strokeDashoffset: isVisible ? 0 : perimeter,
+                transition: `stroke-dashoffset ${BORDER_ANIMATION_DURATION}ms ease-out`,
+              }}
+            />
+          </svg>
+
+          {/* Elements */}
+          {elements.map((el, index) => {
+            const isElementVisible = visibleElements.has(index);
+            const isPlaced = placedElements.has(index);
+            const scattered = scatteredPositions[index];
+
+            // Use final position if placed, otherwise scattered position
+            const posX = isPlaced ? el.x : (scattered?.x ?? el.x);
+            const posY = isPlaced ? el.y : (scattered?.y ?? el.y);
+            const rotation = isPlaced ? 0 : (scattered?.rotation ?? 0);
+
+            return (
+              <div
+                key={el.id}
+                className="absolute"
+                style={{
+                  left: 0,
+                  top: 0,
+                  width: el.width,
+                  height: el.height,
+                  opacity: isElementVisible ? 1 : 0,
+                  transform: `translate(${posX}px, ${posY}px) rotate(${rotation}deg)`,
+                  transition: `opacity 0.6s ease-out, transform ${DRAG_DURATION}ms ease-out, filter 0.5s ease-out`,
+                  filter: el.whiteShadow && isPlaced
+                    ? "drop-shadow(0 0 20px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 40px rgba(255, 255, 255, 0.3))"
+                    : el.hasShadow && isElementVisible
+                    ? "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))"
+                    : "none",
+                  backgroundColor: el.backgroundColor,
+                  borderRadius: el.backgroundColor ? "8px" : undefined,
+                  padding: el.backgroundColor ? "12px 24px" : undefined,
+                }}
               >
-                <div
-                  className={`flex flex-col md:flex-row items-center gap-8 ${
-                    index % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
-                  }`}
-                >
-                  <div className="flex-1 text-center md:text-right">
-                    <span className="text-5xl md:text-6xl font-extrabold text-white opacity-30">
-                      {step.number}
-                    </span>
-                    <h3 className="chromatic-hover text-2xl md:text-3xl font-bold mt-2 mb-3" data-text={step.title}>
-                      {step.title}
-                    </h3>
-                    <p className="text-gray-400 text-lg max-w-md mx-auto md:mx-0">
-                      {step.description}
-                    </p>
-                  </div>
+                <el.SvgComponent
+                  className="pointer-events-none"
+                  style={{
+                    width: el.width,
+                    height: el.height,
+                    filter: el.invertColors ? "brightness(0) invert(1)" : undefined,
+                  }}
+                />
+              </div>
+            );
+          })}
 
-                  {/* Node */}
-                  <div className="relative z-10 w-4 h-4 rounded-full bg-pink shadow-[0_0_20px_rgba(229,3,162,0.5)] hidden md:block" />
-
-                  <div className="flex-1 hidden md:block" />
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
+          {/* Cursor */}
+          {showCursor && (
+            <div
+              className="absolute pointer-events-none z-50"
+              style={{
+                left: 0,
+                top: 0,
+                transform: `translate(${cursorPosition.x}px, ${cursorPosition.y}px)`,
+                transition: `transform ${isDragging ? DRAG_DURATION : CURSOR_MOVE_DURATION}ms ease-out`,
+              }}
+            >
+              <CursorSVG />
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Description text */}
+      <div
+        className="flex justify-center mt-12 px-4 relative z-10"
+        style={{
+          opacity: bottomTextProgress,
+          transform: `translateY(${(1 - bottomTextProgress) * 30}px)`,
+          transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
+        }}
+      >
+        <Image
+          src="/שיחה אחת. אתר שלם!.svg"
+          alt="שיחה אחת. אתר שלם!"
+          width={311}
+          height={23}
+          style={{
+            width: "clamp(220px, 28vw, 311px)",
+            height: "auto",
+            filter: "brightness(0) invert(1)",
+          }}
+        />
       </div>
     </section>
   );
