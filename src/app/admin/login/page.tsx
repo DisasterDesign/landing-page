@@ -17,14 +17,16 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
+      console.log("[LOGIN] Attempting signIn...");
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
+      console.log("[LOGIN] Result:", JSON.stringify(result));
 
       if (result?.error) {
-        toast.error("אימייל או סיסמה שגויים", {
+        toast.error(`שגיאה: ${result.error}`, {
           style: {
             background: "#1A1A1A",
             color: "#fff",
