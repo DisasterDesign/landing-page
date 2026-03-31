@@ -48,11 +48,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         {/* Top nav — page links, centered */}
         <nav dir="ltr" className="absolute top-6 left-1/2 -translate-x-1/2 z-[20] hidden lg:flex items-center gap-7">
           {[
-            { label: "ראשי", href: "/" },
-            { label: "עבודות", href: "/#portfolio" },
+            { label: "דף הבית", href: "/" },
+            { label: "חנות פונטים", href: "/fonts" },
             { label: "בלוג", href: "/blog" },
-            { label: "פונטים", href: "/fonts" },
-            { label: "אודות", href: "/about" },
           ].map((link) => (
             <Link
               key={link.href}
