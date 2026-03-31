@@ -41,9 +41,6 @@ html {
   scroll-behavior: smooth;
 }
 
-*, *::before, *::after {
-  font-family: "Anomalia", system-ui, sans-serif !important;
-}
 
 body {
   background-color: white;
