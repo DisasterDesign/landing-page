@@ -2,12 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import Card from "@/components/ui/Card";
-import { PORTFOLIO_PROJECTS, SITE_NAME } from "@/lib/constants";
+import { PORTFOLIO_PROJECTS, SITE_NAME, SITE_URL } from "@/lib/constants";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
-  title: "תיק עבודות",
+  title: "תיק עבודות — פרויקטים נבחרים",
   description:
-    "צפו בפרויקטים שלנו – אתרי תדמית, חנויות אונליין, דפי נחיתה ועוד. Fuzion Webz מציגה עבודות עיצוב ופיתוח מתקדמות.",
+    "צפו בפרויקטים הנבחרים שלנו — עבודות עיצוב אתרים, פיתוח ועיצוב UX/UI מתקדם. Fuzion Webz מציגה פרויקטים מרשימים.",
+  alternates: {
+    canonical: `${SITE_URL}/portfolio`,
+  },
   openGraph: {
     title: `תיק עבודות | ${SITE_NAME}`,
     description: "צפו בפרויקטים הנבחרים שלנו – עיצוב ופיתוח אתרים מתקדמים.",
@@ -16,6 +20,11 @@ export const metadata: Metadata = {
 
 export default function PortfolioPage() {
   return (
+    <>
+    <BreadcrumbJsonLd items={[
+      { name: "דף הבית", url: SITE_URL },
+      { name: "תיק עבודות", url: `${SITE_URL}/portfolio` },
+    ]} />
     <div className="min-h-screen bg-black">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
@@ -65,5 +74,6 @@ export default function PortfolioPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

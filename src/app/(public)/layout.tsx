@@ -9,10 +9,13 @@ import Loader from "@/components/animations/Loader";
 import WhatsAppButton from "@/components/shared/WhatsAppButton";
 import CookieConsent from "@/components/shared/CookieConsent";
 import AccessibilityWidget from "@/components/shared/AccessibilityWidget";
+import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/JsonLd";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <OrganizationJsonLd />
+      <WebSiteJsonLd />
       <CustomCursor />
       <Loader />
       <a

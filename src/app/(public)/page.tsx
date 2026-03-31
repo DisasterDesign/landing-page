@@ -6,10 +6,13 @@ import Portfolio from "@/components/sections/Portfolio";
 import Pricing from "@/components/sections/Pricing";
 import Contact from "@/components/sections/Contact";
 import Marquee from "@/components/animations/Marquee";
+import { LocalBusinessJsonLd, FAQJsonLd } from "@/components/seo/JsonLd";
 
 export default function Home() {
   return (
     <>
+      <LocalBusinessJsonLd />
+      <FAQJsonLd />
       <Hero />
       <Marquee text="FUZION WEBZ • עיצוב • פיתוח • חדשנות •" />
       <HowItWorks />

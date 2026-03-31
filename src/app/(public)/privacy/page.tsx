@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import ScrollReveal from "@/components/animations/ScrollReveal";
-import { SITE_NAME } from "@/lib/constants";
+import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
   title: "מדיניות פרטיות",
-  description: `מדיניות הפרטיות של ${SITE_NAME}. למדו כיצד אנו אוספים, משתמשים ומגנים על המידע האישי שלכם.`,
+  description: `מדיניות הפרטיות של ${SITE_NAME}. למדו כיצד אנו אוספים, משתמשים ומגנים על המידע האישי שלכם — פרטיות, GDPR ומידע.`,
+  alternates: {
+    canonical: `${SITE_URL}/privacy`,
+  },
   openGraph: {
     title: `מדיניות פרטיות | ${SITE_NAME}`,
     description: `מדיניות הפרטיות של ${SITE_NAME}.`,
@@ -13,6 +17,11 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
+    <>
+    <BreadcrumbJsonLd items={[
+      { name: "דף הבית", url: SITE_URL },
+      { name: "מדיניות פרטיות", url: `${SITE_URL}/privacy` },
+    ]} />
     <div className="min-h-screen bg-black">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
@@ -147,5 +156,6 @@ export default function PrivacyPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | Fuzion Webz",
   },
   description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים. אנחנו יוצרים חוויות דיגיטליות שממירות מבקרים ללקוחות.",
-  metadataBase: new URL("https://fuzionwebz.com"),
+  metadataBase: new URL("https://www.fuzionwebz.com"),
   openGraph: {
     type: "website",
     locale: "he_IL",
@@ -26,9 +26,9 @@ export const metadata: Metadata = {
     follow: true,
   },
   alternates: {
-    canonical: "https://fuzionwebz.com",
+    canonical: "https://www.fuzionwebz.com",
     languages: {
-      "he-IL": "https://fuzionwebz.com",
+      "he-IL": "https://www.fuzionwebz.com",
     },
   },
 };

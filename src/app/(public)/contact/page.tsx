@@ -2,12 +2,16 @@ import type { Metadata } from "next";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import Card from "@/components/ui/Card";
 import Contact from "@/components/sections/Contact";
-import { SITE_NAME, WHATSAPP_NUMBER } from "@/lib/constants";
+import { SITE_NAME, SITE_URL, WHATSAPP_NUMBER } from "@/lib/constants";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
-  title: "צור קשר",
+  title: "צור קשר — Fuzion Webz",
   description:
-    "צרו איתנו קשר לקבלת הצעת מחיר, ייעוץ ראשוני או כל שאלה. Fuzion Webz – תמיד כאן בשבילכם.",
+    "צרו איתנו קשר לקבלת הצעת מחיר, ייעוץ ראשוני חינם או כל שאלה. Fuzion Webz — יצירת קשר מהירה ונוחה.",
+  alternates: {
+    canonical: `${SITE_URL}/contact`,
+  },
   openGraph: {
     title: `צור קשר | ${SITE_NAME}`,
     description: "צרו איתנו קשר לקבלת הצעת מחיר או ייעוץ ראשוני.",
@@ -50,6 +54,11 @@ const CONTACT_INFO = [
 
 export default function ContactPage() {
   return (
+    <>
+    <BreadcrumbJsonLd items={[
+      { name: "דף הבית", url: SITE_URL },
+      { name: "צור קשר", url: `${SITE_URL}/contact` },
+    ]} />
     <div className="min-h-screen bg-black">
       {/* Hero */}
       <section className="pt-24 md:pt-32 px-6">
@@ -105,5 +114,6 @@ export default function ContactPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

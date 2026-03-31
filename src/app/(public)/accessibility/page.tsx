@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import ScrollReveal from "@/components/animations/ScrollReveal";
-import { SITE_NAME } from "@/lib/constants";
+import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
   title: "הצהרת נגישות",
-  description: `הצהרת הנגישות של ${SITE_NAME} בהתאם לתקן הישראלי IS 5568 ותקן WCAG 2.1 AA.`,
+  description: `הצהרת הנגישות של ${SITE_NAME} בהתאם לתקן הישראלי IS 5568 ותקן WCAG 2.1 AA — נגישות מלאה לכל המשתמשים.`,
+  alternates: {
+    canonical: `${SITE_URL}/accessibility`,
+  },
   openGraph: {
     title: `הצהרת נגישות | ${SITE_NAME}`,
     description: `הצהרת הנגישות של ${SITE_NAME} בהתאם לתקן IS 5568.`,
@@ -13,6 +17,11 @@ export const metadata: Metadata = {
 
 export default function AccessibilityPage() {
   return (
+    <>
+    <BreadcrumbJsonLd items={[
+      { name: "דף הבית", url: SITE_URL },
+      { name: "נגישות", url: `${SITE_URL}/accessibility` },
+    ]} />
     <div className="min-h-screen bg-black">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
@@ -116,5 +125,6 @@ export default function AccessibilityPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 
 export const SITE_NAME = "Fuzion Webz";
-export const SITE_URL = "https://fuzionwebz.com";
+export const SITE_URL = "https://www.fuzionwebz.com";
 export const SITE_DESCRIPTION = "סטודיו לעיצוב ובניית אתרים מתקדמים";
 export const WHATSAPP_NUMBER = "972000000000";
 export const WHATSAPP_MESSAGE = "היי, אשמח לשמוע עוד על השירותים שלכם!";

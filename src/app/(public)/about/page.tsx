@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import Card from "@/components/ui/Card";
-import { TEAM_MEMBERS, SITE_NAME } from "@/lib/constants";
+import { TEAM_MEMBERS, SITE_NAME, SITE_URL } from "@/lib/constants";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
-  title: "אודות",
+  title: "אודות — הצוות מאחורי Fuzion Webz",
   description:
-    "הכירו את Fuzion Webz – סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים. צוות מנוסה, חזון ברור ותשוקה לטכנולוגיה.",
+    "הכירו את הצוות של Fuzion Webz — סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים עם מעל עשור ניסיון בעולם הדיגיטל.",
+  alternates: {
+    canonical: `${SITE_URL}/about`,
+  },
   openGraph: {
     title: `אודות | ${SITE_NAME}`,
     description:
@@ -50,6 +54,11 @@ const MILESTONES = [
 
 export default function AboutPage() {
   return (
+    <>
+    <BreadcrumbJsonLd items={[
+      { name: "דף הבית", url: SITE_URL },
+      { name: "אודות", url: `${SITE_URL}/about` },
+    ]} />
     <div className="min-h-screen bg-black">
       {/* Hero */}
       <section className="py-24 md:py-32 px-6">
@@ -164,5 +173,6 @@ export default function AboutPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }
