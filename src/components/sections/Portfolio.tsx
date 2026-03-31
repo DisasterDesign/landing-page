@@ -43,6 +43,7 @@ function VideoCard({ project, isActive }: { project: Project; isActive: boolean 
       className="block group"
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
+      aria-label={`צפייה בפרויקט ${project.name}`}
       data-cursor="view"
     >
       <div className="relative">
@@ -100,15 +101,35 @@ function VideoCard({ project, isActive }: { project: Project; isActive: boolean 
 export default function Portfolio() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragStart, setDragStart] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   const prev = () => setActiveIndex((i) => (i === 0 ? projects.length - 1 : i - 1));
   const next = () => setActiveIndex((i) => (i + 1) % projects.length);
 
-  // Auto-rotate
+  // Auto-rotate (pauses on hover)
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(next, 5000);
     return () => clearInterval(timer);
-  }, [activeIndex]);
+  }, [activeIndex, isPaused]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const section = document.getElementById("portfolio");
+      if (!section?.contains(document.activeElement)) return;
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        next();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        prev();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const getCardTransform = (index: number) => {
     const total = projects.length;
@@ -123,7 +144,7 @@ export default function Portfolio() {
   };
 
   return (
-    <section id="portfolio" className="relative bg-black py-24 md:py-32">
+    <section id="portfolio" className="relative bg-black py-24 md:py-32" aria-roledescription="carousel" aria-label="תיק עבודות">
       <div className="max-w-6xl mx-auto px-6">
         <ScrollReveal>
           <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="העבודות שלנו">
@@ -133,7 +154,11 @@ export default function Portfolio() {
       </div>
 
       {/* Desktop Carousel */}
-      <div className="hidden md:block relative h-[520px] overflow-hidden">
+      <div
+        className="hidden md:block relative h-[520px] overflow-hidden"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
         <div className="relative h-full flex items-center justify-center">
           {projects.map((project, index) => {
             const t = getCardTransform(index);
@@ -143,6 +168,7 @@ export default function Portfolio() {
                 className="absolute w-[620px]"
                 animate={{ x: t.x, scale: t.scale, opacity: t.opacity, zIndex: t.zIndex }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                aria-hidden={index !== activeIndex}
               >
                 <VideoCard project={project} isActive={index === activeIndex} />
               </motion.div>
@@ -177,22 +203,35 @@ export default function Portfolio() {
 
       {/* Dots + Arrows — forced LTR so left arrow is visually left */}
       <div dir="ltr" className="flex items-center justify-center gap-4 mt-10">
-        <button onClick={prev} className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
+        <button
+          onClick={prev}
+          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all"
+          aria-label="פרויקט קודם"
+          data-cursor="pointer"
+        >
           <span className="text-white text-sm">←</span>
         </button>
-        <div className="flex gap-3">
-          {projects.map((_, i) => (
+        <div className="flex gap-3" role="tablist" aria-label="בחירת פרויקט">
+          {projects.map((p, i) => (
             <button
               key={i}
               onClick={() => setActiveIndex(i)}
               className={`h-1.5 rounded-full transition-all duration-300 ${
                 i === activeIndex ? "bg-white w-8" : "bg-white/20 w-2 hover:bg-white/40"
               }`}
+              role="tab"
+              aria-selected={i === activeIndex}
+              aria-label={`${p.name} (${i + 1} מתוך ${projects.length})`}
               data-cursor="pointer"
             />
           ))}
         </div>
-        <button onClick={next} className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all" data-cursor="pointer">
+        <button
+          onClick={next}
+          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 transition-all"
+          aria-label="פרויקט הבא"
+          data-cursor="pointer"
+        >
           <span className="text-white text-sm">→</span>
         </button>
       </div>

@@ -4,7 +4,7 @@ import { hash } from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await hash("FuzionAdmin2026!", 12);
+  const passwordHash = await hash(process.env.SEED_ADMIN_PASSWORD || "FuzionAdmin2026!", 12);
 
   // Seed admin users
   const roei = await prisma.user.upsert({

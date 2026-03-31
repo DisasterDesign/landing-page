@@ -1,9 +1,25 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
+
+  // Rate limit mutating requests
+  if (["POST", "PATCH", "DELETE"].includes(req.method)) {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
+    const { ok } = rateLimit(ip);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      );
+    }
+  }
 
   // Allow public auth routes
   if (pathname.startsWith("/api/auth")) {
@@ -29,6 +45,11 @@ export default auth((req) => {
     if (!isLoggedIn) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    // Check admin role for API routes
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.next();
   }
 
@@ -38,6 +59,11 @@ export default auth((req) => {
       const loginUrl = new URL("/admin/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl);
+    }
+    // Check admin role for admin pages
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "ADMIN") {
+      return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();
   }

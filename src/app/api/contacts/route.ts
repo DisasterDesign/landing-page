@@ -7,7 +7,17 @@ import { createContactSchema } from "@/lib/validations";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const parsed = createContactSchema.safeParse(body);
+
+    // Honeypot check: if _hp field has a value, it's likely a bot
+    if (body._hp) {
+      return NextResponse.json({ id: "ok" }, { status: 201 });
+    }
+
+    // Remove honeypot field before validation
+    const { _hp, ...cleanBody } = body;
+    void _hp;
+
+    const parsed = createContactSchema.safeParse(cleanBody);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -31,18 +41,31 @@ export async function POST(request: NextRequest) {
 }
 
 // GET - Auth required: list all contacts
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const contacts = await prisma.contactSubmission.findMany({
-      orderBy: { createdAt: "desc" },
-    });
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = (page - 1) * limit;
 
-    return NextResponse.json(contacts);
+    const [contacts, total] = await Promise.all([
+      prisma.contactSubmission.findMany({
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.contactSubmission.count(),
+    ]);
+
+    return NextResponse.json({
+      data: contacts,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(

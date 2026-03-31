@@ -18,7 +18,7 @@ export default function Marquee({
   const items = Array(4).fill(text);
 
   return (
-    <div className={cn("overflow-hidden whitespace-nowrap py-8", className)}>
+    <div className={cn("overflow-hidden whitespace-nowrap py-8", className)} aria-hidden="true">
       <div
         className={cn(
           "inline-flex animate-marquee",

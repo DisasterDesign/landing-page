@@ -1,4 +1,5 @@
 import { MetadataRoute } from "next";
+import { prisma } from "@/lib/prisma";
 
 const SITE_URL = "https://www.fuzionwebz.com";
 
@@ -27,14 +28,39 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority,
   }));
 
-  // TODO: When blog/portfolio/fonts have DB entries, fetch slugs here:
-  // const blogPosts = await prisma.post.findMany({ where: { published: true }, select: { slug: true, updatedAt: true } });
-  // const blogEntries = blogPosts.map(post => ({
-  //   url: `${SITE_URL}/blog/${post.slug}`,
-  //   lastModified: post.updatedAt.toISOString(),
-  //   changeFrequency: "weekly" as const,
-  //   priority: 0.7,
-  // }));
+  // Dynamic blog posts
+  let blogEntries: MetadataRoute.Sitemap = [];
+  try {
+    const blogPosts = await prisma.blogPost.findMany({
+      where: { published: true },
+      select: { slug: true, updatedAt: true },
+    });
+    blogEntries = blogPosts.map((post) => ({
+      url: `${SITE_URL}/blog/${post.slug}`,
+      lastModified: post.updatedAt.toISOString(),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+  } catch {
+    // DB may not be available during build — continue with static entries
+  }
 
-  return [...staticEntries];
+  // Dynamic font families
+  let fontEntries: MetadataRoute.Sitemap = [];
+  try {
+    const fontFamilies = await prisma.fontFamily.findMany({
+      where: { published: true },
+      select: { slug: true, updatedAt: true },
+    });
+    fontEntries = fontFamilies.map((font) => ({
+      url: `${SITE_URL}/fonts/${font.slug}`,
+      lastModified: font.updatedAt.toISOString(),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    }));
+  } catch {
+    // DB may not be available during build — continue with static entries
+  }
+
+  return [...staticEntries, ...blogEntries, ...fontEntries];
 }

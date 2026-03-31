@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useState, useId, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 interface BaseInputProps {
@@ -17,6 +17,9 @@ type Props = InputFieldProps | TextAreaFieldProps;
 export default function Input(props: Props) {
   const { label, error, className, multiline, ...rest } = props;
   const [focused, setFocused] = useState(false);
+  const autoId = useId();
+  const inputId = ("id" in rest && rest.id) || autoId;
+  const errorId = `${inputId}-error`;
   const hasValue = Boolean(
     "value" in rest && rest.value
   );
@@ -33,6 +36,7 @@ export default function Input(props: Props) {
   return (
     <div className="relative">
       <label
+        htmlFor={inputId}
         className={cn(
           "absolute right-0 transition-all duration-300 pointer-events-none font-anomalia",
           isActive
@@ -45,7 +49,10 @@ export default function Input(props: Props) {
       {multiline ? (
         <textarea
           {...(rest as TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          id={inputId}
           className={cn(baseClasses, "resize-none min-h-[120px]")}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           onFocus={(e) => {
             setFocused(true);
             (rest as TextareaHTMLAttributes<HTMLTextAreaElement>).onFocus?.(e);
@@ -58,7 +65,10 @@ export default function Input(props: Props) {
       ) : (
         <input
           {...(rest as InputHTMLAttributes<HTMLInputElement>)}
+          id={inputId}
           className={baseClasses}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           onFocus={(e) => {
             setFocused(true);
             (rest as InputHTMLAttributes<HTMLInputElement>).onFocus?.(e);
@@ -70,7 +80,7 @@ export default function Input(props: Props) {
         />
       )}
       {error && (
-        <p className="mt-1 text-xs text-red-500">{error}</p>
+        <p id={errorId} className="mt-1 text-xs text-red-500" role="alert">{error}</p>
       )}
     </div>
   );

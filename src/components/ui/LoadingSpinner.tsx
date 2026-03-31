@@ -1,6 +1,6 @@
 export default function LoadingSpinner() {
   return (
-    <div className="flex gap-1 items-center justify-center">
+    <div className="flex gap-1 items-center justify-center" role="status" aria-label="טוען">
       {[0, 1, 2].map((i) => (
         <div
           key={i}

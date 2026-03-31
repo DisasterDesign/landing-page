@@ -17,16 +17,25 @@ export default function Contact() {
     message: "",
     service: "",
   });
+  const [honeypot, setHoneypot] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      // If honeypot is filled, silently pretend success (bot trap)
+      if (honeypot) {
+        setFormData({ name: "", email: "", phone: "", message: "", service: "" });
+        toast.success("ההודעה נשלחה בהצלחה! נחזור אליך בהקדם.");
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, _hp: honeypot }),
       });
 
       if (!res.ok) throw new Error("שגיאה בשליחת הטופס");
@@ -63,6 +72,19 @@ export default function Contact() {
 
         <ScrollReveal delay={0.2}>
           <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Honeypot field - hidden from real users, catches bots */}
+            <div className="absolute opacity-0 h-0 w-0 overflow-hidden" aria-hidden="true">
+              <label htmlFor="website">Website</label>
+              <input
+                id="website"
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
               <Input
                 label="שם מלא"

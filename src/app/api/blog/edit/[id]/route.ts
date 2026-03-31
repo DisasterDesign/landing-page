@@ -30,6 +30,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
+    // Verify ownership: only the author can edit their post
+    if (existing.authorId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const data: Record<string, unknown> = { ...parsed.data };
 
     // If publishing for the first time, set publishedAt
@@ -71,6 +76,11 @@ export async function DELETE(
     const existing = await prisma.blogPost.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    // Verify ownership: only the author can delete their post
+    if (existing.authorId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     await prisma.blogPost.delete({ where: { id } });

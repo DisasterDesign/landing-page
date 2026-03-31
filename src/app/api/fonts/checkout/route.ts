@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     }, 0);
 
     const downloadToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Create order — mock: set to COMPLETED immediately
     const order = await prisma.fontOrder.create({
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
         currency: "ILS",
         paymentStatus: "COMPLETED",
         downloadToken,
+        expiresAt,
       },
     });
 

@@ -35,10 +35,18 @@ export async function GET(
       return NextResponse.json({ error: "Payment not completed" }, { status: 403 });
     }
 
-    // Increment download count
+    // Check if download link has expired
+    if (order.expiresAt && new Date() > order.expiresAt) {
+      return NextResponse.json({ error: "Download link has expired" }, { status: 410 });
+    }
+
+    // Increment download count and set downloadedAt on first download
     await prisma.fontOrder.update({
       where: { id: order.id },
-      data: { downloadCount: { increment: 1 } },
+      data: {
+        downloadCount: { increment: 1 },
+        ...(order.downloadCount === 0 ? { downloadedAt: new Date() } : {}),
+      },
     });
 
     return NextResponse.json({

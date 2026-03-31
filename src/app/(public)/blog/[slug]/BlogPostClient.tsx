@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import toast from "react-hot-toast";
+import DOMPurify from "isomorphic-dompurify";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 
 interface BlogPostData {
@@ -108,7 +109,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
                 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700
                 prose-img:rounded-xl"
               dir="rtl"
-              dangerouslySetInnerHTML={{ __html: post.content }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
             />
           </ScrollReveal>
 

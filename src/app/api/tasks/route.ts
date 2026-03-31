@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
     const assigneeId = searchParams.get("assigneeId");
     const priority = searchParams.get("priority");
 
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = (page - 1) * limit;
+
     const where: Prisma.TaskWhereInput = {};
 
     if (status) where.status = status as Prisma.EnumTaskStatusFilter;
@@ -25,18 +29,26 @@ export async function GET(request: NextRequest) {
     if (assigneeId) where.assigneeId = assigneeId;
     if (priority) where.priority = priority as Prisma.EnumPriorityFilter;
 
-    const tasks = await prisma.task.findMany({
-      where,
-      include: {
-        project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        creator: { select: { id: true, name: true, email: true } },
-        _count: { select: { comments: true } },
-      },
-      orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-    });
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        include: {
+          project: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          creator: { select: { id: true, name: true, email: true } },
+          _count: { select: { comments: true } },
+        },
+        orderBy: [{ order: "asc" }, { createdAt: "desc" }],
+        skip,
+        take: limit,
+      }),
+      prisma.task.count({ where }),
+    ]);
 
-    return NextResponse.json(tasks);
+    return NextResponse.json({
+      data: tasks,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error("Error fetching tasks:", error);
     return NextResponse.json(
