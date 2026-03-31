@@ -294,6 +294,7 @@ export const FOOTER_LINKS = {
   resources: [
     { label: "בלוג", href: "/blog" },
     { label: "תיק עבודות", href: "/portfolio" },
+    { label: "חנות פונטים", href: "/fonts" },
     { label: "שאלות נפוצות", href: "/faq" },
   ],
   company: [

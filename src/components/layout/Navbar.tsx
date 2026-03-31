@@ -90,14 +90,37 @@ export default function Navbar() {
               data-cursor="pointer"
               aria-label={section.label}
             >
-              {/* Label — left side (inner) */}
+              {/* Label — chromatic split when active */}
               <motion.span
-                className="text-white whitespace-nowrap flex-1 text-right pr-3"
+                className="relative whitespace-nowrap flex-1 text-right pr-3"
                 animate={{ fontSize: isActive ? "22px" : "14px", opacity: isActive ? 1 : 0.25 }}
                 whileHover={{ fontSize: "22px", opacity: 1 }}
                 transition={{ duration: 0.25 }}
               >
-                {section.label}
+                {/* Pink layer — behind, offset */}
+                <motion.span
+                  className="absolute inset-0 text-right pr-3"
+                  style={{ color: "#C80084" }}
+                  animate={{ opacity: isActive ? 0.7 : 0, x: isActive ? -1.5 : 0, y: isActive ? 1 : 0 }}
+                  transition={{ duration: 0.3 }}
+                  aria-hidden="true"
+                >
+                  {section.label}
+                </motion.span>
+                {/* Cyan layer — behind, offset */}
+                <motion.span
+                  className="absolute inset-0 text-right pr-3"
+                  style={{ color: "#00D0CE" }}
+                  animate={{ opacity: isActive ? 0.7 : 0, x: isActive ? 1.5 : 0, y: isActive ? -1 : 0 }}
+                  transition={{ duration: 0.3 }}
+                  aria-hidden="true"
+                >
+                  {section.label}
+                </motion.span>
+                {/* White layer — on top */}
+                <span className={`relative text-white ${isActive ? "font-extrabold" : "font-normal"}`}>
+                  {section.label}
+                </span>
               </motion.span>
               {/* Dot — right side (outer, near edge), fixed position */}
               <div className="w-4 flex items-center justify-center shrink-0">

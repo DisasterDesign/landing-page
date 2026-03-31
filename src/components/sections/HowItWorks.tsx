@@ -379,7 +379,11 @@ export default function HowItWorks() {
       id="how-it-works"
       className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20 bg-black"
     >
-      {/* 3D element removed */}
+      {/* Icon — right side, large, subtle */}
+      <div className="absolute top-1/2 right-[15%] z-0 pointer-events-none hidden lg:block" style={{ transform: "translateY(calc(-50% + 30px)) translateX(10px)" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon-favicon.svg" alt="" className="w-[633px] h-auto" />
+      </div>
 
       {/* Concrete texture overlay */}
       <div
@@ -432,7 +436,7 @@ export default function HowItWorks() {
             backgroundColor: "transparent",
             borderRadius: "24px",
             boxShadow: borderComplete
-              ? "0 0 60px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)"
+              ? "0 0 60px rgba(229, 3, 162, 0.15), 0 0 120px rgba(1, 255, 255, 0.08)"
               : "none",
             transition: "box-shadow 0.8s ease-out",
           }}
@@ -484,7 +488,7 @@ export default function HowItWorks() {
                   transform: `translate(${posX}px, ${posY}px) rotate(${rotation}deg)`,
                   transition: `opacity 0.6s ease-out, transform ${DRAG_DURATION}ms ease-out, filter 0.5s ease-out`,
                   filter: el.whiteShadow && isPlaced
-                    ? "drop-shadow(0 0 20px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 40px rgba(255, 255, 255, 0.3))"
+                    ? "drop-shadow(0 0 15px rgba(229, 3, 162, 0.15)) drop-shadow(0 0 30px rgba(1, 255, 255, 0.08))"
                     : el.hasShadow && isElementVisible
                     ? "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))"
                     : "none",

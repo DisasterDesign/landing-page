@@ -34,6 +34,17 @@ enum Priority {
   URGENT
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum LicenseType {
+  PERSONAL
+  COMMERCIAL
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -47,6 +58,7 @@ model User {
   assignedTasks Task[]   @relation("AssignedTasks")
   createdTasks  Task[]   @relation("CreatedTasks")
   comments      Comment[]
+  blogPosts     BlogPost[]
 }
 
 model Project {
@@ -107,5 +119,87 @@ model ContactSubmission {
   message   String
   service   String?
   isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ==================
+// BLOG
+// ==================
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  excerpt     String?
+  content     String    // Rich HTML from TipTap
+  coverImage  String?
+  category    String?
+  tags        String[]
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  metaTitle   String?
+  metaDesc    String?
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================
+// FONT STORE
+// ==================
+
+model FontFamily {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  designer    String?
+  previewUrl  String?
+  category    String?  // serif, sans, display, script, mono
+  tags        String[]
+  featured    Boolean  @default(false)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  styles FontStyle[]
+  orders FontOrder[]
+}
+
+model FontStyle {
+  id              String @id @default(cuid())
+  name            String // "Regular", "Bold", "Light"
+  weight          Int    @default(400)
+  fontFileUrl     String // Path to downloadable font file
+  previewUrl      String?
+  pricePersonal   Float  @default(0)
+  priceCommercial Float  @default(0)
+
+  fontFamilyId String
+  fontFamily   FontFamily @relation(fields: [fontFamilyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FontOrder {
+  id            String        @id @default(cuid())
+  customerName  String
+  customerEmail String
+  customerPhone String?
+  licenseType   LicenseType
+  totalPrice    Float
+  currency      String        @default("ILS")
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentId     String?       // CardCom transaction ID
+  downloadToken String?       @unique
+  downloadCount Int           @default(0)
+
+  fontFamilyId String
+  fontFamily   FontFamily @relation(fields: [fontFamilyId], references: [id])
+
   createdAt DateTime @default(now())
 }
