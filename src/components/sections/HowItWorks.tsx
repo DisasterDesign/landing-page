@@ -1,10 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useRef, Suspense, ComponentType } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, Environment } from "@react-three/drei";
-import * as THREE from "three";
+import { useState, useEffect, useRef, ComponentType } from "react";
 import SvgHowItWorks from "@/components/svg/SvgHowItWorks";
 import SvgAbout from "@/components/svg/SvgAbout";
 import SvgProjects from "@/components/svg/SvgProjects";
@@ -79,89 +76,6 @@ function generateScatteredPositions(): ScatteredPosition[] {
   }));
 }
 
-// ============================================
-// ASTRONAUT 3D - Enters from depth on scroll
-// ============================================
-function Astronaut3D({ scrollProgress }: { scrollProgress: number }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const { scene } = useGLTF("/v10.glb");
-  const scrollRef = useRef(scrollProgress);
-
-  // Update ref when prop changes
-  scrollRef.current = scrollProgress;
-
-  useFrame((state) => {
-    if (!groupRef.current) return;
-
-    const time = state.clock.elapsedTime;
-
-    // Get latest scroll progress from ref
-    const currentScroll = scrollRef.current;
-
-    // Animation: astronaut enters from very far back
-    // Starts at 0% scroll, completes at 50%
-    const enterStart = 0.0;
-    const enterEnd = 0.5;
-    const progress = currentScroll < enterStart ? 0 :
-      Math.min(1, (currentScroll - enterStart) / (enterEnd - enterStart));
-
-    // Ease out cubic for smooth deceleration
-    const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-    // Z position: starts far back, ends at final position
-    const startZ = -3000; // Far back (visible with far: 6000)
-    const endZ = -50;      // Final position (much further back)
-    const currentZ = startZ + (endZ - startZ) * easedProgress;
-
-    // Hide on mobile/tablet (viewport.width < 10 is roughly < 1024px)
-    const viewport = state.viewport;
-    const isSmallScreen = viewport.width < 10;
-
-    if (isSmallScreen) {
-      groupRef.current.visible = false;
-      return;
-    }
-    groupRef.current.visible = true;
-
-    // Desktop only - X position
-    const xPos = 10.5;
-
-    // Desktop only - Y position
-    const baseY = -9.5;
-    const floatY = Math.sin(time * 0.5) * 0.3;
-
-    groupRef.current.position.set(xPos, baseY + floatY, currentZ);
-
-    // Subtle rotation
-    groupRef.current.rotation.y = Math.sin(time * 0.3) * 0.2 - 0.5;
-    groupRef.current.rotation.x = Math.sin(time * 0.4) * 0.05;
-    groupRef.current.rotation.z = Math.sin(time * 0.2) * 0.03;
-
-    // Desktop scale
-    const scale = 25.5 + easedProgress * 15.3; // 25.5 to 40.8
-    groupRef.current.scale.setScalar(scale);
-  });
-
-  return (
-    <group ref={groupRef} position={[4, -1, -30]}>
-      <primitive object={scene} />
-    </group>
-  );
-}
-
-// Astronaut Scene wrapper
-function AstronautScene({ scrollProgress }: { scrollProgress: number }) {
-  return (
-    <>
-      <ambientLight intensity={0.6} />
-      <pointLight position={[5, 5, 5]} intensity={1} />
-      <pointLight position={[-5, -5, 5]} intensity={0.5} color="#6644ff" />
-      <Environment files="/rosendal_park_sunset_puresky_1k.hdr" />
-      <Astronaut3D scrollProgress={scrollProgress} />
-    </>
-  );
-}
-
 // Cursor SVG Component
 function CursorSVG() {
   return (
@@ -181,7 +95,7 @@ export default function HowItWorks() {
   const [borderComplete, setBorderComplete] = useState(false);
   const [visibleElements, setVisibleElements] = useState<Set<number>>(new Set());
   const [isVisible, setIsVisible] = useState(false);
-  const [scatteredPositions, setScatteredPositions] = useState<ScatteredPosition[]>([]);
+  const [scatteredPositions, setScatteredPositions] = useState<ScatteredPosition[]>(() => generateScatteredPositions());
   const [cursorPosition, setCursorPosition] = useState({ x: FRAME_WIDTH + 50, y: FRAME_HEIGHT / 2 });
   const [showCursor, setShowCursor] = useState(false);
   const [placedElements, setPlacedElements] = useState<Set<number>>(new Set());
@@ -190,7 +104,7 @@ export default function HowItWorks() {
   const [scale, setScale] = useState(1);
   const [titleProgress, setTitleProgress] = useState(0);
   const [bottomTextProgress, setBottomTextProgress] = useState(0);
-  const [astronautProgress, setAstronautProgress] = useState(0);
+  const astronautProgressRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -248,7 +162,7 @@ export default function HowItWorks() {
         const sectionHeight = rect.height;
         const scrolledIntoSection = windowHeight - rect.top;
         const astroProgress = Math.max(0, Math.min(1, scrolledIntoSection / (sectionHeight + windowHeight)));
-        setAstronautProgress(astroProgress);
+        astronautProgressRef.current = astroProgress;
       }
 
       setTitleProgress(titleProg);
@@ -262,10 +176,7 @@ export default function HowItWorks() {
     return () => target.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Initialize scattered positions on mount
-  useEffect(() => {
-    setScatteredPositions(generateScatteredPositions());
-  }, []);
+  // scattered positions initialized via useState initializer above
 
   // Calculate scale based on container width
   useEffect(() => {
@@ -349,8 +260,10 @@ export default function HowItWorks() {
     if (!scattered) return;
 
     // Step 1: Move cursor to scattered position
-    setIsDragging(false);
-    setCursorPosition({ x: scattered.x, y: scattered.y });
+    const initTimer = setTimeout(() => {
+      setIsDragging(false);
+      setCursorPosition({ x: scattered.x, y: scattered.y });
+    }, 0);
 
     // Step 2: After reaching element, drag to final position
     const dragTimer = setTimeout(() => {
@@ -365,6 +278,7 @@ export default function HowItWorks() {
     }, CURSOR_MOVE_DURATION + PAUSE_BETWEEN_ELEMENTS + DRAG_DURATION + PAUSE_BETWEEN_ELEMENTS);
 
     return () => {
+      clearTimeout(initTimer);
       clearTimeout(dragTimer);
       clearTimeout(nextTimer);
     };

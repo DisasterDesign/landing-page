@@ -23,7 +23,7 @@ export default function AdminDashboardPage() {
     dueThisWeek: 0,
     newMessages: 0,
   });
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

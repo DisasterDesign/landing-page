@@ -48,18 +48,21 @@ export default function FontStoreClient() {
   const [activeCategory, setActiveCategory] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     const url = activeCategory
       ? `/api/fonts?category=${activeCategory}`
       : "/api/fonts";
 
-    setLoading(true);
     fetch(url)
       .then((res) => res.ok ? res.json() : [])
       .then((data) => {
-        setFonts(Array.isArray(data) ? data : []);
-        setLoading(false);
+        if (!cancelled) { setFonts(Array.isArray(data) ? data : []); setLoading(false); }
       })
-      .catch(() => { setFonts([]); setLoading(false); });
+      .catch(() => {
+        if (!cancelled) { setFonts([]); setLoading(false); }
+      });
+
+    return () => { cancelled = true; };
   }, [activeCategory]);
 
   const getMinPrice = (font: FontFamily) => {

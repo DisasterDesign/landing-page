@@ -1,7 +1,7 @@
 "use client";
 
 import { TEAM_MEMBERS } from "@/lib/constants";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { useInView } from "@/hooks/useInView";
 import { useRef, useState, useEffect } from "react";
 import ScrollReveal from "@/components/animations/ScrollReveal";

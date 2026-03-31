@@ -10,7 +10,7 @@ let meshGroup: THREE.Group | null = null;
 let glassMesh: THREE.Mesh | null = null;
 let animationId: number | null = null;
 let raycaster: THREE.Raycaster | null = null;
-let pointer = new THREE.Vector2();
+const pointer = new THREE.Vector2();
 let isHovered = false;
 let hoverScale = 1;
 

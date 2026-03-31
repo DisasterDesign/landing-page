@@ -13,22 +13,24 @@ const FLY_DURATION = 0.8;
 const FADE_DURATION = 0.5;
 
 export default function Loader() {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (sessionStorage.getItem("fuzion-loaded")) return false;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      sessionStorage.setItem("fuzion-loaded", "true");
+      return false;
+    }
+    return true;
+  });
   const [phase, setPhase] = useState<Phase>("draw");
   const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0, scale: 0.1 });
   const logoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (sessionStorage.getItem("fuzion-loaded")) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      sessionStorage.setItem("fuzion-loaded", "true");
-      return;
-    }
-    setShow(true);
+    if (!show) return;
     // Hide navbar logo while loader is active
     document.documentElement.classList.add("loader-active");
-  }, []);
+  }, [show]);
 
   useEffect(() => {
     if (!show) return;
@@ -78,7 +80,8 @@ export default function Loader() {
       return () => clearTimeout(timer);
     }
     if (phase === "done") {
-      setShow(false);
+      const raf = requestAnimationFrame(() => setShow(false));
+      return () => cancelAnimationFrame(raf);
     }
   }, [show, phase]);
 

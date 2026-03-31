@@ -19,7 +19,6 @@ export default function GridBackground() {
     if (!scrollContainer) return;
 
     let currentPixel = 0;
-    let oldValue = 0;
 
     // === Scroll pattern (Buzzworthy-style) ===
     let targetTopY = -100;
@@ -56,7 +55,6 @@ export default function GridBackground() {
       if (topRef.current) topRef.current.style.transform = `translateY(${currentTopY}%)`;
       if (bottomRef.current) bottomRef.current.style.transform = `translateY(${currentBottomY}%)`;
 
-      oldValue = newPixel;
       currentPixel = newPixel;
       requestAnimationFrame(bgAnim);
     };

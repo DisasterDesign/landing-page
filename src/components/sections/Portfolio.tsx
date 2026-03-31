@@ -21,7 +21,7 @@ const projects: Project[] = [
   { id: "ams-law", name: "AMS Law", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
 ];
 
-function VideoCard({ project, isActive }: { project: Project; isActive: boolean }) {
+function VideoCard({ project }: { project: Project }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -170,7 +170,7 @@ export default function Portfolio() {
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 aria-hidden={index !== activeIndex}
               >
-                <VideoCard project={project} isActive={index === activeIndex} />
+                <VideoCard project={project} />
               </motion.div>
             );
           })}
@@ -196,7 +196,7 @@ export default function Portfolio() {
             exit={{ opacity: 0, x: -30 }}
             transition={{ duration: 0.3 }}
           >
-            <VideoCard project={projects[activeIndex]} isActive />
+            <VideoCard project={projects[activeIndex]} />
           </motion.div>
         </AnimatePresence>
       </div>
