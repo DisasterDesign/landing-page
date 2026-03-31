@@ -117,7 +117,7 @@ export default function EditBlogPostPage({
         setPublished(publish);
       }
 
-      const res = await fetch(`/api/blog/${id}/edit`, {
+      const res = await fetch(`/api/blog/edit/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -140,7 +140,7 @@ export default function EditBlogPostPage({
     if (!window.confirm("האם אתה בטוח שברצונך למחוק את המאמר?")) return;
 
     try {
-      const res = await fetch(`/api/blog/${id}/edit`, { method: "DELETE" });
+      const res = await fetch(`/api/blog/edit/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("המאמר נמחק");
       router.push("/admin/blog");
