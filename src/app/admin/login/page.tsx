@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import Image from "next/image";
@@ -17,34 +16,40 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      console.log("[LOGIN] Attempting signIn...");
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-      console.log("[LOGIN] Result:", JSON.stringify(result));
+      // Use fetch directly instead of next-auth/react signIn
+      // This avoids potential issues with the next-auth client module
+      const csrfRes = await fetch("/api/auth/csrf");
+      const { csrfToken } = await csrfRes.json();
 
-      if (result?.error) {
-        toast.error(`שגיאה: ${result.error}`, {
-          style: {
-            background: "#1A1A1A",
-            color: "#fff",
-            border: "1px solid #3A3A3A",
-          },
-        });
-      } else {
-        router.push("/admin");
-        router.refresh();
-      }
-    } catch {
-      toast.error("שגיאה בהתחברות", {
-        style: {
-          background: "#1A1A1A",
-          color: "#fff",
-          border: "1px solid #3A3A3A",
-        },
+      const res = await fetch("/api/auth/callback/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          csrfToken,
+          email,
+          password,
+          redirect: "false",
+          json: "true",
+        }),
+        redirect: "manual",
       });
+
+      // NextAuth returns 302 on success, 401 on failure
+      if (res.status === 302 || res.ok) {
+        const location = res.headers.get("location") || "";
+        if (location.includes("error")) {
+          toast.error("אימייל או סיסמה שגויים");
+        } else {
+          toast.success("מתחבר...");
+          // Force a hard navigation to pick up the new session cookie
+          window.location.href = "/admin";
+        }
+      } else {
+        toast.error("אימייל או סיסמה שגויים");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      toast.error("שגיאה בהתחברות");
     } finally {
       setLoading(false);
     }
@@ -55,7 +60,6 @@ export default function AdminLoginPage() {
       <Toaster position="top-center" />
 
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="flex justify-center mb-10">
           <Image
             src="/logo-white.svg"
@@ -66,7 +70,6 @@ export default function AdminLoginPage() {
           />
         </div>
 
-        {/* Card */}
         <div className="bg-gray-900 rounded-2xl p-8 border border-gray-700">
           <h1 className="text-2xl font-bold text-center mb-8">התחברות לניהול</h1>
 
@@ -108,17 +111,7 @@ export default function AdminLoginPage() {
               disabled={loading}
               className="w-full py-3 bg-pink hover:bg-pink-dark text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  מתחבר...
-                </span>
-              ) : (
-                "התחבר"
-              )}
+              {loading ? "מתחבר..." : "התחבר"}
             </button>
           </form>
         </div>
