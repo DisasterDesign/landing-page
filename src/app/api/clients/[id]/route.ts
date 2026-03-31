@@ -27,6 +27,12 @@ export async function PATCH(
     if ("expense" in body)
       updateData.expense =
         body.expense !== null && body.expense !== "" ? parseFloat(body.expense) : null;
+    if ("startDate" in body)
+      updateData.startDate =
+        body.startDate ? new Date(body.startDate).toISOString() : null;
+    if ("paymentDate" in body)
+      updateData.paymentDate =
+        body.paymentDate ? new Date(body.paymentDate).toISOString() : null;
 
     const client = await prisma.client.update({
       where: { id },

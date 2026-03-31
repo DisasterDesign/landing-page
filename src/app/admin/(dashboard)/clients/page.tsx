@@ -11,9 +11,11 @@ interface Client {
   notes: string | null;
   amount: number | null;
   expense: number | null;
+  startDate: string | null;
+  paymentDate: string | null;
 }
 
-type EditableField = "name" | "status" | "notes" | "amount" | "expense";
+type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "startDate" | "paymentDate";
 
 interface EditingCell {
   id: string;
@@ -58,12 +60,14 @@ export default function ClientsPage() {
   }, [editingCell]);
 
   const startEditing = (client: Client, field: EditableField) => {
-    const value =
-      field === "amount" || field === "expense"
-        ? client[field] != null
-          ? String(client[field])
-          : ""
-        : (client[field] as string) ?? "";
+    let value: string;
+    if (field === "amount" || field === "expense") {
+      value = client[field] != null ? String(client[field]) : "";
+    } else if (field === "startDate" || field === "paymentDate") {
+      value = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
+    } else {
+      value = (client[field] as string) ?? "";
+    }
     setEditValue(value);
     setEditingCell({ id: client.id, field });
   };
@@ -75,12 +79,14 @@ export default function ClientsPage() {
     if (!client) return;
 
     // Check if value actually changed
-    const oldValue =
-      field === "amount" || field === "expense"
-        ? client[field] != null
-          ? String(client[field])
-          : ""
-        : (client[field] as string) ?? "";
+    let oldValue: string;
+    if (field === "amount" || field === "expense") {
+      oldValue = client[field] != null ? String(client[field]) : "";
+    } else if (field === "startDate" || field === "paymentDate") {
+      oldValue = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
+    } else {
+      oldValue = (client[field] as string) ?? "";
+    }
 
     if (editValue === oldValue) {
       setEditingCell(null);
@@ -96,6 +102,9 @@ export default function ClientsPage() {
         return;
       }
     }
+    if (field === "startDate" || field === "paymentDate") {
+      patchValue = editValue || null;
+    }
 
     // Optimistic update
     setClients((prev) =>
@@ -103,6 +112,9 @@ export default function ClientsPage() {
         if (c.id !== id) return c;
         if (field === "amount" || field === "expense") {
           return { ...c, [field]: patchValue as number | null };
+        }
+        if (field === "startDate" || field === "paymentDate") {
+          return { ...c, [field]: patchValue ? new Date(patchValue as string).toISOString() : null };
         }
         return { ...c, [field]: editValue };
       })
@@ -235,6 +247,22 @@ export default function ClientsPage() {
       );
     }
 
+    if (isEditing && (field === "startDate" || field === "paymentDate")) {
+      return (
+        <input
+          ref={inputRef}
+          type="date"
+          value={editValue}
+          onChange={(e) => {
+            setEditValue(e.target.value);
+          }}
+          onBlur={saveCell}
+          onKeyDown={handleKeyDown}
+          className="w-full bg-gray-700 text-white text-sm px-2 py-1 rounded border border-pink/50 outline-none"
+        />
+      );
+    }
+
     if (isEditing) {
       return (
         <input
@@ -255,6 +283,8 @@ export default function ClientsPage() {
       display = statusDisplay(client.status);
     } else if (field === "amount" || field === "expense") {
       display = formatNum(client[field]);
+    } else if (field === "startDate" || field === "paymentDate") {
+      display = client[field] ? new Date(client[field]!).toLocaleDateString("he-IL") : "";
     } else {
       display = (client[field] as string) ?? "";
     }
@@ -302,6 +332,8 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">הערות</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סכום (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הוצאה (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך תשלום</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">רווח (₪)</th>
               <th className="w-10"></th>
             </tr>
@@ -329,6 +361,8 @@ export default function ClientsPage() {
                   <td className="px-1 py-0.5">{renderCell(client, "notes")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "amount")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "expense")}</td>
+                  <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
+                  <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
                   <td className="px-3 py-1.5 font-mono">
                     {profit != null ? (
                       <span
@@ -368,6 +402,7 @@ export default function ClientsPage() {
               <td className="px-3 py-2.5 font-mono text-white">
                 {formatNum(totalExpense)}
               </td>
+              <td colSpan={2}></td>
               <td className="px-3 py-2.5 font-mono">
                 <span
                   className={

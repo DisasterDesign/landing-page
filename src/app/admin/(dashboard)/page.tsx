@@ -2,18 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import RevenueChart from "@/components/admin/RevenueChart";
 
 interface DashboardStats {
   activeTasks: number;
   inProgress: number;
   dueThisWeek: number;
   newMessages: number;
-}
-
-interface ActivityItem {
-  id: string;
-  text: string;
-  time: string;
 }
 
 export default function AdminDashboardPage() {
@@ -23,7 +18,6 @@ export default function AdminDashboardPage() {
     dueThisWeek: 0,
     newMessages: 0,
   });
-  const [activity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -136,58 +130,8 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
-        <h3 className="text-lg font-bold mb-4">פעילות אחרונה</h3>
-        {loading ? (
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="animate-pulse flex gap-3 items-center">
-                <div className="w-2 h-2 rounded-full bg-gray-700" />
-                <div className="h-4 bg-gray-700 rounded flex-1" />
-              </div>
-            ))}
-          </div>
-        ) : activity.length > 0 ? (
-          <ul className="space-y-3">
-            {activity.map((item) => (
-              <li key={item.id} className="flex items-start gap-3 text-sm">
-                <span className="w-2 h-2 rounded-full bg-pink mt-1.5 flex-shrink-0" />
-                <span className="text-gray-300 flex-1">{item.text}</span>
-                <span className="text-gray-500 text-xs flex-shrink-0">{item.time}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul className="space-y-3">
-            <li className="flex items-start gap-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-pink mt-1.5 flex-shrink-0" />
-              <span className="text-gray-300">משימה חדשה נוצרה: עיצוב דף הבית</span>
-              <span className="text-gray-500 text-xs flex-shrink-0">לפני 2 שעות</span>
-            </li>
-            <li className="flex items-start gap-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-cyan mt-1.5 flex-shrink-0" />
-              <span className="text-gray-300">פרויקט &quot;אתר לקוח A&quot; עודכן לבביצוע</span>
-              <span className="text-gray-500 text-xs flex-shrink-0">לפני 4 שעות</span>
-            </li>
-            <li className="flex items-start gap-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-pink mt-1.5 flex-shrink-0" />
-              <span className="text-gray-300">הודעה חדשה מ: ישראל ישראלי</span>
-              <span className="text-gray-500 text-xs flex-shrink-0">לפני 6 שעות</span>
-            </li>
-            <li className="flex items-start gap-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-cyan mt-1.5 flex-shrink-0" />
-              <span className="text-gray-300">משימה &quot;בניית API&quot; הושלמה</span>
-              <span className="text-gray-500 text-xs flex-shrink-0">אתמול</span>
-            </li>
-            <li className="flex items-start gap-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-pink mt-1.5 flex-shrink-0" />
-              <span className="text-gray-300">פרויקט חדש נוצר: חנות אונליין</span>
-              <span className="text-gray-500 text-xs flex-shrink-0">לפני יומיים</span>
-            </li>
-          </ul>
-        )}
-      </div>
+      {/* Revenue Chart */}
+      <RevenueChart />
     </div>
   );
 }

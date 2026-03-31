@@ -203,9 +203,11 @@ model Client {
   status    String   @default("")
   notes     String?
   amount    Float?
-  expense   Float?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expense     Float?
+  startDate   DateTime?
+  paymentDate DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([number])
 }
