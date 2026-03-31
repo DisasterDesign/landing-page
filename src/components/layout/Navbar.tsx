@@ -160,7 +160,7 @@ export default function Navbar() {
         />
       </button>
 
-      {/* Mobile menu — covers entire content container */}
+      {/* Mobile menu — page links, not section slider */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
@@ -170,18 +170,33 @@ export default function Navbar() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
+            {/* Close button */}
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center text-white text-2xl"
+              aria-label="סגור תפריט"
+            >
+              ✕
+            </button>
+
             <nav className="flex flex-col items-center gap-8">
-              {SECTIONS.map((section, i) => (
-                <motion.button
-                  key={section.id}
-                  onClick={() => handleClick(section.href)}
+              {[
+                { label: "דף הבית", href: "/" },
+                { label: "חנות פונטים", href: "/fonts" },
+                { label: "בלוג", href: "/blog" },
+                { label: "צור קשר", href: "/#contact" },
+              ].map((link, i) => (
+                <motion.a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.05 }}
-                  className="text-xl font-anomalia text-white hover:opacity-60 transition-opacity"
+                  className="text-2xl font-extrabold text-white hover:opacity-60 transition-opacity"
                 >
-                  {section.label}
-                </motion.button>
+                  {link.label}
+                </motion.a>
               ))}
             </nav>
           </motion.div>
