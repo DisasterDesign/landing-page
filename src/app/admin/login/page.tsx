@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import Image from "next/image";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,11 +14,11 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // Use fetch directly instead of next-auth/react signIn
-      // This avoids potential issues with the next-auth client module
+      // Get CSRF token
       const csrfRes = await fetch("/api/auth/csrf");
       const { csrfToken } = await csrfRes.json();
 
+      // Attempt sign in
       const res = await fetch("/api/auth/callback/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -28,29 +26,21 @@ export default function AdminLoginPage() {
           csrfToken,
           email,
           password,
-          redirect: "false",
-          json: "true",
         }),
-        redirect: "manual",
+        redirect: "follow",
       });
 
-      // NextAuth returns 302 on success, 401 on failure
-      if (res.status === 302 || res.ok) {
-        const location = res.headers.get("location") || "";
-        if (location.includes("error")) {
-          toast.error("אימייל או סיסמה שגויים");
-        } else {
-          toast.success("מתחבר...");
-          // Force a hard navigation to pick up the new session cookie
-          window.location.href = "/admin";
-        }
-      } else {
+      // After redirect-follow, check if we ended up on an error page
+      const finalUrl = res.url || "";
+      if (finalUrl.includes("error")) {
         toast.error("אימייל או סיסמה שגויים");
+        setLoading(false);
+      } else {
+        toast.success("מתחבר...");
+        window.location.href = "/admin";
       }
-    } catch (err) {
-      console.error("Login error:", err);
+    } catch {
       toast.error("שגיאה בהתחברות");
-    } finally {
       setLoading(false);
     }
   };
@@ -75,42 +65,16 @@ export default function AdminLoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm text-gray-400 mb-2">
-                אימייל
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors"
-                placeholder="admin@fuzionwebz.com"
-                dir="ltr"
-              />
+              <label htmlFor="email" className="block text-sm text-gray-400 mb-2">אימייל</label>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors" placeholder="admin@fuzionwebz.com" dir="ltr" />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm text-gray-400 mb-2">
-                סיסמה
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors"
-                placeholder="••••••••"
-                dir="ltr"
-              />
+              <label htmlFor="password" className="block text-sm text-gray-400 mb-2">סיסמה</label>
+              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors" placeholder="••••••••" dir="ltr" />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-pink hover:bg-pink-dark text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-            >
+            <button type="submit" disabled={loading} className="w-full py-3 bg-pink hover:bg-pink-dark text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4">
               {loading ? "מתחבר..." : "התחבר"}
             </button>
           </form>
