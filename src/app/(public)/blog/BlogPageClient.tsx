@@ -71,7 +71,7 @@ export default function BlogPageClient() {
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
-            <h1 className="chromatic-hover text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-extrabold text-center mb-6 text-white" data-text="הבלוג">
+            <h1 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-6" data-text="הבלוג">
               הבלוג
             </h1>
           </ScrollReveal>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import MagneticButton from "@/components/animations/MagneticButton";
 import HeroGlass from "@/components/three/HeroGlass";
@@ -10,7 +11,7 @@ const letterVariants = {
     opacity: 1,
     y: 0,
     transition: {
-      delay: 0.4 + i * 0.04,
+      delay: 0.3 + i * 0.04,
       duration: 0.7,
       ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
     },
@@ -18,6 +19,33 @@ const letterVariants = {
 };
 
 export default function Hero() {
+  // Don't animate until loader is done
+  const [ready, setReady] = useState(false);
+  const [showChromatic, setShowChromatic] = useState(false);
+
+  useEffect(() => {
+    // If loader already done (revisit), start immediately
+    if (sessionStorage.getItem("fuzion-loaded")) {
+      setReady(true);
+      return;
+    }
+    // Otherwise wait for loader to finish + small delay for fade-out
+    const interval = setInterval(() => {
+      if (sessionStorage.getItem("fuzion-loaded")) {
+        clearInterval(interval);
+        setTimeout(() => setReady(true), 400);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Show chromatic effect after letters finish animating
+  useEffect(() => {
+    if (!ready) return;
+    const timer = setTimeout(() => setShowChromatic(true), 1500);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
   return (
     <section className="relative h-screen min-h-[700px] overflow-hidden bg-transparent flex flex-col">
 
@@ -27,11 +55,12 @@ export default function Hero() {
           dir="ltr"
           className="text-center font-extrabold leading-[0.85] tracking-[-0.04em]"
           initial="hidden"
-          animate="visible"
+          animate={ready ? "visible" : "hidden"}
         >
           <span
-            className="block text-[clamp(3rem,13vw,15rem)] chromatic-hover chromatic-always"
+            className={`block text-[clamp(3rem,13vw,15rem)] ${showChromatic ? "chromatic-hover chromatic-always" : ""}`}
             data-text="FUZION WEBZ"
+            style={{ visibility: ready ? "visible" : "hidden" }}
           >
             {"FUZION".split("").map((char, i) => (
               <motion.span key={i} className="inline-block" custom={i} variants={letterVariants}>
@@ -53,7 +82,7 @@ export default function Hero() {
         <motion.p
           className="text-center text-[10px] sm:text-[11px] md:text-[13px] tracking-[0.35em] uppercase text-gray-500 mt-5"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          animate={ready ? { opacity: 1 } : { opacity: 0 }}
           transition={{ delay: 0.8, duration: 0.6 }}
         >
           Digital Design Studio — Israel
@@ -61,7 +90,6 @@ export default function Hero() {
       </div>
 
       {/* ===== MIDDLE: grid — RTL means col1=right, col2=left ===== */}
-      {/* col1 (right in RTL) = 3D, col2 (left in RTL) = text */}
       <div className="flex-1 flex items-center">
         <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
 
@@ -76,7 +104,7 @@ export default function Hero() {
             <motion.div
               className="w-16 h-[1px] bg-gradient-to-r from-pink to-cyan mb-6 lg:mr-0 lg:ml-auto mx-auto"
               initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
+              animate={ready ? { scaleX: 1 } : { scaleX: 0 }}
               transition={{ delay: 1.0, duration: 0.5 }}
               style={{ originX: 1 }}
             />
@@ -84,7 +112,7 @@ export default function Hero() {
             <motion.p
               className="text-lg md:text-xl lg:text-2xl text-gray-400 max-w-md leading-relaxed lg:mr-0 lg:ml-auto mx-auto"
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
               transition={{ delay: 1.1, duration: 0.5 }}
             >
               סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים שממירים מבקרים ללקוחות
@@ -92,7 +120,7 @@ export default function Hero() {
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
               transition={{ delay: 1.3, duration: 0.5 }}
               className="mt-8 lg:mr-0 lg:ml-auto mx-auto"
             >
@@ -119,8 +147,8 @@ export default function Hero() {
       <motion.div
         className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2, duration: 0.6 }}
+        animate={ready ? { opacity: 1 } : { opacity: 0 }}
+        transition={{ delay: 1.8, duration: 0.6 }}
       >
         <span className="text-[9px] tracking-[0.2em] uppercase text-gray-600">Scroll</span>
         <motion.div

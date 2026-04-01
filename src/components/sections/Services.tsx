@@ -129,7 +129,7 @@ export default function Services() {
     <section id="services" className="relative bg-black py-24 md:py-32 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="השירותים שלנו">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="השירותים שלנו">
             השירותים שלנו
           </h2>
         </ScrollReveal>

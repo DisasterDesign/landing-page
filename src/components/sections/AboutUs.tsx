@@ -89,7 +89,7 @@ function ValuesStepper() {
     <div ref={outerRef} style={{ minHeight: "250vh" }}>
     {/* Sticky inner — pins while scrolling through outer */}
     <div className="sticky top-0 h-screen flex flex-col items-center justify-center">
-    <h3 className="chromatic-hover text-3xl md:text-4xl font-extrabold text-center mb-12" data-text="הערכים שלנו">
+    <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full mb-12" data-text="הערכים שלנו">
       הערכים שלנו
     </h3>
     <div className="max-w-6xl mx-auto w-full px-6">
@@ -180,7 +180,7 @@ export default function AboutUs() {
     <section id="about" className="relative bg-black py-24 md:py-32 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="מי אנחנו?">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="מי אנחנו?">
             מי אנחנו?
           </h2>
         </ScrollReveal>

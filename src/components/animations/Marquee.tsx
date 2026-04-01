@@ -12,54 +12,77 @@ interface MarqueeProps {
 export default function Marquee({
   text,
   className,
-  speed = 30,
+  speed = 200,
   reverse = false,
 }: MarqueeProps) {
-  const items = Array(4).fill(text);
+  const content = `${text} `.repeat(16);
+  const animClass = reverse ? "marquee-reverse" : "marquee-forward";
+  const animClass2 = reverse ? "marquee-reverse-2" : "marquee-forward-2";
 
   return (
-    <div className={cn("overflow-hidden whitespace-nowrap py-8", className)} aria-hidden="true">
-      <div
-        className={cn(
-          "inline-flex animate-marquee",
-          reverse && "animate-marquee-reverse"
-        )}
-        style={{
-          animationDuration: `${speed}s`,
-        }}
-      >
-        {items.map((item, i) => (
-          <span
-            key={i}
-            className="mx-8 text-5xl md:text-7xl lg:text-8xl font-bold text-white/10 font-anomalia select-none"
-          >
-            {item}
-          </span>
-        ))}
-        {items.map((item, i) => (
-          <span
-            key={`dup-${i}`}
-            className="mx-8 text-5xl md:text-7xl lg:text-8xl font-bold text-white/10 font-anomalia select-none"
-          >
-            {item}
-          </span>
-        ))}
+    <div
+      className={cn("marquee-wrap", className)}
+      aria-hidden="true"
+      style={{ ["--t" as string]: `${speed}s` } as React.CSSProperties}
+    >
+      <div className="marquee-scroll">
+        <div className={`marquee-inner ${animClass}`}>
+          <span className="marquee-text">{content}</span>
+        </div>
+        <div className={`marquee-inner ${animClass2}`}>
+          <span className="marquee-text">{content}</span>
+        </div>
       </div>
 
       <style jsx>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+        .marquee-wrap {
+          overflow: hidden;
+          user-select: none;
+          padding: 1.5rem 0;
         }
-        @keyframes marquee-reverse {
-          0% { transform: translateX(-50%); }
-          100% { transform: translateX(0); }
+        .marquee-scroll {
+          display: flex;
+          mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.15) 10%, black 30%, black 70%, rgba(0,0,0,0.15) 90%, transparent 100%);
+          -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.15) 10%, black 30%, black 70%, rgba(0,0,0,0.15) 90%, transparent 100%);
         }
-        .animate-marquee {
-          animation: marquee linear infinite;
+        .marquee-inner {
+          white-space: nowrap;
+          flex-shrink: 0;
         }
-        .animate-marquee-reverse {
-          animation: marquee-reverse linear infinite;
+        .marquee-text {
+          font-size: clamp(2.5rem, 6vw, 5rem);
+          font-weight: 700;
+          color: white;
+          padding: 0 1rem;
+          text-shadow: -2px 1px 0 rgba(229,3,162,0.5), 2px -1px 0 rgba(1,255,255,0.5);
+        }
+        .marquee-forward {
+          animation: m-a var(--t) linear infinite;
+        }
+        .marquee-forward-2 {
+          animation: m-b var(--t) linear infinite;
+        }
+        .marquee-reverse {
+          animation: m-a-rev var(--t) linear infinite;
+        }
+        .marquee-reverse-2 {
+          animation: m-b-rev var(--t) linear infinite;
+        }
+        @keyframes m-a {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        @keyframes m-b {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-200%); }
+        }
+        @keyframes m-a-rev {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes m-b-rev {
+          0% { transform: translateX(-200%); }
+          100% { transform: translateX(0%); }
         }
       `}</style>
     </div>

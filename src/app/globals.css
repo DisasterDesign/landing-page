@@ -94,6 +94,12 @@ html, body, div, span, p, a, button, input, select, textarea, li, ul, nav, heade
 html.loader-active #navbar-logo {
   opacity: 0 !important;
 }
+html.loader-active {
+  overflow: hidden;
+}
+html.loader-active #smooth-content {
+  visibility: hidden;
+}
 
 /* Chromatic Aberration Effect */
 .chromatic-hover {

@@ -75,24 +75,8 @@ export default function FontStoreClient() {
       {/* Hero */}
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-extrabold mb-6 relative inline-block">
-            <span className="relative">
-              <span
-                className="absolute inset-0 text-[#00D0CE] select-none"
-                style={{ transform: "translate(3px, -3px)" }}
-                aria-hidden="true"
-              >
-                חנות פונטים
-              </span>
-              <span
-                className="absolute inset-0 text-[#E503A2] select-none"
-                style={{ transform: "translate(-3px, 3px)" }}
-                aria-hidden="true"
-              >
-                חנות פונטים
-              </span>
-              <span className="relative text-white">חנות פונטים</span>
-            </span>
+          <h1 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-6" data-text="חנות פונטים">
+            חנות פונטים
           </h1>
           <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto">
             פונטים מקוריים באיכות גבוהה לשימוש אישי ומסחרי

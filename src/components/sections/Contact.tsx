@@ -62,7 +62,7 @@ export default function Contact() {
 
       <div className="max-w-4xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-extrabold text-center mb-4" data-text="בואו נדבר">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-4" data-text="בואו נדבר">
             בואו נדבר
           </h2>
           <p className="text-gray-400 text-center text-lg mb-16">

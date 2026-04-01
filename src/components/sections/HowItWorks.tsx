@@ -1,8 +1,6 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect, useRef, ComponentType } from "react";
-import SvgHowItWorks from "@/components/svg/SvgHowItWorks";
 import SvgAbout from "@/components/svg/SvgAbout";
 import SvgProjects from "@/components/svg/SvgProjects";
 import SvgOurMembers from "@/components/svg/SvgOurMembers";
@@ -317,14 +315,9 @@ export default function HowItWorks() {
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
-        <SvgHowItWorks
-          style={{
-            width: "clamp(200px, 50vw, 456px)",
-            height: "auto",
-            filter: "brightness(0) invert(1)",
-          }}
-        />
-        <h2 className="sr-only">איך זה עובד?</h2>
+        <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full" data-text="איך זה עובד?">
+          איך זה עובד?
+        </h2>
       </div>
 
       {/* Outer Container - responsive width, scaled height */}
@@ -442,24 +435,16 @@ export default function HowItWorks() {
 
       {/* Description text */}
       <div
-        className="flex justify-center mt-12 px-4 relative z-10"
+        className="mt-12 relative z-10"
         style={{
           opacity: bottomTextProgress,
           transform: `translateY(${(1 - bottomTextProgress) * 30}px)`,
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
-        <Image
-          src="/שיחה אחת. אתר שלם!.svg"
-          alt="שיחה אחת. אתר שלם!"
-          width={311}
-          height={23}
-          style={{
-            width: "clamp(180px, 45vw, 311px)",
-            height: "auto",
-            filter: "brightness(0) invert(1)",
-          }}
-        />
+        <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full" data-text="שיחה אחת. אתר שלם!">
+          שיחה אחת. אתר שלם!
+        </h3>
       </div>
     </section>
   );

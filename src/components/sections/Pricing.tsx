@@ -10,7 +10,7 @@ export default function Pricing() {
     <section id="pricing" className="relative bg-black py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-20" data-text="מסלולי שירות">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="מסלולי שירות">
             מסלולי שירות
           </h2>
         </ScrollReveal>
@@ -79,7 +79,7 @@ export default function Pricing() {
         {/* Add-ons */}
         <ScrollReveal>
           <div className="text-center">
-            <h3 className="chromatic-hover text-2xl font-bold mb-6" data-text="בתשלום נוסף">
+            <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full mb-6" data-text="בתשלום נוסף">
               בתשלום נוסף
             </h3>
             <div className="flex flex-wrap justify-center gap-3">

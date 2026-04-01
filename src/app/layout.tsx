@@ -41,6 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className="h-full antialiased">
+      <head />
       <body className="min-h-full flex flex-col font-anomalia">
         {children}
         <SpeedInsights />

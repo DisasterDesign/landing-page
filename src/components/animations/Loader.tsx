@@ -27,9 +27,15 @@ export default function Loader() {
   const logoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!show) return;
+    if (!show) {
+      // No loader — remove preloader immediately
+      document.getElementById("preloader")?.remove();
+      return;
+    }
     // Hide navbar logo while loader is active
     document.documentElement.classList.add("loader-active");
+    // Remove the HTML preloader since React Loader takes over
+    document.getElementById("preloader")?.remove();
   }, [show]);
 
   useEffect(() => {
