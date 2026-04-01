@@ -66,6 +66,8 @@ export default function EditFontPage({
     priceCommercial: 0,
   });
   const [addingStyle, setAddingStyle] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState("");
 
   useEffect(() => {
     fetch(`/api/fonts/admin/${id}`)
@@ -402,15 +404,45 @@ export default function EditFontPage({
               }
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
             />
-            <input
-              type="text"
-              placeholder="כתובת קובץ פונט (URL)"
-              value={newStyle.fontFileUrl}
-              onChange={(e) =>
-                setNewStyle({ ...newStyle, fontFileUrl: e.target.value })
-              }
-              className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
-            />
+            <div className="col-span-2">
+              <label className="block text-sm text-gray-400 mb-1">קובץ פונט</label>
+              <input
+                type="file"
+                accept=".otf,.ttf,.woff,.woff2"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  setUploadedFileName("");
+                  try {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("fontSlug", form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+                    const res = await fetch("/api/fonts/admin/upload", {
+                      method: "POST",
+                      body: fd,
+                    });
+                    if (!res.ok) {
+                      const data = await res.json();
+                      throw new Error(data.error || "Upload failed");
+                    }
+                    const data = await res.json();
+                    setNewStyle({ ...newStyle, fontFileUrl: data.url });
+                    setUploadedFileName(file.name);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "שגיאה בהעלאת הקובץ");
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors file:mr-3 file:bg-gray-700 file:border-0 file:text-gray-300 file:rounded file:px-3 file:py-1 file:text-xs file:cursor-pointer"
+              />
+              {uploading && <p className="text-cyan text-xs mt-1">מעלה...</p>}
+              {uploadedFileName && !uploading && (
+                <p className="text-green-400 text-xs mt-1">{uploadedFileName}</p>
+              )}
+            </div>
             <input
               type="number"
               placeholder="מחיר אישי (₪)"
@@ -439,7 +471,7 @@ export default function EditFontPage({
           <button
             type="button"
             onClick={handleAddStyle}
-            disabled={addingStyle || !newStyle.name || !newStyle.fontFileUrl}
+            disabled={addingStyle || uploading || !newStyle.name || !newStyle.fontFileUrl}
             className="bg-cyan hover:bg-cyan/80 disabled:opacity-50 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             {addingStyle ? "מוסיף..." : "הוסף סגנון"}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import FontPreview from "@/components/fonts/FontPreview";
+import { useState, useEffect, useId, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import FontWeightBadge from "@/components/fonts/FontWeightBadge";
+import FontDownloadButton from "@/components/fonts/FontDownloadButton";
 
 interface FontStyle {
   id: string;
@@ -24,74 +25,104 @@ interface FontFamily {
   styles: FontStyle[];
 }
 
-type LicenseType = "PERSONAL" | "COMMERCIAL";
-
 export default function FontDetailClient({ font }: { font: FontFamily }) {
-  const [licenseType, setLicenseType] = useState<LicenseType>("PERSONAL");
-  const [buying, setBuying] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [checkoutForm, setCheckoutForm] = useState({
-    customerName: "",
-    customerEmail: "",
-    customerPhone: "",
-  });
-  const [showForm, setShowForm] = useState(false);
+  const router = useRouter();
+  const uniqueId = useId();
+  const [previewText, setPreviewText] = useState("הדוגמא שלך כאן");
+  const [fontSize, setFontSize] = useState(48);
+  const [loadedFonts, setLoadedFonts] = useState<Record<string, string>>({});
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const [error, setError] = useState("");
 
-  const totalPrice = font.styles.reduce((sum, style) => {
-    return (
-      sum +
-      (licenseType === "PERSONAL"
-        ? style.pricePersonal
-        : style.priceCommercial)
-    );
-  }, 0);
+  const makeFontName = useCallback(
+    (styleId: string) =>
+      `detail-${font.slug}-${styleId}-${uniqueId}`.replace(
+        /[^a-zA-Z0-9_-]/g,
+        "-"
+      ),
+    [font.slug, uniqueId]
+  );
 
-  const handleBuy = async () => {
-    if (!checkoutForm.customerName || !checkoutForm.customerEmail) {
-      setError("נא למלא שם ואימייל");
-      return;
-    }
+  // Load hero font (first available style)
+  useEffect(() => {
+    const firstStyle = font.styles[0];
+    if (!firstStyle?.fontFileUrl) return;
 
-    setBuying(true);
+    const heroName = makeFontName("hero");
+    const face = new FontFace(heroName, `url(${firstStyle.fontFileUrl})`);
+    face
+      .load()
+      .then((loaded) => {
+        document.fonts.add(loaded);
+        setHeroLoaded(true);
+      })
+      .catch((err) => console.error("Hero font load failed:", err));
+  }, [font.styles, makeFontName]);
+
+  // Load each style font separately
+  useEffect(() => {
+    font.styles.forEach((style) => {
+      if (!style.fontFileUrl) return;
+      const name = makeFontName(style.id);
+      const face = new FontFace(name, `url(${style.fontFileUrl})`, {
+        weight: String(style.weight),
+      });
+      face
+        .load()
+        .then((loaded) => {
+          document.fonts.add(loaded);
+          setLoadedFonts((prev) => ({ ...prev, [style.id]: name }));
+        })
+        .catch((err) =>
+          console.error(`Font load failed for ${style.name}:`, err)
+        );
+    });
+  }, [font.styles, makeFontName]);
+
+  const handleDownload = async (data: { name: string; email: string }) => {
     setError("");
-
     try {
       const res = await fetch("/api/fonts/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...checkoutForm,
+          customerName: data.name,
+          customerEmail: data.email,
           fontFamilyId: font.id,
-          licenseType,
+          licenseType: "PERSONAL",
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Checkout failed");
+        const d = await res.json();
+        throw new Error(d.error || "Checkout failed");
       }
 
-      const data = await res.json();
-      setDownloadUrl(data.downloadUrl);
+      const d = await res.json();
+      if (d.downloadUrl) {
+        router.push(d.downloadUrl);
+      }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "שגיאה בתהליך הרכישה"
-      );
-    } finally {
-      setBuying(false);
+      setError(err instanceof Error ? err.message : "שגיאה בתהליך ההורדה");
     }
   };
 
-  const firstStyle = font.styles[0];
+  const heroFontFamily = heroLoaded ? makeFontName("hero") : "inherit";
 
   return (
     <div className="min-h-screen bg-black" dir="rtl">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-5xl mx-auto">
-          {/* Font Name with chromatic effect */}
-          <div className="text-center mb-12">
-            <h1 className="text-5xl md:text-7xl font-extrabold mb-4 relative inline-block">
+          {/* Hero: Font name displayed in the font itself */}
+          <div className="text-center mb-16">
+            <h1
+              className="text-5xl md:text-7xl lg:text-8xl font-extrabold mb-4 relative inline-block"
+              style={{
+                fontFamily: heroFontFamily,
+                opacity: heroLoaded ? 1 : 0.5,
+                transition: "opacity 0.3s ease",
+              }}
+            >
               <span className="relative">
                 <span
                   className="absolute inset-0 text-[#00D0CE] select-none"
@@ -114,7 +145,6 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             {font.designer && (
               <p className="text-gray-400 text-lg">מעצב: {font.designer}</p>
             )}
-
             {font.description && (
               <p className="text-gray-500 mt-4 max-w-2xl mx-auto">
                 {font.description}
@@ -122,183 +152,117 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             )}
           </div>
 
-          {/* Font Preview */}
-          {firstStyle && (
-            <FontPreview
-              fontName={font.name}
-              fontFileUrl={firstStyle.fontFileUrl}
-              className="mb-12"
-            />
-          )}
-
-          {/* Styles Table */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-8">
-            <h2 className="text-lg font-semibold text-white mb-4">סגנונות</h2>
-
-            {/* License Type Selector */}
-            <div className="flex items-center gap-4 mb-6">
-              <span className="text-gray-400 text-sm">סוג רישיון:</span>
-              <label className="flex items-center gap-2 cursor-pointer">
+          {/* Interactive Preview */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-12">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+              <input
+                type="text"
+                value={previewText}
+                onChange={(e) => setPreviewText(e.target.value)}
+                placeholder="הקלד טקסט לתצוגה..."
+                className="flex-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
+              />
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-gray-400">{fontSize}px</span>
                 <input
-                  type="radio"
-                  name="license"
-                  checked={licenseType === "PERSONAL"}
-                  onChange={() => setLicenseType("PERSONAL")}
-                  className="accent-pink"
+                  type="range"
+                  min={16}
+                  max={120}
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="w-36 accent-pink"
                 />
-                <span className="text-sm text-gray-300">
-                  אישי (Personal)
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="license"
-                  checked={licenseType === "COMMERCIAL"}
-                  onChange={() => setLicenseType("COMMERCIAL")}
-                  className="accent-pink"
-                />
-                <span className="text-sm text-gray-300">
-                  מסחרי (Commercial)
-                </span>
-              </label>
+              </div>
             </div>
 
-            {font.styles.length > 0 ? (
-              <div className="space-y-2">
-                {font.styles.map((style) => (
-                  <div
-                    key={style.id}
-                    className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3"
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="text-white font-medium">
-                        {style.name}
-                      </span>
-                      <span className="text-gray-500 text-xs">
-                        משקל: {style.weight}
-                      </span>
-                    </div>
-                    <span className="text-white font-semibold">
-                      {licenseType === "PERSONAL"
-                        ? style.pricePersonal
-                        : style.priceCommercial}
-                      ₪
-                    </span>
+            {/* Weight Rows */}
+            <div className="space-y-3">
+              {font.styles.map((style) => (
+                <div
+                  key={style.id}
+                  className="bg-gray-950 rounded-xl p-5 flex flex-col gap-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <FontWeightBadge weight={style.weight} />
+                    <span className="text-gray-400 text-sm">{style.name}</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm">אין סגנונות זמינים</p>
-            )}
-
-            {/* Total */}
-            {font.styles.length > 0 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-800">
-                <span className="text-gray-300 font-medium">סה&quot;כ</span>
-                <span className="text-2xl font-bold text-white">
-                  {totalPrice}₪
-                </span>
-              </div>
-            )}
+                  <p
+                    className="text-white leading-relaxed transition-all duration-200"
+                    style={{
+                      fontFamily: loadedFonts[style.id] || "inherit",
+                      fontSize: `${fontSize}px`,
+                      opacity: loadedFonts[style.id] ? 1 : 0.4,
+                    }}
+                  >
+                    {previewText || "הדוגמא שלך כאן"}
+                  </p>
+                </div>
+              ))}
+              {font.styles.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-4">
+                  אין סגנונות זמינים
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Download Success */}
-          {downloadUrl ? (
-            <div className="bg-green-900/20 border border-green-800 rounded-2xl p-6 text-center">
-              <h3 className="text-xl font-bold text-green-300 mb-2">
-                הרכישה הושלמה בהצלחה!
-              </h3>
-              <p className="text-gray-400 mb-4">
-                הפונט שלך מוכן להורדה
-              </p>
-              <Link
-                href={downloadUrl}
-                className="inline-block bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-medium transition-colors"
-              >
-                עבור לדף ההורדה
-              </Link>
-            </div>
-          ) : !showForm ? (
-            /* Buy Button */
-            <div className="text-center">
-              <button
-                onClick={() => setShowForm(true)}
-                disabled={font.styles.length === 0}
-                className="bg-pink hover:bg-pink/80 disabled:opacity-50 text-white px-10 py-3.5 rounded-xl text-lg font-bold transition-colors"
-              >
-                קנה עכשיו — {totalPrice}₪
-              </button>
-            </div>
-          ) : (
-            /* Checkout Form */
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-md mx-auto">
-              <h3 className="text-lg font-semibold text-white mb-4">
-                פרטי הרכישה
-              </h3>
-
-              {error && (
-                <div className="bg-red-900/30 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm mb-4">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="שם מלא *"
-                  value={checkoutForm.customerName}
-                  onChange={(e) =>
-                    setCheckoutForm({
-                      ...checkoutForm,
-                      customerName: e.target.value,
-                    })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
-                />
-                <input
-                  type="email"
-                  placeholder="אימייל *"
-                  value={checkoutForm.customerEmail}
-                  onChange={(e) =>
-                    setCheckoutForm({
-                      ...checkoutForm,
-                      customerEmail: e.target.value,
-                    })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
-                />
-                <input
-                  type="tel"
-                  placeholder="טלפון (אופציונלי)"
-                  value={checkoutForm.customerPhone}
-                  onChange={(e) =>
-                    setCheckoutForm({
-                      ...checkoutForm,
-                      customerPhone: e.target.value,
-                    })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 mt-4">
-                <button
-                  onClick={handleBuy}
-                  disabled={buying}
-                  className="flex-1 bg-pink hover:bg-pink/80 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors"
-                >
-                  {buying ? "מעבד..." : `שלם ${totalPrice}₪`}
-                </button>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2.5 rounded-lg text-sm transition-colors"
-                >
-                  ביטול
-                </button>
+          {/* Price Table */}
+          {font.styles.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-8">
+              <h2 className="text-lg font-semibold text-white mb-4">מחירון</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-800">
+                      <th className="text-right py-3 px-2 font-medium">סגנון</th>
+                      <th className="text-right py-3 px-2 font-medium">משקל</th>
+                      <th className="text-right py-3 px-2 font-medium">
+                        אישי
+                      </th>
+                      <th className="text-right py-3 px-2 font-medium">
+                        מסחרי
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {font.styles.map((style) => (
+                      <tr
+                        key={style.id}
+                        className="border-b border-gray-800/50"
+                      >
+                        <td className="py-3 px-2 text-white font-medium">
+                          {style.name}
+                        </td>
+                        <td className="py-3 px-2">
+                          <FontWeightBadge weight={style.weight} />
+                        </td>
+                        <td className="py-3 px-2 text-white">
+                          {style.pricePersonal === 0
+                            ? "חינם"
+                            : `${style.pricePersonal}₪`}
+                        </td>
+                        <td className="py-3 px-2 text-white">
+                          {style.priceCommercial === 0
+                            ? "חינם"
+                            : `${style.priceCommercial}₪`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
+
+          {/* Download Button */}
+          <div className="text-center">
+            {error && (
+              <div className="bg-red-900/30 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm mb-4 max-w-md mx-auto">
+                {error}
+              </div>
+            )}
+            <FontDownloadButton onDownload={handleDownload} />
+          </div>
         </div>
       </section>
     </div>
