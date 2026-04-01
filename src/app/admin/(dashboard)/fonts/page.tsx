@@ -22,7 +22,7 @@ export default function AdminFontsPage() {
     fetch("/api/fonts/admin")
       .then((res) => res.json())
       .then((data) => {
-        setFonts(data);
+        setFonts(Array.isArray(data) ? data : data.data || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
