@@ -113,7 +113,7 @@ export default function Contact() {
                 <select
                   value={formData.service}
                   onChange={(e) => setFormData({ ...formData, service: e.target.value })}
-                  className="w-full bg-transparent border-b-2 border-gray-700 px-0 py-3 text-white font-anomalia outline-none focus:border-cyan transition-all duration-300 appearance-none cursor-pointer"
+                  className="w-full bg-transparent border-b-2 border-gray-700 px-0 py-3 text-white font-meruba outline-none focus:border-cyan transition-all duration-300 appearance-none cursor-pointer"
                 >
                   <option value="" className="bg-gray-900">בחרו שירות</option>
                   {SERVICES.map((s) => (

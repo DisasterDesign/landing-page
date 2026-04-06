@@ -19,7 +19,7 @@ export default function Button({
   return (
     <button
       className={cn(
-        "relative overflow-hidden font-anomalia font-bold tracking-wide transition-all duration-300",
+        "relative overflow-hidden font-meruba font-bold tracking-wide transition-all duration-300",
         "focus-visible:outline-2 focus-visible:outline-cyan focus-visible:outline-offset-2",
         // Size
         size === "sm" && "px-5 py-2 text-sm",

@@ -2,8 +2,8 @@
 @plugin "@tailwindcss/typography";
 
 @theme inline {
-  --default-font-family: "Anomalia", system-ui, sans-serif;
-  --font-sans: "Anomalia", system-ui, sans-serif;
+  --default-font-family: "Meruba", "Anomalia", system-ui, sans-serif;
+  --font-sans: "Meruba", "Anomalia", system-ui, sans-serif;
   --color-pink: #E503A2;
   --color-cyan: #01FFFF;
   --color-black: #000000;
@@ -19,6 +19,47 @@
   --color-gray-400: #999999;
   --color-gray-300: #CCCCCC;
   --font-anomalia: "Anomalia", system-ui, sans-serif;
+  --font-meruba: "Meruba", system-ui, sans-serif;
+}
+
+@font-face {
+  font-family: "Meruba";
+  src: url("/fonts/meruba/Meruba-Thin.otf") format("opentype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Meruba";
+  src: url("/fonts/meruba/Meruba-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Meruba";
+  src: url("/fonts/meruba/Meruba-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Meruba";
+  src: url("/fonts/meruba/Meruba-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Meruba";
+  src: url("/fonts/meruba/Meruba-ExtraBold.otf") format("opentype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -45,7 +86,7 @@ html {
 body {
   background-color: white;
   color: #FFFFFF;
-  font-family: "Anomalia", system-ui, sans-serif;
+  font-family: "Meruba", "Anomalia", system-ui, sans-serif;
   cursor: none;
   overflow-x: hidden;
 }

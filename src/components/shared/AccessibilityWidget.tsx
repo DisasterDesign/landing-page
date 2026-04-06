@@ -63,7 +63,7 @@ export default function AccessibilityWidget() {
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
           >
-            <span className="text-white text-sm font-bold font-anomalia">נגישות</span>
+            <span className="text-white text-sm font-bold font-meruba">נגישות</span>
 
             {/* Font size */}
             <div className="flex items-center justify-between">
