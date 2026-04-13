@@ -26,7 +26,9 @@ export interface PricingTier {
   price: number;
   currency: string;
   period: string;
-  features: { text: string; included: boolean }[];
+  tagline: string;
+  sections: { title: string; items: string[] }[];
+  suitableFor: string;
   recommended?: boolean;
   cta: string;
 }

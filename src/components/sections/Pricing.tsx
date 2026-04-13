@@ -33,31 +33,38 @@ export default function Pricing() {
                 )}
 
                 <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
+                <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-pink">
                     {tier.price}
                   </span>
-                  <span className="text-gray-400">{tier.currency}/{tier.period}</span>
+                  <span className="text-gray-400">{tier.currency} / {tier.period}</span>
                 </div>
+                <p className="text-sm text-gray-400 mb-6 leading-relaxed">{tier.tagline}</p>
 
-                <ul className="space-y-3 mb-8 flex-1">
-                  {tier.features.map((feature, j) => (
-                    <li key={j} className="flex items-start gap-3">
-                      <span className={cn(
-                        "shrink-0 mt-0.5",
-                        feature.included ? "text-cyan" : "text-gray-600"
-                      )}>
-                        {feature.included ? "✓" : "✗"}
-                      </span>
-                      <span className={cn(
-                        "text-sm",
-                        feature.included ? "text-gray-300" : "text-gray-600 line-through"
-                      )}>
-                        {feature.text}
-                      </span>
-                    </li>
+                <div className="space-y-6 mb-8 flex-1">
+                  {tier.sections.map((section, s) => (
+                    <div key={s}>
+                      <h4 className="text-xs uppercase tracking-wider text-pink font-bold mb-3">
+                        {section.title}
+                      </h4>
+                      <ul className="space-y-2.5">
+                        {section.items.map((item, j) => (
+                          <li key={j} className="flex items-start gap-3">
+                            <span className="shrink-0 mt-0.5 text-cyan">✓</span>
+                            <span className="text-sm text-gray-300">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+
+                  <div className="pt-4 border-t border-gray-800">
+                    <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">
+                      מתאים ל
+                    </h4>
+                    <p className="text-sm text-gray-400 leading-relaxed">{tier.suitableFor}</p>
+                  </div>
+                </div>
 
                 <a
                   href="#contact"
