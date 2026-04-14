@@ -10,7 +10,7 @@ export interface TeamMember {
   roleHe: string;
   email: string;
   bio: string;
-  image?: string;
+  image: string;
 }
 
 export interface Service {
