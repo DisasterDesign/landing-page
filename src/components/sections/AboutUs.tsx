@@ -27,14 +27,14 @@ function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; inde
           className="absolute inset-0 rounded-[18px] bg-[#C80084] transition-transform duration-500 group-hover:-translate-x-[5px] group-hover:translate-y-[5px]"
           style={{ transform: "translate(-3px, 3px)" }}
         />
-        <div className="relative bg-black rounded-[18px] border border-gray-800/50 p-8 md:p-10 transition-all duration-500 group-hover:border-gray-700/50">
-          <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden mt-4 md:mt-6 mb-8 bg-gray-900">
+        <div className="relative bg-black rounded-[18px] border border-gray-800/50 p-8 md:p-10 overflow-hidden transition-all duration-500 group-hover:border-gray-700/50">
+          <div className="relative w-[calc(100%+4rem)] md:w-[calc(100%+5rem)] aspect-[4/3] overflow-hidden -mt-8 md:-mt-10 -mx-8 md:-mx-10 mb-8 bg-gray-900">
             <Image
               src={member.image}
               alt={member.nameHe}
               fill
               sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover transition-transform duration-700 group-hover:scale-105"
+              className="object-cover object-[center_25%] transition-transform duration-700 group-hover:scale-105"
               priority={index === 0}
             />
             <div className="absolute inset-0 bg-gradient-to-br from-[#C80084]/10 via-transparent to-[#00D0CE]/10 mix-blend-overlay pointer-events-none" />
