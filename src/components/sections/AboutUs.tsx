@@ -28,7 +28,7 @@ function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; inde
           style={{ transform: "translate(-3px, 3px)" }}
         />
         <div className="relative bg-black rounded-[18px] border border-gray-800/50 p-8 md:p-10 transition-all duration-500 group-hover:border-gray-700/50">
-          <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden mb-8 bg-gray-900">
+          <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden mt-4 md:mt-6 mb-8 bg-gray-900">
             <Image
               src={member.image}
               alt={member.nameHe}
