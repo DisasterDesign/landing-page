@@ -34,7 +34,7 @@ function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; inde
               alt={member.nameHe}
               fill
               sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover object-[center_25%] transition-transform duration-700 group-hover:scale-105"
+              className="object-cover object-[center_5%] transition-transform duration-700 group-hover:scale-105"
               priority={index === 0}
             />
             <div className="absolute inset-0 bg-gradient-to-br from-[#C80084]/10 via-transparent to-[#00D0CE]/10 mix-blend-overlay pointer-events-none" />
