@@ -1,0 +1,26 @@
+{
+  "name": "Fuzion Webz Admin",
+  "short_name": "FW Admin",
+  "description": "מערכת ניהול פנימית",
+  "start_url": "/admin",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

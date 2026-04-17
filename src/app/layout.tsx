@@ -1,10 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
   icons: {
     icon: "/fabicon.png",
+    apple: "/icons/icon-192x192.png",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "FW Admin",
   },
   title: {
     default: "Fuzion Webz | סטודיו לעיצוב ובניית אתרים",
@@ -34,6 +42,10 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,6 +57,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         <SpeedInsights />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

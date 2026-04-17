@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export default async function DashboardLayout({
   children,
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
         {/* Page content */}
         <main className="p-4 md:p-6 pb-24 md:pb-6">{children}</main>
       </div>
+      <InstallPrompt />
     </>
   );
 }

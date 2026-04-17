@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import {
   DndContext,
   DragOverlay,
@@ -20,6 +21,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import Modal from "@/components/ui/Modal";
 
 // ---------- Types ----------
 
@@ -133,6 +135,49 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
   );
 }
 
+// ---------- MobileTaskCard (no DnD) ----------
+
+function MobileTaskCard({ task }: { task: Task }) {
+  const initials = task.assignee
+    ? task.assignee.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : null;
+
+  return (
+    <Link
+      href={`/admin/tasks/${task.id}`}
+      className="block bg-gray-800 rounded-xl p-4 border border-gray-700 active:bg-gray-700 transition-colors space-y-3"
+    >
+      <p className="text-sm font-medium text-white leading-snug">{task.title}</p>
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+            priorityConfig[task.priority].color
+          }`}
+        >
+          {priorityConfig[task.priority].label}
+        </span>
+        <div className="flex items-center gap-2">
+          {task.dueDate && (
+            <span className="text-[11px] text-gray-500">
+              {new Date(task.dueDate).toLocaleDateString("he-IL")}
+            </span>
+          )}
+          {initials && (
+            <div className="w-6 h-6 rounded-full bg-pink/20 text-pink flex items-center justify-center text-[10px] font-bold">
+              {initials}
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // ---------- KanbanColumn Component ----------
 
 function KanbanColumn({
@@ -185,6 +230,15 @@ export default function TasksPage() {
   const [filterProject, setFilterProject] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+
+  // Mobile UI
+  const [activeTab, setActiveTab] = useState<TaskStatus>("TODO");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newAssignee, setNewAssignee] = useState("");
+  const [newPriority, setNewPriority] = useState<Priority>("MEDIUM");
+  const [newDueDate, setNewDueDate] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -267,6 +321,36 @@ export default function TasksPage() {
           t.id === activeId ? { ...t, status: overTask.status } : t
         )
       );
+    }
+  };
+
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    setCreating(true);
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          priority: newPriority,
+          ...(newAssignee ? { assigneeId: newAssignee } : {}),
+          ...(newDueDate ? { dueDate: newDueDate } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("המשימה נוצרה");
+      setCreateOpen(false);
+      setNewTitle("");
+      setNewAssignee("");
+      setNewPriority("MEDIUM");
+      setNewDueDate("");
+      fetchData();
+    } catch {
+      toast.error("שגיאה ביצירת המשימה");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -371,28 +455,152 @@ export default function TasksPage() {
         </select>
       </div>
 
-      {/* Kanban Board */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {columns.map((col) => (
-            <KanbanColumn
-              key={col.id}
-              column={col}
-              tasks={getColumnTasks(col.id)}
-            />
-          ))}
+      {/* Kanban Board (desktop) */}
+      <div className="hidden md:block">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {columns.map((col) => (
+              <KanbanColumn
+                key={col.id}
+                column={col}
+                tasks={getColumnTasks(col.id)}
+              />
+            ))}
+          </div>
+
+          <DragOverlay>
+            {activeTask ? <TaskCard task={activeTask} overlay /> : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      {/* Mobile tabs + list */}
+      <div className="md:hidden">
+        <div className="flex gap-1 bg-gray-900 border border-gray-700 rounded-2xl p-1 mb-4 overflow-x-auto">
+          {columns.map((col) => {
+            const active = activeTab === col.id;
+            const count = getColumnTasks(col.id).length;
+            return (
+              <button
+                key={col.id}
+                onClick={() => setActiveTab(col.id)}
+                className={`flex-1 min-w-[72px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold transition-colors ${
+                  active ? "bg-pink text-white" : "text-gray-400"
+                }`}
+              >
+                <span>{col.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 rounded-full ${
+                    active ? "bg-white/25" : "bg-gray-800"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <DragOverlay>
-          {activeTask ? <TaskCard task={activeTask} overlay /> : null}
-        </DragOverlay>
-      </DndContext>
+        <div className="space-y-3">
+          {getColumnTasks(activeTab).length === 0 ? (
+            <p className="text-center text-gray-500 text-sm py-12">
+              אין משימות בקטגוריה זו
+            </p>
+          ) : (
+            getColumnTasks(activeTab).map((task) => (
+              <MobileTaskCard key={task.id} task={task} />
+            ))
+          )}
+        </div>
+
+        <button
+          onClick={() => setCreateOpen(true)}
+          aria-label="משימה חדשה"
+          className="md:hidden fixed bottom-24 left-4 z-40 w-14 h-14 rounded-full bg-pink hover:bg-pink-light shadow-lg shadow-pink/30 flex items-center justify-center text-white"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
+
+      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="משימה חדשה">
+        <form onSubmit={handleQuickCreate} className="space-y-4" dir="rtl">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">כותרת *</label>
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              required
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              placeholder="מה צריך לעשות?"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">משויך ל</label>
+            <select
+              value={newAssignee}
+              onChange={(e) => setNewAssignee(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+            >
+              <option value="">ללא</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">עדיפות</label>
+            <select
+              value={newPriority}
+              onChange={(e) => setNewPriority(e.target.value as Priority)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+            >
+              <option value="LOW">נמוכה</option>
+              <option value="MEDIUM">בינונית</option>
+              <option value="HIGH">גבוהה</option>
+              <option value="URGENT">דחופה</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">תאריך יעד</label>
+            <input
+              type="date"
+              value={newDueDate}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={creating || !newTitle.trim()}
+              className="flex-1 bg-pink hover:bg-pink-light disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
+            >
+              {creating ? "יוצר..." : "צור משימה"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="px-4 border border-gray-700 hover:border-gray-600 text-gray-300 rounded-xl"
+            >
+              ביטול
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
