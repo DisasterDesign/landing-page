@@ -2,8 +2,8 @@
 @plugin "@tailwindcss/typography";
 
 @theme inline {
-  --default-font-family: "Meruba", "Anomalia", system-ui, sans-serif;
-  --font-sans: "Meruba", "Anomalia", system-ui, sans-serif;
+  --default-font-family: "Birzia", "Meruba", "Anomalia", system-ui, sans-serif;
+  --font-sans: "Birzia", "Meruba", "Anomalia", system-ui, sans-serif;
   --color-pink: #E503A2;
   --color-cyan: #01FFFF;
   --color-black: #000000;
@@ -20,6 +20,39 @@
   --color-gray-300: #CCCCCC;
   --font-anomalia: "Anomalia", system-ui, sans-serif;
   --font-meruba: "Meruba", system-ui, sans-serif;
+  --font-birzia: "Birzia", system-ui, sans-serif;
+}
+
+@font-face {
+  font-family: "Birzia";
+  src: url("/fonts/birzia/Birzia-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Birzia";
+  src: url("/fonts/birzia/Birzia-Medium.otf") format("opentype");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Birzia";
+  src: url("/fonts/birzia/Birzia-Bold.otf") format("opentype");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Birzia";
+  src: url("/fonts/birzia/Birzia-Black.otf") format("opentype");
+  font-weight: 800 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -86,9 +119,14 @@ html {
 body {
   background-color: white;
   color: #FFFFFF;
-  font-family: "Meruba", "Anomalia", system-ui, sans-serif;
+  font-family: "Birzia", "Meruba", "Anomalia", system-ui, sans-serif;
   cursor: none;
   overflow-x: hidden;
+}
+
+/* Headings keep the original Meruba font — only running text uses Birzia */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Meruba", "Anomalia", system-ui, sans-serif;
 }
 
 @media (pointer: coarse) {
