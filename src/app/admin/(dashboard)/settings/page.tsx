@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 interface TeamMember {
   id: string;
@@ -103,6 +104,28 @@ export default function SettingsPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* PWA install banner reset */}
+      <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6 space-y-3">
+        <h3 className="text-lg font-bold">אפליקציה במסך הבית</h3>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          אם סגרת את באנר ההתקנה ואתה רוצה לראות אותו שוב — לחץ כאן ורענן את העמוד.
+        </p>
+        <button
+          onClick={() => {
+            try {
+              localStorage.removeItem("fw-install-dismissed-at");
+              localStorage.removeItem("fw-install-dismissed");
+              toast.success("אופס. רענן את העמוד כדי לראות את הבאנר שוב.");
+            } catch {
+              toast.error("שגיאה");
+            }
+          }}
+          className="bg-pink hover:bg-pink-light text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+        >
+          אפס באנר התקנה
+        </button>
       </div>
     </div>
   );

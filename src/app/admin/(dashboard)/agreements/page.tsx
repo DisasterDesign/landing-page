@@ -187,7 +187,7 @@ export default function AgreementsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24">סטטוס</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך יצירה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך חתימה</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-44">פעולות</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-44 sticky left-0 bg-gray-800 z-10 border-l border-gray-700 md:static md:border-l-0">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -199,7 +199,7 @@ export default function AgreementsPage() {
               </tr>
             ) : (
               agreements.map((a) => (
-                <tr key={a.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                <tr key={a.id} className="border-b border-gray-800 hover:bg-gray-800/50 group/row">
                   <td className="px-3 py-2.5 text-white">{a.customerName}</td>
                   <td className="px-3 py-2.5 text-gray-300">{a.businessName || "—"}</td>
                   <td className="px-3 py-2.5">
@@ -215,7 +215,7 @@ export default function AgreementsPage() {
                   <td className="px-3 py-2.5 text-gray-400 text-xs">
                     {a.signedAt ? new Date(a.signedAt).toLocaleDateString("he-IL") : "—"}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5 sticky left-0 bg-gray-950 group-hover/row:bg-gray-800 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => copyLink(a.signToken)}

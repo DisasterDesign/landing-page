@@ -345,7 +345,7 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">רווח נקי (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך תשלום</th>
-              <th className="w-10"></th>
+              <th className="w-12 sticky left-0 bg-gray-800 z-10 border-l border-gray-700 md:static md:border-l-0"></th>
             </tr>
           </thead>
           <tbody>
@@ -388,14 +388,15 @@ export default function ClientsPage() {
                   </td>
                   <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-1 py-0.5 sticky left-0 bg-gray-950 group-hover:bg-gray-800/50 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
                     <button
                       onClick={() => deleteClient(client.id)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1"
+                      className="text-gray-500 hover:text-red-400 active:text-red-400 transition-colors p-2 -m-1"
                       title="מחק"
+                      aria-label={`מחק את ${client.name || "לקוח"}`}
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
                       </svg>
                     </button>
                   </td>
