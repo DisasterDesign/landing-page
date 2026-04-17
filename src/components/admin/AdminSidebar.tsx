@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -106,6 +106,22 @@ interface AdminSidebarProps {
 export default function AdminSidebar({ userName }: AdminSidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while drawer open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [mobileOpen]);
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin";
@@ -194,24 +210,83 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 z-40 flex justify-around items-center h-16 px-2">
-        {navItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center gap-0.5 py-1 px-2 rounded-lg transition-colors ${
-                active ? "text-pink" : "text-gray-400"
-              }`}
-            >
-              {item.icon}
-              <span className="text-[10px]">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Mobile hamburger button — fixed in header area */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        aria-label="פתח תפריט"
+        className="md:hidden fixed top-3 right-3 z-50 w-11 h-11 rounded-xl bg-gray-900/90 backdrop-blur border border-gray-700 text-white flex items-center justify-center active:bg-gray-800"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Mobile drawer overlay */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/70 z-50 animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile drawer panel */}
+      <aside
+        className={`md:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gray-900 border-l border-gray-700 z-50 flex flex-col transition-transform duration-300 ${
+          mobileOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+        aria-hidden={!mobileOpen}
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-700">
+          <span className="text-lg font-bold text-pink">Fuzion</span>
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="סגור תפריט"
+            className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+          {navItems.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+                  active
+                    ? "bg-pink/15 text-pink"
+                    : "text-gray-300 active:bg-gray-800"
+                }`}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                <span className="text-sm font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-gray-700 p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-pink/20 text-pink flex items-center justify-center text-sm font-bold">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white truncate">{userName}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: "/admin/login" })}
+            className="w-full text-center text-sm text-gray-300 hover:text-pink py-2 border border-gray-700 rounded-lg active:bg-gray-800"
+          >
+            התנתק
+          </button>
+        </div>
+      </aside>
     </>
   );
 }

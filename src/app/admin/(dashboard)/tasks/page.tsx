@@ -522,7 +522,7 @@ export default function TasksPage() {
         <button
           onClick={() => setCreateOpen(true)}
           aria-label="משימה חדשה"
-          className="md:hidden fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full bg-pink hover:bg-pink-light shadow-lg shadow-pink/30 flex items-center justify-center text-white"
+          className="md:hidden fixed bottom-6 right-4 z-40 w-14 h-14 rounded-full bg-pink hover:bg-pink-light shadow-lg shadow-pink/30 flex items-center justify-center text-white"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

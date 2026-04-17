@@ -16,12 +16,17 @@ interface Client {
   paymentDate: string | null;
 }
 
-type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "cardcomFee" | "startDate" | "paymentDate";
+type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "startDate" | "paymentDate";
 
-const VAT_RATE = 17;
+// Israeli VAT rate as of January 2025 (raised from 17%); still 18% in 2026.
+const VAT_RATE = 18;
+// CardCom merchant fee on every charged transaction.
+const CARDCOM_FEE_RATE = 0.02;
+
 const computeVat = (amount: number | null) => ((amount ?? 0) * VAT_RATE) / (100 + VAT_RATE);
-const computeNetProfit = (c: Pick<Client, "amount" | "expense" | "cardcomFee">) =>
-  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - (c.expense ?? 0) - (c.cardcomFee ?? 0);
+const computeCardcomFee = (amount: number | null) => (amount ?? 0) * CARDCOM_FEE_RATE;
+const computeNetProfit = (c: Pick<Client, "amount" | "expense">) =>
+  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - (c.expense ?? 0) - computeCardcomFee(c.amount);
 
 interface EditingCell {
   id: string;
@@ -67,7 +72,7 @@ export default function ClientsPage() {
 
   const startEditing = (client: Client, field: EditableField) => {
     let value: string;
-    if (field === "amount" || field === "expense" || field === "cardcomFee") {
+    if (field === "amount" || field === "expense") {
       value = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       value = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
@@ -86,7 +91,7 @@ export default function ClientsPage() {
 
     // Check if value actually changed
     let oldValue: string;
-    if (field === "amount" || field === "expense" || field === "cardcomFee") {
+    if (field === "amount" || field === "expense") {
       oldValue = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       oldValue = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
@@ -100,7 +105,7 @@ export default function ClientsPage() {
     }
 
     let patchValue: unknown = editValue;
-    if (field === "amount" || field === "expense" || field === "cardcomFee") {
+    if (field === "amount" || field === "expense") {
       patchValue = editValue === "" ? null : parseFloat(editValue);
       if (editValue !== "" && isNaN(patchValue as number)) {
         toast.error("ערך לא תקין");
@@ -116,7 +121,7 @@ export default function ClientsPage() {
     setClients((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        if (field === "amount" || field === "expense" || field === "cardcomFee") {
+        if (field === "amount" || field === "expense") {
           return { ...c, [field]: patchValue as number | null };
         }
         if (field === "startDate" || field === "paymentDate") {
@@ -191,7 +196,7 @@ export default function ClientsPage() {
 
   const totalAmount = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
   const totalVat = clients.reduce((sum, c) => sum + computeVat(c.amount), 0);
-  const totalCardcom = clients.reduce((sum, c) => sum + (c.cardcomFee ?? 0), 0);
+  const totalCardcom = clients.reduce((sum, c) => sum + computeCardcomFee(c.amount), 0);
   const totalExpense = clients.reduce((sum, c) => sum + (c.expense ?? 0), 0);
   const totalNetProfit = clients.reduce((sum, c) => sum + computeNetProfit(c), 0);
 
@@ -275,7 +280,7 @@ export default function ClientsPage() {
       return (
         <input
           ref={inputRef}
-          type={field === "amount" || field === "expense" || field === "cardcomFee" ? "number" : "text"}
+          type={field === "amount" || field === "expense" ? "number" : "text"}
           step="any"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -289,7 +294,7 @@ export default function ClientsPage() {
     let display: string;
     if (field === "status") {
       display = statusDisplay(client.status);
-    } else if (field === "amount" || field === "expense" || field === "cardcomFee") {
+    } else if (field === "amount" || field === "expense") {
       display = formatNum(client[field]);
     } else if (field === "startDate" || field === "paymentDate") {
       display = client[field] ? new Date(client[field]!).toLocaleDateString("he-IL") : "";
@@ -339,8 +344,8 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">הערות</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סכום (כולל מע״מ ₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 17% (₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">עמלת CardCom (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 18% (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">עמלת CardCom 2% (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הוצאה נוספת (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">רווח נקי (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
@@ -351,6 +356,7 @@ export default function ClientsPage() {
           <tbody>
             {clients.map((client) => {
               const vat = client.amount != null ? computeVat(client.amount) : null;
+              const cardcomFee = client.amount != null ? computeCardcomFee(client.amount) : null;
               const netProfit = client.amount != null ? computeNetProfit(client) : null;
               const isSaving = savingIds.has(client.id);
 
@@ -371,7 +377,9 @@ export default function ClientsPage() {
                   <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
                     {vat != null ? formatNum(vat) : <span className="text-gray-600">-</span>}
                   </td>
-                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "cardcomFee")}</td>
+                  <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
+                    {cardcomFee != null ? formatNum(cardcomFee) : <span className="text-gray-600">-</span>}
+                  </td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "expense")}</td>
                   <td className="px-3 py-1.5 font-mono bg-gray-700/20">
                     {netProfit != null ? (
@@ -415,7 +423,7 @@ export default function ClientsPage() {
               <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
                 {formatNum(totalVat)}
               </td>
-              <td className="px-3 py-2.5 font-mono text-white">
+              <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
                 {formatNum(totalCardcom)}
               </td>
               <td className="px-3 py-2.5 font-mono text-white">

@@ -28,9 +28,9 @@ export default async function DashboardLayout({
       {/* Main content area */}
       <div className="md:mr-60 min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 flex items-center justify-between px-6">
+        <header className="sticky top-0 z-30 h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 flex items-center justify-between px-6 pr-20 md:pr-6">
           <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold text-white">ניהול</h1>
+            <h1 className="hidden md:block text-lg font-bold text-white">ניהול</h1>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-400 hidden md:block">
@@ -43,7 +43,7 @@ export default async function DashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="p-4 md:p-6 pb-24 md:pb-6">{children}</main>
+        <main className="p-4 md:p-6">{children}</main>
       </div>
       <InstallPrompt />
     </>
