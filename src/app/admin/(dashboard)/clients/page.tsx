@@ -11,11 +11,17 @@ interface Client {
   notes: string | null;
   amount: number | null;
   expense: number | null;
+  cardcomFee: number | null;
   startDate: string | null;
   paymentDate: string | null;
 }
 
-type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "startDate" | "paymentDate";
+type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "cardcomFee" | "startDate" | "paymentDate";
+
+const VAT_RATE = 17;
+const computeVat = (amount: number | null) => ((amount ?? 0) * VAT_RATE) / (100 + VAT_RATE);
+const computeNetProfit = (c: Pick<Client, "amount" | "expense" | "cardcomFee">) =>
+  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - (c.expense ?? 0) - (c.cardcomFee ?? 0);
 
 interface EditingCell {
   id: string;
@@ -61,7 +67,7 @@ export default function ClientsPage() {
 
   const startEditing = (client: Client, field: EditableField) => {
     let value: string;
-    if (field === "amount" || field === "expense") {
+    if (field === "amount" || field === "expense" || field === "cardcomFee") {
       value = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       value = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
@@ -80,7 +86,7 @@ export default function ClientsPage() {
 
     // Check if value actually changed
     let oldValue: string;
-    if (field === "amount" || field === "expense") {
+    if (field === "amount" || field === "expense" || field === "cardcomFee") {
       oldValue = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       oldValue = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
@@ -94,7 +100,7 @@ export default function ClientsPage() {
     }
 
     let patchValue: unknown = editValue;
-    if (field === "amount" || field === "expense") {
+    if (field === "amount" || field === "expense" || field === "cardcomFee") {
       patchValue = editValue === "" ? null : parseFloat(editValue);
       if (editValue !== "" && isNaN(patchValue as number)) {
         toast.error("ערך לא תקין");
@@ -110,7 +116,7 @@ export default function ClientsPage() {
     setClients((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        if (field === "amount" || field === "expense") {
+        if (field === "amount" || field === "expense" || field === "cardcomFee") {
           return { ...c, [field]: patchValue as number | null };
         }
         if (field === "startDate" || field === "paymentDate") {
@@ -184,8 +190,10 @@ export default function ClientsPage() {
   };
 
   const totalAmount = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
+  const totalVat = clients.reduce((sum, c) => sum + computeVat(c.amount), 0);
+  const totalCardcom = clients.reduce((sum, c) => sum + (c.cardcomFee ?? 0), 0);
   const totalExpense = clients.reduce((sum, c) => sum + (c.expense ?? 0), 0);
-  const totalProfit = totalAmount - totalExpense;
+  const totalNetProfit = clients.reduce((sum, c) => sum + computeNetProfit(c), 0);
 
   const formatNum = (n: number | null) =>
     n != null ? n.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) : "";
@@ -267,7 +275,7 @@ export default function ClientsPage() {
       return (
         <input
           ref={inputRef}
-          type={field === "amount" || field === "expense" ? "number" : "text"}
+          type={field === "amount" || field === "expense" || field === "cardcomFee" ? "number" : "text"}
           step="any"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -281,7 +289,7 @@ export default function ClientsPage() {
     let display: string;
     if (field === "status") {
       display = statusDisplay(client.status);
-    } else if (field === "amount" || field === "expense") {
+    } else if (field === "amount" || field === "expense" || field === "cardcomFee") {
       display = formatNum(client[field]);
     } else if (field === "startDate" || field === "paymentDate") {
       display = client[field] ? new Date(client[field]!).toLocaleDateString("he-IL") : "";
@@ -330,20 +338,20 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">הערות</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סכום (₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הוצאה (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סכום (כולל מע״מ ₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 17% (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">עמלת CardCom (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הוצאה נוספת (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">רווח נקי (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך תשלום</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">רווח (₪)</th>
               <th className="w-10"></th>
             </tr>
           </thead>
           <tbody>
             {clients.map((client) => {
-              const profit =
-                client.amount != null
-                  ? client.amount - (client.expense ?? 0)
-                  : null;
+              const vat = client.amount != null ? computeVat(client.amount) : null;
+              const netProfit = client.amount != null ? computeNetProfit(client) : null;
               const isSaving = savingIds.has(client.id);
 
               return (
@@ -360,22 +368,26 @@ export default function ClientsPage() {
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "notes")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "amount")}</td>
+                  <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
+                    {vat != null ? formatNum(vat) : <span className="text-gray-600">-</span>}
+                  </td>
+                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "cardcomFee")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "expense")}</td>
-                  <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
-                  <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
-                  <td className="px-3 py-1.5 font-mono">
-                    {profit != null ? (
+                  <td className="px-3 py-1.5 font-mono bg-gray-700/20">
+                    {netProfit != null ? (
                       <span
                         className={
-                          profit >= 0 ? "text-green-400" : "text-red-400"
+                          netProfit >= 0 ? "text-green-400" : "text-red-400"
                         }
                       >
-                        {formatNum(profit)}
+                        {formatNum(netProfit)}
                       </span>
                     ) : (
                       <span className="text-gray-600">-</span>
                     )}
                   </td>
+                  <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
+                  <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
                   <td className="px-1 py-0.5">
                     <button
                       onClick={() => deleteClient(client.id)}
@@ -399,20 +411,25 @@ export default function ClientsPage() {
               <td className="px-3 py-2.5 font-mono text-white">
                 {formatNum(totalAmount)}
               </td>
+              <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
+                {formatNum(totalVat)}
+              </td>
+              <td className="px-3 py-2.5 font-mono text-white">
+                {formatNum(totalCardcom)}
+              </td>
               <td className="px-3 py-2.5 font-mono text-white">
                 {formatNum(totalExpense)}
               </td>
-              <td colSpan={2}></td>
-              <td className="px-3 py-2.5 font-mono">
+              <td className="px-3 py-2.5 font-mono bg-gray-700/20">
                 <span
                   className={
-                    totalProfit >= 0 ? "text-green-400" : "text-red-400"
+                    totalNetProfit >= 0 ? "text-green-400" : "text-red-400"
                   }
                 >
-                  {formatNum(totalProfit)}
+                  {formatNum(totalNetProfit)}
                 </span>
               </td>
-              <td></td>
+              <td colSpan={3}></td>
             </tr>
           </tfoot>
         </table>

@@ -27,6 +27,9 @@ export async function PATCH(
     if ("expense" in body)
       updateData.expense =
         body.expense !== null && body.expense !== "" ? parseFloat(body.expense) : null;
+    if ("cardcomFee" in body)
+      updateData.cardcomFee =
+        body.cardcomFee !== null && body.cardcomFee !== "" ? parseFloat(body.cardcomFee) : null;
     if ("startDate" in body)
       updateData.startDate =
         body.startDate ? new Date(body.startDate).toISOString() : null;

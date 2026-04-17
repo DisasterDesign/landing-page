@@ -59,6 +59,21 @@ export const createCommentSchema = z.object({
   taskId: z.string().min(1, "Task ID is required"),
 });
 
+// ==================
+// CLIENTS
+// ==================
+
+export const clientPatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  status: z.string().optional(),
+  notes: z.string().nullable().optional(),
+  amount: z.number().nullable().optional(),
+  expense: z.number().min(0).nullable().optional(),
+  cardcomFee: z.number().min(0).nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  paymentDate: z.string().nullable().optional(),
+});
+
 // Blog
 export const createBlogPostSchema = z.object({
   title: z.string().min(1, "Title is required"),

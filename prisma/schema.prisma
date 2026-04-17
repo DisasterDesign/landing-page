@@ -197,17 +197,18 @@ model FontStyle {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  number    Int      @default(autoincrement())
-  name      String
-  status    String   @default("")
-  notes     String?
-  amount    Float?
+  id          String    @id @default(cuid())
+  number      Int       @default(autoincrement())
+  name        String
+  status      String    @default("")
+  notes       String?
+  amount      Float?
   expense     Float?
+  cardcomFee  Float?
   startDate   DateTime?
   paymentDate DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([number])
 }
