@@ -60,6 +60,42 @@ export const createCommentSchema = z.object({
 });
 
 // ==================
+// AGREEMENTS
+// ==================
+
+export const agreementTierEnum = z.enum(["BASIC", "ADVANCED", "PREMIUM"]);
+export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
+
+export const createAgreementSchema = z.object({
+  tier: agreementTierEnum,
+  customerName: z.string().min(1, "שם חובה"),
+  businessName: z.string().optional(),
+  idNumber: z.string().optional(),
+  phone: z.string().min(9, "טלפון לא תקין"),
+  email: z.string().email("אימייל לא תקין"),
+  clientId: z.string().optional(),
+});
+
+export const updateAgreementSchema = z.object({
+  status: agreementStatusEnum.optional(),
+  customerName: z.string().min(1).optional(),
+  businessName: z.string().nullable().optional(),
+  idNumber: z.string().nullable().optional(),
+  phone: z.string().min(9).optional(),
+  email: z.string().email().optional(),
+  clientId: z.string().nullable().optional(),
+});
+
+export const signAgreementSchema = z.object({
+  customerName: z.string().min(1),
+  businessName: z.string().optional(),
+  idNumber: z.string().optional(),
+  phone: z.string().min(9),
+  email: z.string().email(),
+  signatureData: z.string().min(1, "חתימה חובה"),
+});
+
+// ==================
 // CLIENTS
 // ==================
 

@@ -45,6 +45,19 @@ enum LicenseType {
   COMMERCIAL
 }
 
+enum AgreementTier {
+  BASIC
+  ADVANCED
+  PREMIUM
+}
+
+enum AgreementStatus {
+  DRAFT
+  SENT
+  SIGNED
+  CANCELLED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -210,7 +223,35 @@ model Client {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  agreements Agreement[]
+
   @@index([number])
+}
+
+model Agreement {
+  id            String          @id @default(cuid())
+  tier          AgreementTier
+  monthlyPrice  Float
+  customerName  String
+  businessName  String?
+  idNumber      String?
+  phone         String
+  email         String
+  status        AgreementStatus @default(DRAFT)
+  signedAt      DateTime?
+  signatureData String?
+  content       String
+  signToken     String          @unique @default(cuid())
+  createdBy     String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  @@index([status])
+  @@index([clientId])
+  @@index([signToken])
 }
 
 model FontOrder {

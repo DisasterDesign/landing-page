@@ -26,6 +26,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow public agreement signing endpoints
+  if (pathname.startsWith("/api/agreements/sign/")) {
+    return NextResponse.next();
+  }
+
   // Allow public POST to /api/contacts
   if (pathname === "/api/contacts" && req.method === "POST") {
     return NextResponse.next();
