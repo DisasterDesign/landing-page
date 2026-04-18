@@ -39,3 +39,10 @@ const jsonPath = path.join(__dirname, "..", "env-injected.json");
 fs.writeFileSync(jsonPath, JSON.stringify(envMap, null, 2));
 
 console.log(`inject-env: wrote ${count}/${ENV_KEYS.length} env vars`);
+// Debug: show value lengths to confirm they're non-empty
+for (const key of ENV_KEYS) {
+  console.log(`  ${key}: ${(envMap[key] || "").length} chars`);
+}
+// Verify written file
+const written = require("fs").readFileSync(tsPath, "utf8");
+console.log(`inject-env: env-values.ts is ${written.length} bytes, contains ${(written.match(/= "[^"]+"/g) || []).length} non-empty values`);
