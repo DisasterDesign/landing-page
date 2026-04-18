@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "prebuild": "node -e \"const fs=require('fs'); const vars=['GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URI','OAUTH_ENCRYPTION_KEY','CRON_SECRET','BLOG_API_KEY']; const lines=vars.filter(k=>process.env[k]).map(k=>k+'='+process.env[k]); if(lines.length){fs.writeFileSync('.env.production',lines.join('\\n')+'\\n'); console.log('Created .env.production with',lines.length,'vars');} else {console.log('No env vars found, skipping .env.production');}\"",
+    "prebuild": "node scripts/inject-env.js",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
