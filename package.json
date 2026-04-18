@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "prisma generate && next build",
+    "build": "echo '=== ENV DEBUG ===' && echo GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID && echo CRON_SECRET_EXISTS=$([ -z \"$CRON_SECRET\" ] && echo NO || echo YES) && echo BLOG_API_KEY_EXISTS=$([ -z \"$BLOG_API_KEY\" ] && echo NO || echo YES) && echo DATABASE_URL_EXISTS=$([ -z \"$DATABASE_URL\" ] && echo NO || echo YES) && echo '=== END ENV DEBUG ===' && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
