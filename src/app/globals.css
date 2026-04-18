@@ -150,6 +150,7 @@ h1, h2, h3, h4, h5, h6 {
 .admin-light {
   background-color: #ffffff;
   color: #111827;
+  cursor: auto; /* CustomCursor only renders on the marketing site; restore native cursor in admin */
 }
 
 /* Surfaces */
