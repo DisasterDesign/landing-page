@@ -12,11 +12,17 @@ export async function GET() {
     }
 
     const oauthConfigured = getGoogleConfig() !== null;
+    const allEnvKeys = Object.keys(process.env).sort();
     const debugEnv = {
       hasClientId: !!process.env.GOOGLE_CLIENT_ID,
       hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
       hasRedirectUri: !!process.env.GOOGLE_REDIRECT_URI,
       clientIdPrefix: process.env.GOOGLE_CLIENT_ID?.substring(0, 6) || "EMPTY",
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasNextauthSecret: !!process.env.NEXTAUTH_SECRET,
+      hasCronSecret: !!process.env.CRON_SECRET,
+      totalEnvKeys: allEnvKeys.length,
+      envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG")),
     };
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
