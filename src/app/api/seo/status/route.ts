@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getGoogleConfig } from "@/lib/google-oauth";
+import getConfig from "next/config";
 
 export async function GET() {
   try {
@@ -24,6 +25,7 @@ export async function GET() {
       totalEnvKeys: allEnvKeys.length,
       hasTestVar: !!process.env.TEST_VAR,
       testVarValue: process.env.TEST_VAR || "EMPTY",
+      serverConfig: (() => { try { const { serverRuntimeConfig } = getConfig() || {}; return { hasClientId: !!serverRuntimeConfig?.GOOGLE_CLIENT_ID, clientIdPrefix: serverRuntimeConfig?.GOOGLE_CLIENT_ID?.substring(0, 6) || "EMPTY" }; } catch { return "getConfig_failed"; } })(),
       envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG") || k.startsWith("TEST")),
     };
     const integration = await prisma.googleIntegration.findUnique({

@@ -2,8 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: [],
   images: {
     formats: ["image/avif", "image/webp"],
+  },
+  // Explicitly pass server env vars through to runtime
+  serverRuntimeConfig: {
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+    OAUTH_ENCRYPTION_KEY: process.env.OAUTH_ENCRYPTION_KEY,
+    CRON_SECRET: process.env.CRON_SECRET,
+    BLOG_API_KEY: process.env.BLOG_API_KEY,
   },
   async headers() {
     return [
