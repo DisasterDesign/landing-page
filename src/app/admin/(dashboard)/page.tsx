@@ -11,6 +11,27 @@ interface DashboardStats {
   newMessages: number;
 }
 
+interface MyTask {
+  id: string;
+  title: string;
+  status: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
+  dueDate: string | null;
+}
+
+const STATUS_LABEL: Record<MyTask["status"], string> = {
+  TODO: "לביצוע",
+  IN_PROGRESS: "בביצוע",
+  REVIEW: "לבדיקה",
+  DONE: "הושלם",
+};
+
+const STATUS_DOT: Record<MyTask["status"], string> = {
+  TODO: "bg-gray-500",
+  IN_PROGRESS: "bg-cyan",
+  REVIEW: "bg-yellow-500",
+  DONE: "bg-green-500",
+};
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     activeTasks: 0,
@@ -18,14 +39,18 @@ export default function AdminDashboardPage() {
     dueThisWeek: 0,
     newMessages: 0,
   });
+  const [myTasks, setMyTasks] = useState<MyTask[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchAll() {
       try {
-        const res = await fetch("/api/dashboard/stats");
-        if (res.ok) {
-          const data = await res.json();
+        const [statsRes, tasksRes] = await Promise.all([
+          fetch("/api/dashboard/stats"),
+          fetch("/api/dashboard/my-tasks"),
+        ]);
+        if (statsRes.ok) {
+          const data = await statsRes.json();
           setStats({
             activeTasks: data.tasks?.total ?? 0,
             inProgress: data.tasks?.IN_PROGRESS ?? 0,
@@ -33,13 +58,17 @@ export default function AdminDashboardPage() {
             newMessages: data.unreadContacts ?? 0,
           });
         }
+        if (tasksRes.ok) {
+          const data = await tasksRes.json();
+          setMyTasks(data.tasks || []);
+        }
       } catch (err) {
-        console.error("Failed to fetch dashboard stats:", err);
+        console.error("Failed to load dashboard:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchStats();
+    fetchAll();
   }, []);
 
   const statCards = [
@@ -128,6 +157,66 @@ export default function AdminDashboardPage() {
             <p className="text-sm text-gray-400">{card.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* My open tasks */}
+      <div className="tasks-area bg-gray-900 rounded-2xl border border-gray-700 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold">המשימות שלי</h3>
+          <Link
+            href="/admin/tasks"
+            className="text-xs text-cyan hover:text-cyan/80 underline-offset-2 hover:underline"
+          >
+            כל המשימות
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-12 bg-gray-800 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : myTasks.length === 0 ? (
+          <p className="text-sm text-gray-500 py-6 text-center">
+            אין משימות פתוחות שמשויכות אליך 🎉
+          </p>
+        ) : (
+          <ul className="divide-y divide-gray-800">
+            {myTasks.map((t) => {
+              const due = t.dueDate ? new Date(t.dueDate) : null;
+              const overdue = due ? due.getTime() < Date.now() : false;
+              return (
+                <li key={t.id}>
+                  <Link
+                    href={`/admin/tasks/${t.id}`}
+                    className="flex items-center gap-3 py-3 hover:bg-gray-800/40 px-2 -mx-2 rounded-lg transition-colors"
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT[t.status]}`}
+                      aria-hidden
+                    />
+                    <span className="flex-1 text-sm text-white truncate">
+                      {t.title}
+                    </span>
+                    <span className="text-[11px] text-gray-500 shrink-0 hidden sm:inline">
+                      {STATUS_LABEL[t.status]}
+                    </span>
+                    {due && (
+                      <span
+                        className={`text-[11px] shrink-0 ${
+                          overdue ? "text-red-400" : "text-gray-500"
+                        }`}
+                      >
+                        {due.toLocaleDateString("he-IL")}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {/* Revenue Chart */}

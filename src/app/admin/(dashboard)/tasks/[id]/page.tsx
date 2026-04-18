@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
-
 interface Comment {
   id: string;
   content: string;
@@ -17,7 +15,6 @@ interface TaskDetail {
   id: string;
   title: string;
   description: string | null;
-  status: TaskStatus;
   dueDate: string | null;
   tags: string[];
   assignee: { id: string; name: string } | null;
@@ -49,7 +46,6 @@ export default function TaskDetailPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<TaskStatus>("TODO");
   const [assigneeId, setAssigneeId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [tags, setTags] = useState("");
@@ -66,7 +62,6 @@ export default function TaskDetailPage() {
         setTask(t);
         setTitle(t.title);
         setDescription(t.description || "");
-        setStatus(t.status);
         setAssigneeId(t.assignee?.id || "");
         setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : "");
         setTags(t.tags?.join(", ") || "");
@@ -97,7 +92,6 @@ export default function TaskDetailPage() {
         body: JSON.stringify({
           title,
           description: description || null,
-          status,
           assigneeId: assigneeId || null,
           dueDate: dueDate || null,
           tags: tags
@@ -187,7 +181,7 @@ export default function TaskDetailPage() {
   const labelClasses = "block text-sm text-gray-400 mb-1.5";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="tasks-area max-w-3xl mx-auto space-y-6">
       <Toaster position="top-center" />
 
       {/* Header */}
@@ -226,20 +220,6 @@ export default function TaskDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClasses}>סטטוס</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as TaskStatus)}
-              className={selectClasses}
-            >
-              <option value="TODO">לביצוע</option>
-              <option value="IN_PROGRESS">בביצוע</option>
-              <option value="REVIEW">לבדיקה</option>
-              <option value="DONE">הושלם</option>
-            </select>
-          </div>
-
           <div>
             <label className={labelClasses}>אחראי</label>
             <select

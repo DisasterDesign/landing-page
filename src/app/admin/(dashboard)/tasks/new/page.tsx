@@ -9,13 +9,6 @@ interface User {
   name: string;
 }
 
-const statusOptions = [
-  { value: "TODO", label: "לביצוע" },
-  { value: "IN_PROGRESS", label: "בביצוע" },
-  { value: "REVIEW", label: "לבדיקה" },
-  { value: "DONE", label: "הושלם" },
-];
-
 export default function NewTaskPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +17,6 @@ export default function NewTaskPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("TODO");
   const [assigneeId, setAssigneeId] = useState("");
   const [dueDate, setDueDate] = useState("");
 
@@ -70,7 +62,6 @@ export default function NewTaskPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,
-          status,
           assigneeId,
           dueDate: dueDate || undefined,
         }),
@@ -92,7 +83,7 @@ export default function NewTaskPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6" dir="rtl">
+    <div className="tasks-area max-w-2xl mx-auto space-y-6" dir="rtl">
       <Toaster position="top-center" />
 
       <div className="flex items-center gap-3">
@@ -133,22 +124,6 @@ export default function NewTaskPage() {
             rows={4}
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-pink transition-colors resize-none"
           />
-        </div>
-
-        {/* Status */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-300">סטטוס</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors"
-          >
-            {statusOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Assignee */}

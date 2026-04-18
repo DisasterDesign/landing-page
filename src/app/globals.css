@@ -129,6 +129,17 @@ h1, h2, h3, h4, h5, h6 {
   font-family: "Meruba", "Anomalia", system-ui, sans-serif;
 }
 
+/* Tasks system uses Birzia throughout (incl. headings) */
+.tasks-area,
+.tasks-area h1,
+.tasks-area h2,
+.tasks-area h3,
+.tasks-area h4,
+.tasks-area h5,
+.tasks-area h6 {
+  font-family: "Birzia", "Meruba", system-ui, sans-serif;
+}
+
 @media (pointer: coarse) {
   body {
     cursor: auto;
