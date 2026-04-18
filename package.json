@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "echo '=== ENV DEBUG ===' && echo GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID && echo CRON_SECRET_EXISTS=$([ -z \"$CRON_SECRET\" ] && echo NO || echo YES) && echo BLOG_API_KEY_EXISTS=$([ -z \"$BLOG_API_KEY\" ] && echo NO || echo YES) && echo DATABASE_URL_EXISTS=$([ -z \"$DATABASE_URL\" ] && echo NO || echo YES) && echo '=== END ENV DEBUG ===' && prisma generate && next build",
+    "build": "echo '=== SHELL ENV ===' && echo GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID && node -e \"console.log('=== NODE ENV ==='); console.log('GOOGLE_CLIENT_ID:', !!process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_ID?.substring(0,10)); console.log('DATABASE_URL:', !!process.env.DATABASE_URL); console.log('CRON_SECRET:', !!process.env.CRON_SECRET); console.log('ALL_GOOGLE_KEYS:', Object.keys(process.env).filter(k=>k.startsWith('GOOGLE'))); console.log('=== END NODE ENV ===');\" && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
