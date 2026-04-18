@@ -50,6 +50,7 @@ export default function Marquee({
           flex-shrink: 0;
         }
         .marquee-text {
+          font-family: "Meruba", "Anomalia", system-ui, sans-serif;
           font-size: clamp(2.5rem, 6vw, 5rem);
           font-weight: 700;
           color: white;

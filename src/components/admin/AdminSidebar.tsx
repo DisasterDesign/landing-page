@@ -139,7 +139,7 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden md:flex flex-col fixed top-0 right-0 h-screen bg-gray-900 border-l border-gray-700 z-40 transition-all duration-300 ${
+        className={`hidden md:flex flex-col fixed top-0 right-0 h-screen bg-gray-900 border-l border-gray-700 z-40 transition-all duration-300 font-meruba ${
           collapsed ? "w-[72px]" : "w-60"
         }`}
       >
@@ -214,7 +214,7 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
       <button
         onClick={() => setMobileOpen(true)}
         aria-label="פתח תפריט"
-        className="md:hidden fixed top-3 right-3 z-50 w-11 h-11 rounded-xl bg-gray-900/90 backdrop-blur border border-gray-700 text-white flex items-center justify-center active:bg-gray-800"
+        className="md:hidden fixed top-3 right-3 z-50 w-11 h-11 rounded-xl bg-gray-900/90 backdrop-blur border border-gray-700 text-white flex items-center justify-center active:bg-gray-800 font-meruba"
       >
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -232,7 +232,7 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
 
       {/* Mobile drawer panel */}
       <aside
-        className={`md:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gray-900 border-l border-gray-700 z-50 flex flex-col transition-transform duration-300 ${
+        className={`md:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gray-900 border-l border-gray-700 z-50 flex flex-col transition-transform duration-300 font-meruba ${
           mobileOpen ? "translate-x-0" : "translate-x-full"
         }`}
         aria-hidden={!mobileOpen}

@@ -145,8 +145,8 @@ export default function BlogPageClient() {
                   <Link href={`/blog/${post.slug}`} className="group block">
                     <div className="relative">
                       {/* Chromatic offset layers */}
-                      <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 bg-cyan/20 rounded-2xl transition-transform duration-300 group-hover:translate-x-2.5 group-hover:translate-y-2.5" />
-                      <div className="absolute inset-0 -translate-x-1.5 -translate-y-1.5 bg-pink/20 rounded-2xl transition-transform duration-300 group-hover:-translate-x-2.5 group-hover:-translate-y-2.5" />
+                      <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 bg-cyan/20 rounded-2xl transition-transform duration-300 group-hover:translate-x-2.5 group-hover:translate-y-2.5 pointer-events-none" />
+                      <div className="absolute inset-0 -translate-x-1.5 -translate-y-1.5 bg-pink/20 rounded-2xl transition-transform duration-300 group-hover:-translate-x-2.5 group-hover:-translate-y-2.5 pointer-events-none" />
 
                       {/* Main card */}
                       <div className="relative bg-gray-900 border border-gray-800 rounded-2xl p-6 transition-all duration-300 group-hover:border-gray-600 group-hover:-translate-y-1">
