@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { updateTaskSchema } from "@/lib/validations";
+import { createNotification } from "@/lib/notifications";
 
 // GET - Auth required: single task with comments
 export async function GET(
@@ -69,6 +70,11 @@ export async function PATCH(
 
     const { dueDate, ...rest } = parsed.data;
 
+    const previous = await prisma.task.findUnique({
+      where: { id },
+      select: { assigneeId: true },
+    });
+
     const task = await prisma.task.update({
       where: { id },
       data: {
@@ -83,6 +89,22 @@ export async function PATCH(
         creator: { select: { id: true, name: true, email: true } },
       },
     });
+
+    if (
+      task.assigneeId &&
+      task.assigneeId !== previous?.assigneeId
+    ) {
+      await createNotification(
+        {
+          recipientId: task.assigneeId,
+          type: "TASK_ASSIGNED",
+          title: "משימה חדשה שויכה אליך",
+          body: task.title,
+          taskId: task.id,
+        },
+        session.user.id
+      );
+    }
 
     return NextResponse.json(task);
   } catch (error) {

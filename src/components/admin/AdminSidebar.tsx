@@ -25,15 +25,6 @@ const navItems = [
     ),
   },
   {
-    label: "פרויקטים",
-    href: "/admin/projects",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-      </svg>
-    ),
-  },
-  {
     label: "בלוג",
     href: "/admin/blog",
     icon: (
@@ -210,13 +201,13 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile hamburger button — fixed in header area */}
+      {/* Mobile hamburger FAB — centered at bottom */}
       <button
         onClick={() => setMobileOpen(true)}
         aria-label="פתח תפריט"
-        className="md:hidden fixed top-3 right-3 z-50 w-11 h-11 rounded-xl bg-gray-900/90 backdrop-blur border border-gray-700 text-white flex items-center justify-center active:bg-gray-800 font-meruba"
+        className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full bg-pink hover:bg-pink-light text-white flex items-center justify-center shadow-lg shadow-pink/40 active:scale-95 transition-transform font-meruba"
       >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>

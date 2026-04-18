@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import NotificationBell from "@/components/admin/NotificationBell";
 
 export default async function DashboardLayout({
   children,
@@ -28,11 +29,12 @@ export default async function DashboardLayout({
       {/* Main content area */}
       <div className="md:mr-60 min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 flex items-center justify-between px-6 pr-20 md:pr-6">
+        <header className="sticky top-0 z-30 h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <h1 className="hidden md:block text-lg font-bold text-white">ניהול</h1>
+            <h1 className="text-lg font-bold text-white">ניהול</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <NotificationBell />
             <span className="text-sm text-gray-400 hidden md:block">
               {session.user.name}
             </span>
@@ -43,7 +45,7 @@ export default async function DashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="p-4 md:p-6 pb-28 md:pb-6">{children}</main>
       </div>
       <InstallPrompt />
     </>

@@ -58,6 +58,12 @@ enum AgreementStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_COMMENTED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -72,6 +78,7 @@ model User {
   createdTasks  Task[]   @relation("CreatedTasks")
   comments      Comment[]
   blogPosts     BlogPost[]
+  notifications Notification[] @relation("NotificationRecipient")
 }
 
 model Project {
@@ -105,13 +112,32 @@ model Task {
   creatorId String
   creator   User     @relation("CreatedTasks", fields: [creatorId], references: [id])
 
-  comments Comment[]
+  comments      Comment[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([projectId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  title       String
+  body        String?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  recipientId String
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt])
+  @@index([recipientId, createdAt])
 }
 
 model Comment {

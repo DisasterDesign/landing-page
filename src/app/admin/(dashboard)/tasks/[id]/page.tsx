@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
-type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
 interface Comment {
   id: string;
@@ -19,11 +18,9 @@ interface TaskDetail {
   title: string;
   description: string | null;
   status: TaskStatus;
-  priority: Priority;
   dueDate: string | null;
   tags: string[];
   assignee: { id: string; name: string } | null;
-  project: { id: string; name: string } | null;
   comments: Comment[];
 }
 
@@ -43,7 +40,6 @@ export default function TaskDetailPage() {
   const router = useRouter();
 
   const [task, setTask] = useState<TaskDetail | null>(null);
-  const [projects, setProjects] = useState<SelectOption[]>([]);
   const [users, setUsers] = useState<SelectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,17 +50,14 @@ export default function TaskDetailPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
-  const [priority, setPriority] = useState<Priority>("MEDIUM");
-  const [projectId, setProjectId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [tags, setTags] = useState("");
 
   const fetchTask = useCallback(async () => {
     try {
-      const [taskRes, projectsRes, usersRes] = await Promise.all([
+      const [taskRes, usersRes] = await Promise.all([
         fetch(`/api/tasks/${id}`),
-        fetch("/api/projects"),
         fetch("/api/users"),
       ]);
 
@@ -74,17 +67,11 @@ export default function TaskDetailPage() {
         setTitle(t.title);
         setDescription(t.description || "");
         setStatus(t.status);
-        setPriority(t.priority);
-        setProjectId(t.project?.id || "");
         setAssigneeId(t.assignee?.id || "");
         setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : "");
         setTags(t.tags?.join(", ") || "");
       }
 
-      if (projectsRes.ok) {
-        const data = await projectsRes.json();
-        setProjects(Array.isArray(data) ? data : data.projects || []);
-      }
       if (usersRes.ok) {
         const data = await usersRes.json();
         setUsers(Array.isArray(data) ? data : data.users || []);
@@ -111,8 +98,6 @@ export default function TaskDetailPage() {
           title,
           description: description || null,
           status,
-          priority,
-          projectId: projectId || null,
           assigneeId: assigneeId || null,
           dueDate: dueDate || null,
           tags: tags
@@ -252,36 +237,6 @@ export default function TaskDetailPage() {
               <option value="IN_PROGRESS">בביצוע</option>
               <option value="REVIEW">לבדיקה</option>
               <option value="DONE">הושלם</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClasses}>עדיפות</label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-              className={selectClasses}
-            >
-              <option value="LOW">נמוכה</option>
-              <option value="MEDIUM">בינונית</option>
-              <option value="HIGH">גבוהה</option>
-              <option value="URGENT">דחופה</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClasses}>פרויקט</label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className={selectClasses}
-            >
-              <option value="">ללא פרויקט</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
             </select>
           </div>
 

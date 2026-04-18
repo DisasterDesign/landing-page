@@ -4,11 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 
-interface Project {
-  id: string;
-  name: string;
-}
-
 interface User {
   id: string;
   name: string;
@@ -21,48 +16,36 @@ const statusOptions = [
   { value: "DONE", label: "הושלם" },
 ];
 
-const priorityOptions = [
-  { value: "LOW", label: "נמוכה" },
-  { value: "MEDIUM", label: "בינונית" },
-  { value: "HIGH", label: "גבוהה" },
-  { value: "URGENT", label: "דחופה" },
-];
-
 export default function NewTaskPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("TODO");
-  const [priority, setPriority] = useState("MEDIUM");
-  const [projectId, setProjectId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [dueDate, setDueDate] = useState("");
 
   useEffect(() => {
-    async function fetchOptions() {
+    async function fetchUsers() {
       try {
-        const [projectsRes, usersRes] = await Promise.all([
-          fetch("/api/projects"),
-          fetch("/api/users"),
-        ]);
-
-        if (projectsRes.ok) {
-          const data = await projectsRes.json();
-          setProjects(Array.isArray(data) ? data : data.data || data.projects || []);
+        const res = await fetch("/api/users");
+        if (!res.ok) {
+          throw new Error(`status ${res.status}`);
         }
-        if (usersRes.ok) {
-          const data = await usersRes.json();
-          setUsers(Array.isArray(data) ? data : data.data || data.users || []);
-        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.users || [];
+        setUsers(list);
       } catch (err) {
-        console.error("Failed to fetch options:", err);
+        console.error("Failed to fetch users:", err);
+        toast.error("שגיאה בטעינת רשימת המשתמשים");
+      } finally {
+        setLoadingUsers(false);
       }
     }
-    fetchOptions();
+    fetchUsers();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -88,8 +71,6 @@ export default function NewTaskPage() {
           title: title.trim(),
           description: description.trim() || undefined,
           status,
-          priority,
-          projectId: projectId || undefined,
           assigneeId,
           dueDate: dueDate || undefined,
         }),
@@ -154,51 +135,17 @@ export default function NewTaskPage() {
           />
         </div>
 
-        {/* Status + Priority row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-300">סטטוס</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors"
-            >
-              {statusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-300">עדיפות</label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors"
-            >
-              {priorityOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Project */}
+        {/* Status */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-300">פרויקט</label>
+          <label className="block text-sm font-medium text-gray-300">סטטוס</label>
           <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors"
           >
-            <option value="">ללא פרויקט</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -213,15 +160,19 @@ export default function NewTaskPage() {
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
             required
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors"
+            disabled={loadingUsers}
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors disabled:opacity-50"
           >
-            <option value="">בחר משתמש</option>
+            <option value="">{loadingUsers ? "טוען..." : "בחר משתמש"}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
             ))}
           </select>
+          {!loadingUsers && users.length === 0 && (
+            <p className="text-xs text-red-400">לא נטענו משתמשים — בדוק חיבור לשרת.</p>
+          )}
         </div>
 
         {/* Due Date */}

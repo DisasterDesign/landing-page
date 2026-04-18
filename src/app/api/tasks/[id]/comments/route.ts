@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { createNotification } from "@/lib/notifications";
 
 // POST - Auth required: add comment to task
 export async function POST(
@@ -33,6 +34,23 @@ export async function POST(
         author: { select: { id: true, name: true } },
       },
     });
+
+    const task = await prisma.task.findUnique({
+      where: { id },
+      select: { assigneeId: true, title: true },
+    });
+    if (task?.assigneeId) {
+      await createNotification(
+        {
+          recipientId: task.assigneeId,
+          type: "TASK_COMMENTED",
+          title: `${comment.author.name} הוסיף תגובה`,
+          body: task.title,
+          taskId: id,
+        },
+        session.user.id
+      );
+    }
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {

@@ -98,7 +98,7 @@ export default function InstallPrompt() {
         <div
           role="dialog"
           aria-label="התקנת אפליקציה"
-          className="fixed bottom-4 inset-x-4 md:right-auto md:left-4 md:max-w-sm z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-4 flex items-center gap-3"
+          className="fixed bottom-28 md:bottom-4 inset-x-4 md:right-auto md:left-4 md:max-w-sm z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-4 flex items-center gap-3"
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white">התקן את האפליקציה</p>
@@ -184,7 +184,7 @@ export default function InstallPrompt() {
     <div
       role="dialog"
       aria-label="התקנת אפליקציה"
-      className="fixed bottom-4 inset-x-4 md:right-auto md:left-4 md:max-w-sm z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-4 flex items-center gap-3"
+      className="fixed bottom-28 md:bottom-4 inset-x-4 md:right-auto md:left-4 md:max-w-sm z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-4 flex items-center gap-3"
     >
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-white">התקן את האפליקציה</p>

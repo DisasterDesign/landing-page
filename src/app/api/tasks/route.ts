@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createTaskSchema } from "@/lib/validations";
+import { createNotification } from "@/lib/notifications";
 import { Prisma } from "@prisma/client";
 
 // GET - Auth required: list tasks with filters
@@ -90,6 +91,19 @@ export async function POST(request: NextRequest) {
         creator: { select: { id: true, name: true, email: true } },
       },
     });
+
+    if (task.assigneeId) {
+      await createNotification(
+        {
+          recipientId: task.assigneeId,
+          type: "TASK_ASSIGNED",
+          title: "משימה חדשה שויכה אליך",
+          body: task.title,
+          taskId: task.id,
+        },
+        session.user.id
+      );
+    }
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
