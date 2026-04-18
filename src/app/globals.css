@@ -307,6 +307,61 @@ h1, h2, h3, h4, h5, h6 {
 .admin-light .shadow-pink\/40 { box-shadow: 0 10px 15px -3px rgba(17, 24, 39, 0.18) !important; }
 .admin-light .shadow-cyan\/30 { box-shadow: 0 10px 15px -3px rgba(75, 85, 99, 0.18) !important; }
 
+/* ===== Contrast fixes: keep button/active-state text legible ===== */
+
+/* Primary buttons keep white text on dark bg (specificity 20 > 10 wins
+   over the global .text-white override). Same for nested spans/icons. */
+.admin-light .bg-pink.text-white,
+.admin-light .bg-pink .text-white,
+.admin-light .bg-pink-light.text-white,
+.admin-light .bg-pink-light .text-white,
+.admin-light .bg-pink-dark.text-white,
+.admin-light .bg-pink-dark .text-white { color: #ffffff !important; }
+
+/* Cyan FAB / secondary actions: force readable text + a darker bg */
+.admin-light .bg-cyan { background-color: #374151 !important; }
+.admin-light .bg-cyan.text-white,
+.admin-light .bg-cyan .text-white,
+.admin-light .bg-cyan.text-black,
+.admin-light .bg-cyan .text-black { color: #ffffff !important; }
+
+/* Active state pattern: bg-gray-900 + text-white together = real dark accent
+   (e.g. SEO sub-nav active tab). Without this both invert to white-on-white. */
+.admin-light .bg-gray-900.text-white {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+}
+
+/* Notification bell unread badge */
+.admin-light .bg-pink.border-gray-900 {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+/* Sidebar active nav item: was bg-pink/15 + text-pink */
+.admin-light .bg-pink\/15.text-pink {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  font-weight: 700;
+}
+
+/* Agreements tier card when selected: border-pink + bg-pink/15 */
+.admin-light .border-pink.bg-pink\/15 {
+  background-color: #f3f4f6 !important;
+  border-color: #111827 !important;
+}
+.admin-light .border-pink.bg-pink\/15.text-white,
+.admin-light .border-pink.bg-pink\/15 .text-white {
+  color: #111827 !important;
+}
+
+/* Input focus visibility — subtle dark ring */
+.admin-light .focus\:border-pink:focus {
+  border-color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08) !important;
+}
+
 @media (pointer: coarse) {
   body {
     cursor: auto;
