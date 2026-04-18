@@ -1,11 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
+import { OAUTH_ENCRYPTION_KEY } from "@/lib/env-values";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
 function getKey(): Buffer {
-  const raw = process.env.OAUTH_ENCRYPTION_KEY || "";
+  const raw = OAUTH_ENCRYPTION_KEY || process.env.OAUTH_ENCRYPTION_KEY || "";
   if (!raw) {
     throw new Error("OAUTH_ENCRYPTION_KEY is not configured");
   }

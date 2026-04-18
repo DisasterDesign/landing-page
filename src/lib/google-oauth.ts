@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } from "@/lib/env-values";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/webmasters.readonly",
@@ -18,9 +19,9 @@ export interface GoogleConfig {
 }
 
 export function getGoogleConfig(): GoogleConfig | null {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  const clientId = GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = GOOGLE_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }

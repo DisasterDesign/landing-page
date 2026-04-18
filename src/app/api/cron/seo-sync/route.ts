@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncIntegration } from "@/lib/seo-sync";
+import { CRON_SECRET } from "@/lib/env-values";
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   // manual triggers from the local CLI.
   const isVercelCron = req.headers.get("user-agent")?.includes("vercel-cron");
   const auth = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || "";
+  const cronSecret = CRON_SECRET || process.env.CRON_SECRET || "";
   const expected = cronSecret
     ? `Bearer ${cronSecret}`
     : null;
