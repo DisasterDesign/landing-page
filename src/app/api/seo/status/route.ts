@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getGoogleConfig } from "@/lib/google-oauth";
+import * as envValues from "@/lib/env-values";
 
 export async function GET() {
   try {
@@ -12,6 +13,15 @@ export async function GET() {
     }
 
     const oauthConfigured = getGoogleConfig() !== null;
+
+    // DEBUG — remove after confirming env injection works
+    const debug = {
+      envValuesClientId: !!envValues.GOOGLE_CLIENT_ID,
+      envValuesClientIdLen: (envValues.GOOGLE_CLIENT_ID || "").length,
+      processEnvClientId: !!process.env.GOOGLE_CLIENT_ID,
+      processEnvClientIdLen: (process.env.GOOGLE_CLIENT_ID || "").length,
+      allEnvValuesKeys: Object.keys(envValues).filter(k => !k.startsWith("__")),
+    };
 
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
@@ -26,6 +36,7 @@ export async function GET() {
 
     return NextResponse.json({
       oauthConfigured,
+      debug,
       connected: integration !== null,
       integration,
     });
