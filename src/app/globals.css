@@ -140,6 +140,121 @@ h1, h2, h3, h4, h5, h6 {
   font-family: "Birzia", "Meruba", system-ui, sans-serif;
 }
 
+/* ==========================================================================
+   Light theme for the admin backend.
+   Scoped to the .admin-light wrapper on the admin root layout, so marketing
+   pages stay dark. Overrides the gray utility classes by remapping their
+   colors. Brand accents (pink/cyan/red/green/yellow) stay as-is.
+   ========================================================================== */
+
+.admin-light {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+/* Surfaces */
+.admin-light .bg-black,
+.admin-light .bg-gray-950,
+.admin-light .bg-gray-900 { background-color: #ffffff !important; }
+.admin-light .bg-gray-900\/80,
+.admin-light .bg-gray-900\/90 { background-color: rgba(255, 255, 255, 0.92) !important; }
+.admin-light .bg-gray-800 { background-color: #f3f4f6 !important; }
+.admin-light .bg-gray-800\/80 { background-color: rgba(243, 244, 246, 0.85) !important; }
+.admin-light .bg-gray-800\/60 { background-color: rgba(243, 244, 246, 0.7) !important; }
+.admin-light .bg-gray-800\/50 { background-color: rgba(243, 244, 246, 0.6) !important; }
+.admin-light .bg-gray-800\/40 { background-color: rgba(243, 244, 246, 0.5) !important; }
+.admin-light .bg-gray-800\/30 { background-color: rgba(243, 244, 246, 0.4) !important; }
+.admin-light .bg-gray-700 { background-color: #e5e7eb !important; }
+.admin-light .bg-gray-700\/40,
+.admin-light .bg-gray-700\/30,
+.admin-light .bg-gray-700\/20 { background-color: rgba(229, 231, 235, 0.5) !important; }
+
+/* Hover surfaces */
+.admin-light .hover\:bg-gray-800:hover,
+.admin-light .hover\:bg-gray-800\/30:hover,
+.admin-light .hover\:bg-gray-800\/40:hover,
+.admin-light .hover\:bg-gray-800\/50:hover,
+.admin-light .hover\:bg-gray-800\/60:hover { background-color: #f3f4f6 !important; }
+.admin-light .hover\:bg-gray-700:hover { background-color: #e5e7eb !important; }
+.admin-light .group:hover .group-hover\:bg-gray-800\/50,
+.admin-light .group\/row:hover .group-hover\/row\:bg-gray-800 { background-color: #f3f4f6 !important; }
+.admin-light .active\:bg-gray-800:active { background-color: #f3f4f6 !important; }
+
+/* Borders */
+.admin-light .border-gray-950,
+.admin-light .border-gray-900,
+.admin-light .border-gray-800,
+.admin-light .border-gray-800\/50 { border-color: #e5e7eb !important; }
+.admin-light .border-gray-700,
+.admin-light .border-gray-700\/50 { border-color: #d1d5db !important; }
+.admin-light .border-gray-600 { border-color: #9ca3af !important; }
+
+/* Borders inside hover/group */
+.admin-light .hover\:border-gray-700:hover,
+.admin-light .hover\:border-gray-700\/50:hover { border-color: #9ca3af !important; }
+.admin-light .hover\:border-gray-600:hover { border-color: #6b7280 !important; }
+.admin-light .group:hover .group-hover\:border-gray-700\/50,
+.admin-light .group:hover .group-hover\:border-gray-600 { border-color: #9ca3af !important; }
+.admin-light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e5e7eb !important; }
+
+/* Text — invert near-white tones to dark */
+.admin-light .text-white { color: #111827 !important; }
+.admin-light .text-gray-100 { color: #1f2937 !important; }
+.admin-light .text-gray-200 { color: #1f2937 !important; }
+.admin-light .text-gray-300 { color: #374151 !important; }
+.admin-light .text-gray-400 { color: #4b5563 !important; }
+.admin-light .text-gray-500 { color: #6b7280 !important; }
+.admin-light .text-gray-600 { color: #9ca3af !important; }
+.admin-light .text-gray-700 { color: #d1d5db !important; }
+
+.admin-light .hover\:text-white:hover { color: #111827 !important; }
+.admin-light .hover\:text-gray-300:hover { color: #374151 !important; }
+
+/* Placeholders */
+.admin-light .placeholder-gray-500::placeholder,
+.admin-light .placeholder\:text-gray-500::placeholder { color: #9ca3af !important; }
+
+/* Inputs / selects / textareas — surfaces inside forms get a subtle bg */
+.admin-light input,
+.admin-light textarea,
+.admin-light select {
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+}
+.admin-light input:focus,
+.admin-light textarea:focus,
+.admin-light select:focus {
+  border-color: var(--color-pink);
+}
+
+/* Form fields that explicitly use bg-gray-800 — keep them slightly grey for
+   contrast against the page bg */
+.admin-light input.bg-gray-800,
+.admin-light textarea.bg-gray-800,
+.admin-light select.bg-gray-800 {
+  background-color: #f9fafb !important;
+}
+
+/* Sticky table cells often re-declare bg-gray-950 / bg-gray-800/50 — covered
+   by the surface rules above. Make sure sticky cells get a solid white bg
+   when they're stuck so they don't show content behind. */
+.admin-light .sticky.bg-gray-950 { background-color: #ffffff !important; }
+.admin-light .sticky.bg-gray-800 { background-color: #f3f4f6 !important; }
+
+/* The InstallPrompt and Modal use bg-gray-900 too — they live under
+   .admin-light when shown on admin pages, so they get inverted automatically.
+   Add a soft shadow so floating elements are visible against white. */
+.admin-light .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.18) !important; }
+.admin-light .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.12) !important; }
+
+/* Backdrop overlays (drawer, modal) — keep them dark for separation */
+.admin-light .bg-black\/70,
+.admin-light .bg-black\/80 { background-color: rgba(17, 24, 39, 0.55) !important; }
+
+/* Toaster background should stay legible — react-hot-toast inlines styles
+   so we don't need to override here. */
+
 @media (pointer: coarse) {
   body {
     cursor: auto;
