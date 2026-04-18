@@ -12,6 +12,12 @@ export async function GET() {
     }
 
     const oauthConfigured = getGoogleConfig() !== null;
+    const debugEnv = {
+      hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+      hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+      hasRedirectUri: !!process.env.GOOGLE_REDIRECT_URI,
+      clientIdPrefix: process.env.GOOGLE_CLIENT_ID?.substring(0, 6) || "EMPTY",
+    };
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
       select: {
@@ -25,6 +31,7 @@ export async function GET() {
 
     return NextResponse.json({
       oauthConfigured,
+      debugEnv,
       connected: integration !== null,
       integration,
     });
