@@ -24,7 +24,9 @@ export async function GET() {
       totalEnvKeys: allEnvKeys.length,
       hasTestVar: !!process.env.TEST_VAR,
       testVarValue: process.env.TEST_VAR || "EMPTY",
-      buildInlined: "using next.config env section",
+      debugHardcoded: process.env.DEBUG_HARDCODED || "MISSING",
+      debugClientId: process.env.DEBUG_CLIENT_ID || "MISSING",
+      debugDbExists: process.env.DEBUG_DB_URL_EXISTS || "MISSING",
       envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG") || k.startsWith("TEST")),
     };
     const integration = await prisma.googleIntegration.findUnique({
