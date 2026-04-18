@@ -7,7 +7,7 @@ import { startOfWeek, endOfWeek } from "date-fns";
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -16,54 +16,33 @@ export async function GET() {
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
     const [
-      tasksByStatus,
-      projectCount,
+      openTasks,
+      doneTasks,
+      myOpenTasks,
       unreadContacts,
       tasksDueThisWeek,
     ] = await Promise.all([
-      // Task counts by status
-      prisma.task.groupBy({
-        by: ["status"],
-        _count: { id: true },
+      prisma.task.count({ where: { status: "TODO" } }),
+      prisma.task.count({ where: { status: "DONE" } }),
+      prisma.task.count({
+        where: { status: "TODO", assigneeId: session.user.id },
       }),
-      // Total project count
-      prisma.project.count(),
-      // Unread contact submissions
-      prisma.contactSubmission.count({
-        where: { isRead: false },
-      }),
-      // Tasks due this week
+      prisma.contactSubmission.count({ where: { isRead: false } }),
       prisma.task.count({
         where: {
-          dueDate: {
-            gte: weekStart,
-            lte: weekEnd,
-          },
-          status: { not: "DONE" },
+          dueDate: { gte: weekStart, lte: weekEnd },
+          status: "TODO",
         },
       }),
     ]);
 
-    // Transform task counts into an object
-    const taskCounts = {
-      TODO: 0,
-      IN_PROGRESS: 0,
-      REVIEW: 0,
-      DONE: 0,
-    };
-
-    for (const group of tasksByStatus) {
-      taskCounts[group.status] = group._count.id;
-    }
-
-    const totalTasks = Object.values(taskCounts).reduce((a, b) => a + b, 0);
-
     return NextResponse.json({
       tasks: {
-        total: totalTasks,
-        ...taskCounts,
+        total: openTasks + doneTasks,
+        TODO: openTasks,
+        DONE: doneTasks,
       },
-      projectCount,
+      myOpenTasks,
       unreadContacts,
       tasksDueThisWeek,
     });

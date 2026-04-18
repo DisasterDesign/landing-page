@@ -6,7 +6,7 @@ import RevenueChart from "@/components/admin/RevenueChart";
 
 interface DashboardStats {
   activeTasks: number;
-  inProgress: number;
+  myOpen: number;
   dueThisWeek: number;
   newMessages: number;
 }
@@ -20,7 +20,7 @@ interface MyTask {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     activeTasks: 0,
-    inProgress: 0,
+    myOpen: 0,
     dueThisWeek: 0,
     newMessages: 0,
   });
@@ -37,8 +37,8 @@ export default function AdminDashboardPage() {
         if (statsRes.ok) {
           const data = await statsRes.json();
           setStats({
-            activeTasks: data.tasks?.total ?? 0,
-            inProgress: data.tasks?.IN_PROGRESS ?? 0,
+            activeTasks: data.tasks?.TODO ?? 0,
+            myOpen: data.myOpenTasks ?? 0,
             dueThisWeek: data.tasksDueThisWeek ?? 0,
             newMessages: data.unreadContacts ?? 0,
           });
@@ -68,12 +68,12 @@ export default function AdminDashboardPage() {
       ),
     },
     {
-      label: "בביצוע",
-      value: stats.inProgress,
+      label: "המשימות שלי",
+      value: stats.myOpen,
       accent: "cyan",
       icon: (
         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       ),
     },
