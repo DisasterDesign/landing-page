@@ -22,7 +22,9 @@ export async function GET() {
       hasNextauthSecret: !!process.env.NEXTAUTH_SECRET,
       hasCronSecret: !!process.env.CRON_SECRET,
       totalEnvKeys: allEnvKeys.length,
-      envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG")),
+      hasTestVar: !!process.env.TEST_VAR,
+      testVarValue: process.env.TEST_VAR || "EMPTY",
+      envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG") || k.startsWith("TEST")),
     };
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
