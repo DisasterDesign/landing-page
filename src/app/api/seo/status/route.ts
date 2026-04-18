@@ -12,23 +12,17 @@ export async function GET() {
     }
 
     const oauthConfigured = getGoogleConfig() !== null;
-    const allEnvKeys = Object.keys(process.env).sort();
+
+    // Temporary debug - remove after confirming env vars work
     const debugEnv = {
       hasClientId: !!process.env.GOOGLE_CLIENT_ID,
       hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
       hasRedirectUri: !!process.env.GOOGLE_REDIRECT_URI,
-      clientIdPrefix: process.env.GOOGLE_CLIENT_ID?.substring(0, 6) || "EMPTY",
-      hasDatabaseUrl: !!process.env.DATABASE_URL,
-      hasNextauthSecret: !!process.env.NEXTAUTH_SECRET,
+      hasOauthKey: !!process.env.OAUTH_ENCRYPTION_KEY,
       hasCronSecret: !!process.env.CRON_SECRET,
-      totalEnvKeys: allEnvKeys.length,
-      hasTestVar: !!process.env.TEST_VAR,
-      testVarValue: process.env.TEST_VAR || "EMPTY",
-      debugHardcoded: process.env.DEBUG_HARDCODED || "MISSING",
-      debugClientId: process.env.DEBUG_CLIENT_ID || "MISSING",
-      debugDbExists: process.env.DEBUG_DB_URL_EXISTS || "MISSING",
-      envKeySample: allEnvKeys.filter(k => k.startsWith("GOOGLE") || k.startsWith("OAUTH") || k.startsWith("DATABASE") || k.startsWith("NEXTAUTH") || k.startsWith("CRON") || k.startsWith("BLOG") || k.startsWith("TEST")),
+      clientIdPrefix: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) || "EMPTY",
     };
+
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
       select: {
@@ -54,4 +48,3 @@ export async function GET() {
     );
   }
 }
-// plain-type-env-test

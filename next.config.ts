@@ -5,11 +5,14 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
-  // Debug: check if env vars exist at build time
+  // Inline env vars at build time (workaround for Vercel runtime injection issue)
   env: {
-    DEBUG_HARDCODED: "works",
-    DEBUG_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "BUILD_EMPTY",
-    DEBUG_DB_URL_EXISTS: process.env.DATABASE_URL ? "yes" : "no",
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",
+    OAUTH_ENCRYPTION_KEY: process.env.OAUTH_ENCRYPTION_KEY || "",
+    CRON_SECRET: process.env.CRON_SECRET || "",
+    BLOG_API_KEY: process.env.BLOG_API_KEY || "",
   },
   async headers() {
     return [
