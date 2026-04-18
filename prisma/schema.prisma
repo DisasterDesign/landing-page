@@ -77,6 +77,8 @@ model User {
   comments      Comment[]
   blogPosts     BlogPost[]
   notifications Notification[] @relation("NotificationRecipient")
+  googleIntegration GoogleIntegration?
+  utmLinks      UtmLink[]
 }
 
 model Project {
@@ -298,4 +300,87 @@ model FontOrder {
   fontFamily   FontFamily @relation(fields: [fontFamilyId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+// ==================
+// SEO / GOOGLE
+// ==================
+
+model GoogleIntegration {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email         String?
+  accessToken   String   // AES-256-GCM encrypted
+  refreshToken  String   // AES-256-GCM encrypted
+  expiresAt     DateTime
+  scopes        String[]
+  gscSiteUrl    String?
+  ga4PropertyId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SeoSnapshot {
+  id               String   @id @default(cuid())
+  date             DateTime @db.Date
+  totalClicks      Int      @default(0)
+  totalImpressions Int      @default(0)
+  avgCtr           Float    @default(0)
+  avgPosition      Float    @default(0)
+  organicSessions  Int      @default(0)
+  referralSessions Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@unique([date])
+  @@index([date])
+}
+
+model SeoQuery {
+  id          String   @id @default(cuid())
+  query       String
+  clicks      Int
+  impressions Int
+  ctr         Float
+  position    Float
+  topPage     String?
+  windowStart DateTime @db.Date
+  windowEnd   DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  @@unique([query, windowStart])
+  @@index([clicks])
+  @@index([impressions])
+  @@index([position])
+}
+
+model Backlink {
+  id           String   @id @default(cuid())
+  sourceDomain String
+  targetUrl    String
+  firstSeen    DateTime
+  lastSeen     DateTime @updatedAt
+
+  @@unique([sourceDomain, targetUrl])
+  @@index([sourceDomain])
+}
+
+model UtmLink {
+  id         String   @id @default(cuid())
+  fullUrl    String
+  baseUrl    String
+  source     String
+  medium     String
+  campaign   String
+  term       String?
+  content    String?
+  label      String?
+  clicks     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  createdBy   String
+  createdByUser User    @relation(fields: [createdBy], references: [id])
+
+  @@index([createdAt])
+  @@index([createdBy])
 }

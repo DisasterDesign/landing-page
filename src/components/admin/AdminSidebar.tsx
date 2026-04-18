@@ -52,6 +52,15 @@ const navItems = [
     ),
   },
   {
+    label: "SEO",
+    href: "/admin/seo",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8M21 7h-5M21 7v5" />
+      </svg>
+    ),
+  },
+  {
     label: "לקוחות",
     href: "/admin/clients",
     icon: (
