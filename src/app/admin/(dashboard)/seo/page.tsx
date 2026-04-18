@@ -512,12 +512,12 @@ export default function SeoPage() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="clicks-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ec4899" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#ec4899" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#111827" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#111827" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="impr-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#01FFFF" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#01FFFF" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#9ca3af" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#9ca3af" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -535,7 +535,7 @@ export default function SeoPage() {
                 <Area
                   type="monotone"
                   dataKey="impressions"
-                  stroke="#01FFFF"
+                  stroke="#9ca3af"
                   fill="url(#impr-grad)"
                   name="הופעות"
                   strokeWidth={1.5}
@@ -543,7 +543,7 @@ export default function SeoPage() {
                 <Area
                   type="monotone"
                   dataKey="clicks"
-                  stroke="#ec4899"
+                  stroke="#111827"
                   fill="url(#clicks-grad)"
                   name="קליקים"
                   strokeWidth={2}

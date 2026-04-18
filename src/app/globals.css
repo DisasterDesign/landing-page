@@ -255,6 +255,58 @@ h1, h2, h3, h4, h5, h6 {
 /* Toaster background should stay legible — react-hot-toast inlines styles
    so we don't need to override here. */
 
+/* ===== Neutral palette for the admin: kill the pink/cyan accents ===== */
+.admin-light {
+  --color-pink: #111827;
+  --color-pink-light: #1f2937;
+  --color-pink-dark: #000000;
+  --color-cyan: #4b5563;
+  --color-cyan-dark: #374151;
+}
+
+/* Some Tailwind utilities are emitted with the literal hex baked in (older
+   builds, opacity utils). Override the resulting classes too. */
+.admin-light .bg-pink { background-color: #111827 !important; }
+.admin-light .bg-pink\/10 { background-color: rgba(17, 24, 39, 0.06) !important; }
+.admin-light .bg-pink\/15 { background-color: rgba(17, 24, 39, 0.08) !important; }
+.admin-light .bg-pink\/20 { background-color: rgba(17, 24, 39, 0.1) !important; }
+.admin-light .bg-pink\/30 { background-color: rgba(17, 24, 39, 0.15) !important; }
+
+.admin-light .hover\:bg-pink:hover { background-color: #1f2937 !important; }
+.admin-light .hover\:bg-pink-light:hover { background-color: #1f2937 !important; }
+.admin-light .hover\:bg-pink-dark:hover { background-color: #000000 !important; }
+
+.admin-light .text-pink { color: #111827 !important; }
+.admin-light .hover\:text-pink:hover { color: #111827 !important; }
+
+.admin-light .border-pink,
+.admin-light .border-pink\/30,
+.admin-light .border-pink\/50 { border-color: #111827 !important; }
+.admin-light .focus\:border-pink:focus { border-color: #111827 !important; }
+.admin-light .hover\:border-pink:hover { border-color: #111827 !important; }
+
+.admin-light .accent-pink { accent-color: #111827 !important; }
+
+.admin-light .bg-cyan { background-color: #4b5563 !important; }
+.admin-light .bg-cyan\/10 { background-color: rgba(75, 85, 99, 0.06) !important; }
+.admin-light .bg-cyan\/15 { background-color: rgba(75, 85, 99, 0.08) !important; }
+.admin-light .bg-cyan\/20 { background-color: rgba(75, 85, 99, 0.1) !important; }
+.admin-light .bg-cyan\/30 { background-color: rgba(75, 85, 99, 0.15) !important; }
+.admin-light .hover\:bg-cyan:hover { background-color: #374151 !important; }
+.admin-light .hover\:bg-cyan\/80:hover { background-color: #6b7280 !important; }
+
+.admin-light .text-cyan { color: #4b5563 !important; }
+.admin-light .hover\:text-cyan:hover { color: #111827 !important; }
+.admin-light .hover\:text-cyan\/80:hover { color: #111827 !important; }
+
+.admin-light .border-cyan,
+.admin-light .border-cyan\/30 { border-color: #4b5563 !important; }
+
+/* Glow shadows that used pink: tone them down */
+.admin-light .shadow-pink\/30,
+.admin-light .shadow-pink\/40 { box-shadow: 0 10px 15px -3px rgba(17, 24, 39, 0.18) !important; }
+.admin-light .shadow-cyan\/30 { box-shadow: 0 10px 15px -3px rgba(75, 85, 99, 0.18) !important; }
+
 @media (pointer: coarse) {
   body {
     cursor: auto;

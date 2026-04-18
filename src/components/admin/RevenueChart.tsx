@@ -206,16 +206,16 @@ export default function RevenueChart() {
           <AreaChart data={chartData}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#E503A2" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#E503A2" stopOpacity={0} />
+                <stop offset="5%" stopColor="#111827" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#111827" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#01FFFF" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#01FFFF" stopOpacity={0} />
+                <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ffffff" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
+                <stop offset="5%" stopColor="#6b7280" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#6b7280" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -236,7 +236,7 @@ export default function RevenueChart() {
               type="monotone"
               dataKey="revenue"
               name="הכנסות"
-              stroke="#E503A2"
+              stroke="#111827"
               fill="url(#colorRevenue)"
               strokeWidth={2}
             />
@@ -244,7 +244,7 @@ export default function RevenueChart() {
               type="monotone"
               dataKey="expenses"
               name="הוצאות"
-              stroke="#01FFFF"
+              stroke="#9ca3af"
               fill="url(#colorExpenses)"
               strokeWidth={2}
             />
@@ -252,7 +252,7 @@ export default function RevenueChart() {
               type="monotone"
               dataKey="profit"
               name="רווח"
-              stroke="#ffffff"
+              stroke="#6b7280"
               fill="url(#colorProfit)"
               strokeWidth={2}
             />
