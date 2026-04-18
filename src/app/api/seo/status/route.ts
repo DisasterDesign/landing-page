@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getGoogleConfig } from "@/lib/google-oauth";
-import * as envRuntime from "@/lib/env-runtime";
+import { getEnv } from "@/lib/env-runtime";
 
 export async function GET() {
   try {
@@ -17,7 +17,7 @@ export async function GET() {
     // Debug - will remove after confirming fix
     const debugEnv = {
       processEnv: !!process.env.GOOGLE_CLIENT_ID,
-      injectedModule: !!envRuntime.GOOGLE_CLIENT_ID,
+      getEnvResult: !!getEnv("GOOGLE_CLIENT_ID"),
       oauthConfigured,
     };
 

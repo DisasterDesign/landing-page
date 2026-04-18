@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createBlogPostSchema } from "@/lib/validations";
-import { BLOG_API_KEY as INJECTED_BLOG_KEY } from "@/lib/env-runtime";
+import { getEnv } from "@/lib/env-runtime";
 
 /**
  * Auto-publish endpoint for scheduled blog post publishing.
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     try {
           // Verify API key
           const authHeader = request.headers.get("authorization");
-          const apiKey = process.env.BLOG_API_KEY || INJECTED_BLOG_KEY;
+          const apiKey = getEnv("BLOG_API_KEY");
 
           if (!apiKey) {
                   console.error("BLOG_API_KEY not configured");

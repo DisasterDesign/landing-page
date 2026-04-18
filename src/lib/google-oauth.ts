@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
-import * as envRuntime from "@/lib/env-runtime";
+import { getEnv } from "@/lib/env-runtime";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/webmasters.readonly",
@@ -19,10 +19,9 @@ export interface GoogleConfig {
 }
 
 export function getGoogleConfig(): GoogleConfig | null {
-  // Use build-time injected values as fallback (Vercel runtime injection workaround)
-  const clientId = process.env.GOOGLE_CLIENT_ID || envRuntime.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || envRuntime.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || envRuntime.GOOGLE_REDIRECT_URI;
+  const clientId = getEnv("GOOGLE_CLIENT_ID");
+  const clientSecret = getEnv("GOOGLE_CLIENT_SECRET");
+  const redirectUri = getEnv("GOOGLE_REDIRECT_URI");
   if (!clientId || !clientSecret || !redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }
