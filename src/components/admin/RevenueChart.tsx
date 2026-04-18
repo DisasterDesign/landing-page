@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 
 interface Client {
@@ -16,63 +17,76 @@ interface Client {
   name: string;
   amount: number | null;
   expense: number | null;
+  cardcomFee: number | null;
   startDate: string | null;
   createdAt: string;
 }
 
 interface MonthData {
-  month: string;
+  key: string;
+  label: string;
   revenue: number;
   expenses: number;
   profit: number;
+  isCurrent: boolean;
 }
 
-const HEBREW_MONTHS = [
-  "ינואר",
-  "פברואר",
+const VAT_RATE = 18;
+const CARDCOM_FEE_RATE = 0.02;
+
+const HEBREW_MONTHS_SHORT = [
+  "ינו",
+  "פבר",
   "מרץ",
-  "אפריל",
+  "אפר",
   "מאי",
   "יוני",
   "יולי",
-  "אוגוסט",
-  "ספטמבר",
-  "אוקטובר",
-  "נובמבר",
-  "דצמבר",
+  "אוג",
+  "ספט",
+  "אוק",
+  "נוב",
+  "דצמ",
 ];
 
-function formatCurrency(n: number) {
-  return n.toLocaleString("he-IL", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+function formatCurrency(n: number): string {
+  return n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+}
+
+function formatCurrencyShort(n: number): string {
+  if (Math.abs(n) >= 1000) {
+    return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K`;
+  }
+  return Math.round(n).toString();
 }
 
 interface TooltipPayloadItem {
-  name: string;
+  payload: MonthData;
   value: number;
-  color: string;
 }
 
 function CustomTooltip({
   active,
   payload,
-  label,
 }: {
   active?: boolean;
   payload?: TooltipPayloadItem[];
-  label?: string;
 }) {
   if (!active || !payload?.length) return null;
+  const data = payload[0].payload;
+  const profitColor = data.profit >= 0 ? "text-green-600" : "text-red-500";
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-lg">
-      <p className="text-gray-400 text-xs mb-2">{label}</p>
-      {payload.map((entry: TooltipPayloadItem, i: number) => (
-        <p key={i} className="text-sm" style={{ color: entry.color }}>
-          {entry.name}: {formatCurrency(entry.value)} ₪
-        </p>
-      ))}
+    <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-lg text-right" dir="rtl">
+      <p className="text-gray-300 text-xs font-bold mb-1.5">{data.label}</p>
+      <p className="text-sm text-white font-mono">
+        הכנסות: {formatCurrency(data.revenue)} ₪
+      </p>
+      <p className="text-xs text-gray-400 font-mono">
+        הוצאות: {formatCurrency(data.expenses)} ₪
+      </p>
+      <p className={`text-sm font-mono font-bold mt-1 ${profitColor}`}>
+        רווח: {formatCurrency(data.profit)} ₪
+      </p>
     </div>
   );
 }
@@ -80,89 +94,91 @@ function CustomTooltip({
 export default function RevenueChart() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [windowMonths, setWindowMonths] = useState<6 | 12 | 24>(12);
 
   useEffect(() => {
-    async function fetchClients() {
+    (async () => {
       try {
         const res = await fetch("/api/clients");
-        if (!res.ok) throw new Error("Failed to fetch");
+        if (!res.ok) throw new Error();
         const data = await res.json();
-        setClients(data.data);
+        setClients(data.data ?? []);
       } catch (err) {
         console.error("Failed to fetch clients:", err);
       } finally {
         setLoading(false);
       }
-    }
-    fetchClients();
+    })();
   }, []);
 
-  // Group by month and compute cumulative totals
-  const chartData: MonthData[] = (() => {
-    const monthMap: Record<string, { revenue: number; expenses: number }> = {};
+  const monthlyData: MonthData[] = useMemo(() => {
+    const monthMap = new Map<string, { revenue: number; expenses: number }>();
+    const today = new Date();
+    today.setUTCDate(1);
+    today.setUTCHours(0, 0, 0, 0);
+    const currentKey = `${today.getUTCFullYear()}-${String(
+      today.getUTCMonth() + 1
+    ).padStart(2, "0")}`;
 
-    clients.forEach((client) => {
-      const dateStr = client.startDate || client.createdAt;
-      const date = new Date(dateStr);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    // Build a continuous run of months, even if a month has no clients.
+    for (let i = windowMonths - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCMonth(d.getUTCMonth() - i);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      monthMap.set(key, { revenue: 0, expenses: 0 });
+    }
 
-      if (!monthMap[key]) {
-        monthMap[key] = { revenue: 0, expenses: 0 };
-      }
-      monthMap[key].revenue += client.amount ?? 0;
-      monthMap[key].expenses += client.expense ?? 0;
-    });
+    // Aggregate clients by their start date (fallback createdAt).
+    for (const c of clients) {
+      const dateStr = c.startDate ?? c.createdAt;
+      const d = new Date(dateStr);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      if (!monthMap.has(key)) continue; // outside window
+      const entry = monthMap.get(key)!;
+      const amount = c.amount ?? 0;
+      const cardcom = amount * CARDCOM_FEE_RATE;
+      const expense = c.expense ?? 0;
+      entry.revenue += amount;
+      entry.expenses += expense + cardcom;
+      monthMap.set(key, entry);
+    }
 
-    const sortedKeys = Object.keys(monthMap).sort();
-
-    let cumRevenue = 0;
-    let cumExpenses = 0;
-
-    return sortedKeys.map((key) => {
+    return Array.from(monthMap.entries()).map(([key, val]) => {
       const [year, monthStr] = key.split("-");
-      const monthIndex = parseInt(monthStr, 10) - 1;
-      cumRevenue += monthMap[key].revenue;
-      cumExpenses += monthMap[key].expenses;
-
+      const monthIdx = parseInt(monthStr, 10) - 1;
+      // Net profit excluding VAT
+      const netRevenue = (val.revenue * 100) / (100 + VAT_RATE);
       return {
-        month: `${HEBREW_MONTHS[monthIndex]} ${year}`,
-        revenue: cumRevenue,
-        expenses: cumExpenses,
-        profit: cumRevenue - cumExpenses,
+        key,
+        label: `${HEBREW_MONTHS_SHORT[monthIdx]} ${year.slice(2)}`,
+        revenue: val.revenue,
+        expenses: val.expenses,
+        profit: netRevenue - val.expenses,
+        isCurrent: key === currentKey,
       };
     });
-  })();
+  }, [clients, windowMonths]);
 
-  const totalRevenue = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
-  const totalExpenses = clients.reduce((sum, c) => sum + (c.expense ?? 0), 0);
-  const netProfit = totalRevenue - totalExpenses;
+  // Summary stats from the visible window
+  const stats = useMemo(() => {
+    const totalRevenue = monthlyData.reduce((a, m) => a + m.revenue, 0);
+    const totalProfit = monthlyData.reduce((a, m) => a + m.profit, 0);
+    const monthsWithRevenue = monthlyData.filter((m) => m.revenue > 0).length;
+    const avgMonthly = monthsWithRevenue > 0 ? totalRevenue / monthsWithRevenue : 0;
 
-  const summaryCards = [
-    {
-      label: 'סה"כ הכנסות',
-      value: formatCurrency(totalRevenue),
-      color: "text-green-400",
-      borderColor: "border-green-400/30",
-    },
-    {
-      label: 'סה"כ הוצאות',
-      value: formatCurrency(totalExpenses),
-      color: "text-red-400",
-      borderColor: "border-red-400/30",
-    },
-    {
-      label: "רווח נקי",
-      value: formatCurrency(netProfit),
-      color: netProfit >= 0 ? "text-green-400" : "text-red-400",
-      borderColor: netProfit >= 0 ? "border-green-400/30" : "border-red-400/30",
-    },
-    {
-      label: "לקוחות",
-      value: String(clients.length),
-      color: "text-white",
-      borderColor: "border-gray-600",
-    },
-  ];
+    const current = monthlyData[monthlyData.length - 1]?.revenue ?? 0;
+    const previous = monthlyData[monthlyData.length - 2]?.revenue ?? 0;
+    const growthPct =
+      previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
+
+    return {
+      totalRevenue,
+      totalProfit,
+      avgMonthly,
+      currentMonth: current,
+      growthPct,
+    };
+  }, [monthlyData]);
 
   if (loading) {
     return (
@@ -174,94 +190,144 @@ export default function RevenueChart() {
               <div key={i} className="h-20 bg-gray-800 rounded-xl" />
             ))}
           </div>
-          <div className="h-[350px] bg-gray-800 rounded-xl" />
+          <div className="h-[320px] bg-gray-800 rounded-xl" />
         </div>
       </div>
     );
   }
 
+  const hasAnyRevenue = monthlyData.some((m) => m.revenue > 0);
+
   return (
     <div dir="rtl" className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
-      <h3 className="text-lg font-bold mb-4 text-white">סקירת הכנסות</h3>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+        <div>
+          <h3 className="text-lg font-bold text-white">הכנסות חודשיות</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            הכנסה ברוטו לפי חודש (מס הכנסה לא כלול)
+          </p>
+        </div>
+        <div className="flex bg-gray-800 rounded-xl p-1 text-xs">
+          {[6, 12, 24].map((n) => (
+            <button
+              key={n}
+              onClick={() => setWindowMonths(n as 6 | 12 | 24)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-colors ${
+                windowMonths === n
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {n} חוד׳
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {summaryCards.map((card) => (
-          <div
-            key={card.label}
-            className={`bg-gray-800 rounded-xl p-4 border ${card.borderColor}`}
-          >
-            <p className="text-gray-400 text-xs mb-1">{card.label}</p>
-            <p className={`text-xl font-bold ${card.color}`}>
-              {card.value}
-              {card.label !== "לקוחות" && " ₪"}
-            </p>
-          </div>
-        ))}
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <SummaryCard
+          label="סה״כ בחלון"
+          value={`${formatCurrency(stats.totalRevenue)} ₪`}
+        />
+        <SummaryCard
+          label="ממוצע חודשי"
+          value={`${formatCurrency(stats.avgMonthly)} ₪`}
+        />
+        <SummaryCard
+          label="רווח נקי"
+          value={`${formatCurrency(stats.totalProfit)} ₪`}
+          valueColor={stats.totalProfit >= 0 ? "text-green-600" : "text-red-500"}
+        />
+        <SummaryCard
+          label="חודש נוכחי"
+          value={`${formatCurrency(stats.currentMonth)} ₪`}
+          delta={
+            stats.growthPct === 0
+              ? undefined
+              : {
+                  text: `${stats.growthPct > 0 ? "+" : ""}${stats.growthPct.toFixed(0)}%`,
+                  positive: stats.growthPct >= 0,
+                }
+          }
+        />
       </div>
 
       {/* Chart */}
-      {chartData.length > 0 ? (
-        <ResponsiveContainer width="100%" height={350}>
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#111827" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#111827" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6b7280" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#6b7280" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+      {hasAnyRevenue ? (
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={monthlyData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
-              dataKey="month"
-              tick={{ fill: "#9CA3AF", fontSize: 12 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
+              dataKey="label"
+              tick={{ fill: "#6b7280", fontSize: 11 }}
+              axisLine={{ stroke: "#e5e7eb" }}
+              tickLine={false}
             />
             <YAxis
-              tick={{ fill: "#9CA3AF", fontSize: 12 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
-              tickFormatter={(v: number) => formatCurrency(v)}
+              tick={{ fill: "#6b7280", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={formatCurrencyShort}
+              width={50}
             />
-            <Tooltip content={<CustomTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              name="הכנסות"
-              stroke="#111827"
-              fill="url(#colorRevenue)"
-              strokeWidth={2}
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ fill: "rgba(17, 24, 39, 0.04)" }}
             />
-            <Area
-              type="monotone"
-              dataKey="expenses"
-              name="הוצאות"
-              stroke="#9ca3af"
-              fill="url(#colorExpenses)"
-              strokeWidth={2}
-            />
-            <Area
-              type="monotone"
-              dataKey="profit"
-              name="רווח"
-              stroke="#6b7280"
-              fill="url(#colorProfit)"
-              strokeWidth={2}
-            />
-          </AreaChart>
+            <Bar dataKey="revenue" name="הכנסות" radius={[6, 6, 0, 0]} maxBarSize={48}>
+              {monthlyData.map((entry, idx) => (
+                <Cell
+                  key={idx}
+                  fill={entry.isCurrent ? "#111827" : "#9ca3af"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex items-center justify-center h-[350px] text-gray-500">
-          אין נתונים להצגה
+        <div className="flex flex-col items-center justify-center h-[280px] text-gray-500 gap-2">
+          <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <p className="text-sm">אין הכנסות בחלון הזמן הזה</p>
+          <p className="text-xs">הוסף לקוחות עם תאריך התחלה ב-{windowMonths} החודשים האחרונים</p>
         </div>
+      )}
+
+      <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-gray-900" />
+          חודש נוכחי
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-gray-400" />
+          חודשים קודמים
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  valueColor,
+  delta,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  delta?: { text: string; positive: boolean };
+}) {
+  return (
+    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+      <p className="text-gray-400 text-xs mb-1">{label}</p>
+      <p className={`text-xl font-bold font-mono ${valueColor || "text-white"}`}>{value}</p>
+      {delta && (
+        <p className={`text-xs mt-0.5 ${delta.positive ? "text-green-600" : "text-red-500"}`}>
+          {delta.text} מהחודש הקודם
+        </p>
       )}
     </div>
   );
