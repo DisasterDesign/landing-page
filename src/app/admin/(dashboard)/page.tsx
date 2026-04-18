@@ -14,23 +14,8 @@ interface DashboardStats {
 interface MyTask {
   id: string;
   title: string;
-  status: "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
   dueDate: string | null;
 }
-
-const STATUS_LABEL: Record<MyTask["status"], string> = {
-  TODO: "לביצוע",
-  IN_PROGRESS: "בביצוע",
-  REVIEW: "לבדיקה",
-  DONE: "הושלם",
-};
-
-const STATUS_DOT: Record<MyTask["status"], string> = {
-  TODO: "bg-gray-500",
-  IN_PROGRESS: "bg-cyan",
-  REVIEW: "bg-yellow-500",
-  DONE: "bg-green-500",
-};
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -192,15 +177,9 @@ export default function AdminDashboardPage() {
                     href={`/admin/tasks/${t.id}`}
                     className="flex items-center gap-3 py-3 hover:bg-gray-800/40 px-2 -mx-2 rounded-lg transition-colors"
                   >
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT[t.status]}`}
-                      aria-hidden
-                    />
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-pink" aria-hidden />
                     <span className="flex-1 text-sm text-white truncate">
                       {t.title}
-                    </span>
-                    <span className="text-[11px] text-gray-500 shrink-0 hidden sm:inline">
-                      {STATUS_LABEL[t.status]}
                     </span>
                     {due && (
                       <span

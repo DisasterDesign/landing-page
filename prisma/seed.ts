@@ -67,7 +67,7 @@ async function main() {
         id: "seed-task-1",
         title: "Design homepage wireframes",
         description: "Create wireframes for the new homepage layout",
-        status: "IN_PROGRESS",
+        status: "TODO",
         priority: "HIGH",
         order: 0,
         tags: ["design", "homepage"],

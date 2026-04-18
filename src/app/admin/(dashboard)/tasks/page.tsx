@@ -25,7 +25,7 @@ import Modal from "@/components/ui/Modal";
 
 // ---------- Types ----------
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
+type TaskStatus = "TODO" | "DONE";
 
 interface Task {
   id: string;
@@ -44,9 +44,7 @@ interface User {
 // ---------- Constants ----------
 
 const columns: { id: TaskStatus; label: string; color: string }[] = [
-  { id: "TODO", label: "לביצוע", color: "bg-gray-500" },
-  { id: "IN_PROGRESS", label: "בביצוע", color: "bg-cyan" },
-  { id: "REVIEW", label: "לבדיקה", color: "bg-yellow-500" },
+  { id: "TODO", label: "לבצע", color: "bg-pink" },
   { id: "DONE", label: "הושלם", color: "bg-green-500" },
 ];
 
@@ -352,7 +350,7 @@ export default function TasksPage() {
     return (
       <div className="space-y-6">
         <div className="h-8 w-32 bg-gray-800 rounded animate-pulse" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {columns.map((col) => (
             <div
               key={col.id}
@@ -404,7 +402,7 @@ export default function TasksPage() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {columns.map((col) => (
               <KanbanColumn
                 key={col.id}

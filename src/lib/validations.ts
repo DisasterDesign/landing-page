@@ -11,7 +11,7 @@ export const createContactSchema = z.object({
 export const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]).optional(),
+  status: z.enum(["TODO", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   projectId: z.string().optional(),
   assigneeId: z.string().optional(),
@@ -22,7 +22,7 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
-  status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]).optional(),
+  status: z.enum(["TODO", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   projectId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
@@ -35,7 +35,7 @@ export const reorderTasksSchema = z.object({
     z.object({
       id: z.string(),
       order: z.number(),
-      status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]),
+      status: z.enum(["TODO", "DONE"]),
     })
   ),
 });
