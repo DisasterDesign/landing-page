@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getGoogleConfig } from "@/lib/google-oauth";
-import { getEnv } from "@/lib/env-runtime";
 
 export async function GET() {
   try {
@@ -13,13 +12,6 @@ export async function GET() {
     }
 
     const oauthConfigured = getGoogleConfig() !== null;
-
-    // Debug - will remove after confirming fix
-    const debugEnv = {
-      processEnv: !!process.env.GOOGLE_CLIENT_ID,
-      getEnvResult: !!getEnv("GOOGLE_CLIENT_ID"),
-      oauthConfigured,
-    };
 
     const integration = await prisma.googleIntegration.findUnique({
       where: { userId: session.user.id },
@@ -34,7 +26,6 @@ export async function GET() {
 
     return NextResponse.json({
       oauthConfigured,
-      debugEnv,
       connected: integration !== null,
       integration,
     });
