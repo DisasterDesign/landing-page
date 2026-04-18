@@ -5,15 +5,8 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
-  // Inline env vars at build time (workaround for Vercel runtime injection issue)
-  env: {
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
-    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",
-    OAUTH_ENCRYPTION_KEY: process.env.OAUTH_ENCRYPTION_KEY || "",
-    CRON_SECRET: process.env.CRON_SECRET || "",
-    BLOG_API_KEY: process.env.BLOG_API_KEY || "",
-  },
+  // Note: env vars are injected via prebuild script (.env.production)
+  // due to Vercel runtime injection bug with newly added vars
   async headers() {
     return [
       {

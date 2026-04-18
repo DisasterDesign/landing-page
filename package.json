@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "node -e \"console.log('BUILD_CHECK:', {GID: !!process.env.GOOGLE_CLIENT_ID, GS: !!process.env.GOOGLE_CLIENT_SECRET, CS: !!process.env.CRON_SECRET, DB: !!process.env.DATABASE_URL})\" && prisma generate && next build",
+    "prebuild": "node -e \"const fs=require('fs'); const vars=['GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URI','OAUTH_ENCRYPTION_KEY','CRON_SECRET','BLOG_API_KEY']; const lines=vars.filter(k=>process.env[k]).map(k=>k+'='+process.env[k]); if(lines.length){fs.writeFileSync('.env.production',lines.join('\\n')+'\\n'); console.log('Created .env.production with',lines.length,'vars');} else {console.log('No env vars found, skipping .env.production');}\"",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
