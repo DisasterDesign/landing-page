@@ -10,10 +10,12 @@ import WhatsAppButton from "@/components/shared/WhatsAppButton";
 import CookieConsent from "@/components/shared/CookieConsent";
 import AccessibilityWidget from "@/components/shared/AccessibilityWidget";
 import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/JsonLd";
+import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <GoogleAnalytics />
       <OrganizationJsonLd />
       <WebSiteJsonLd />
       <CustomCursor />

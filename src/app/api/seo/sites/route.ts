@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getFreshAccessToken } from "@/lib/google-oauth";
+import { getFreshAccessToken, fetchUserEmail } from "@/lib/google-oauth";
 import { listSites } from "@/lib/search-console";
 import { listGA4Properties } from "@/lib/analytics";
 
@@ -18,7 +18,7 @@ export async function GET() {
     }
 
     const errors: string[] = [];
-    const [gscSites, ga4Properties] = await Promise.all([
+    const [gscSites, ga4Properties, connectedEmail] = await Promise.all([
       listSites(accessToken).catch((e) => {
         console.error("listSites failed:", e);
         errors.push(`GSC: ${e instanceof Error ? e.message : String(e)}`);
@@ -29,9 +29,15 @@ export async function GET() {
         errors.push(`GA4: ${e instanceof Error ? e.message : String(e)}`);
         return [];
       }),
+      fetchUserEmail(accessToken).catch(() => null),
     ]);
 
-    return NextResponse.json({ gscSites, ga4Properties, ...(errors.length > 0 && { errors }) });
+    return NextResponse.json({
+      gscSites,
+      ga4Properties,
+      connectedEmail,
+      ...(errors.length > 0 && { errors }),
+    });
   } catch (error) {
     console.error("Error listing sites:", error);
     return NextResponse.json(
