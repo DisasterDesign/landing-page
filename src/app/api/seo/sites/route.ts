@@ -17,18 +17,21 @@ export async function GET() {
       return NextResponse.json({ error: "לא מחובר ל-Google" }, { status: 400 });
     }
 
+    const errors: string[] = [];
     const [gscSites, ga4Properties] = await Promise.all([
       listSites(accessToken).catch((e) => {
         console.error("listSites failed:", e);
+        errors.push(`GSC: ${e instanceof Error ? e.message : String(e)}`);
         return [];
       }),
       listGA4Properties(accessToken).catch((e) => {
         console.error("listGA4Properties failed:", e);
+        errors.push(`GA4: ${e instanceof Error ? e.message : String(e)}`);
         return [];
       }),
     ]);
 
-    return NextResponse.json({ gscSites, ga4Properties });
+    return NextResponse.json({ gscSites, ga4Properties, ...(errors.length > 0 && { errors }) });
   } catch (error) {
     console.error("Error listing sites:", error);
     return NextResponse.json(
