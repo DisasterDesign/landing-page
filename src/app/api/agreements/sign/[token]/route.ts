@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement } from "@/lib/agreement-templates";
+import { notifyAllAdmins } from "@/lib/notifications";
 
 export async function GET(
   _request: NextRequest,
@@ -105,6 +106,12 @@ export async function POST(
         status: "SIGNED",
         content: finalContent,
       },
+    });
+
+    await notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: `הסכם נחתם — ${customerName}`,
+      body: `מסלול ${existing.tier === "BASIC" ? "בסיס" : existing.tier === "ADVANCED" ? "מתקדם" : "פרימיום"}`,
     });
 
     return NextResponse.json({ success: true });

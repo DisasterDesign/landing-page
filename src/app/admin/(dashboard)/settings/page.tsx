@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import PushNotificationToggle from "@/components/admin/PushNotificationToggle";
 
 interface TeamMember {
   id: string;
@@ -105,6 +106,9 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Push notifications */}
+      <PushNotificationToggle />
 
       {/* PWA install banner reset */}
       <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6 space-y-3">

@@ -60,6 +60,15 @@ enum NotificationType {
   TASK_ASSIGNED
   TASK_UPDATED
   TASK_COMMENTED
+  CONTACT_RECEIVED
+  AGREEMENT_SIGNED
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  CLOSED
+  SPAM
 }
 
 model User {
@@ -79,6 +88,7 @@ model User {
   notifications Notification[] @relation("NotificationRecipient")
   googleIntegration GoogleIntegration?
   utmLinks      UtmLink[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Project {
@@ -154,16 +164,19 @@ model Comment {
 }
 
 model ContactSubmission {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   name      String
   email     String
   phone     String?
   message   String
   service   String?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isRead    Boolean       @default(false)
+  status    ContactStatus @default(NEW)
+  tags      String[]
+  createdAt DateTime      @default(now())
 
   @@index([isRead])
+  @@index([status])
   @@index([createdAt])
 }
 
@@ -383,4 +396,17 @@ model UtmLink {
 
   @@index([createdAt])
   @@index([createdBy])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

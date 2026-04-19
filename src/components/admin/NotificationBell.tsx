@@ -3,14 +3,34 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+type NotifType =
+  | "TASK_ASSIGNED"
+  | "TASK_UPDATED"
+  | "TASK_COMMENTED"
+  | "CONTACT_RECEIVED"
+  | "AGREEMENT_SIGNED";
+
 interface NotificationItem {
   id: string;
-  type: "TASK_ASSIGNED" | "TASK_UPDATED" | "TASK_COMMENTED";
+  type: NotifType;
   title: string;
   body: string | null;
   readAt: string | null;
   createdAt: string;
   task: { id: string; title: string } | null;
+}
+
+function targetUrlFor(n: NotificationItem): string | null {
+  switch (n.type) {
+    case "TASK_ASSIGNED":
+    case "TASK_UPDATED":
+    case "TASK_COMMENTED":
+      return n.task?.id ? `/admin/tasks/${n.task.id}` : "/admin/tasks";
+    case "CONTACT_RECEIVED":
+      return "/admin/contacts";
+    case "AGREEMENT_SIGNED":
+      return "/admin/agreements";
+  }
 }
 
 const POLL_MS = 30000;
@@ -93,8 +113,9 @@ export default function NotificationBell() {
       }
     }
 
-    if (n.task?.id) {
-      router.push(`/admin/tasks/${n.task.id}`);
+    const url = targetUrlFor(n);
+    if (url) {
+      router.push(url);
     }
   };
 
