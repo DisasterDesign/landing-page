@@ -51,6 +51,18 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Verify the user actually granted ALL requested scopes (Google's consent
+    // screen lets users uncheck individual scopes). Save what was granted, not
+    // what we asked for.
+    const grantedScopes = (tokens.scope || "").split(" ").filter(Boolean);
+    const required = GOOGLE_SCOPES.filter(
+      (s) => s !== "https://www.googleapis.com/auth/userinfo.email"
+    );
+    const missing = required.filter((s) => !grantedScopes.includes(s));
+    if (missing.length > 0) {
+      return redirectWithError(req, "scope_missing");
+    }
+
     const email = await fetchUserEmail(tokens.access_token);
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
@@ -60,7 +72,7 @@ export async function GET(req: NextRequest) {
         accessToken: encrypt(tokens.access_token),
         refreshToken: encrypt(tokens.refresh_token),
         expiresAt,
-        scopes: GOOGLE_SCOPES,
+        scopes: grantedScopes,
         email,
       },
       create: {
@@ -68,7 +80,7 @@ export async function GET(req: NextRequest) {
         accessToken: encrypt(tokens.access_token),
         refreshToken: encrypt(tokens.refresh_token),
         expiresAt,
-        scopes: GOOGLE_SCOPES,
+        scopes: grantedScopes,
         email,
       },
     });

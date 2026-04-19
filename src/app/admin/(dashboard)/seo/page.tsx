@@ -181,7 +181,13 @@ export default function SeoPage() {
     }
     const err = params.get("error");
     if (err) {
-      toast.error(`שגיאת חיבור: ${err}`);
+      const message =
+        err === "scope_missing"
+          ? "חסרות הרשאות. בקונסנט של גוגל אשר את כל ה-checkboxes (Search Console + Analytics)."
+          : err === "no_refresh_token__revoke_app_access_in_google_account_and_retry"
+          ? "אין refresh token. גש ל-https://myaccount.google.com/connections, מחק את האפליקציה, ונסה שוב."
+          : `שגיאת חיבור: ${err}`;
+      toast.error(message, { duration: 8000 });
       router.replace("/admin/seo");
     }
   }, [params, router]);
@@ -191,12 +197,19 @@ export default function SeoPage() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("לנתק את חשבון Google? הנתונים הקיימים יישמרו אבל לא יתעדכנו.")) return;
+    if (
+      !confirm(
+        "לנתק את חשבון Google?\n\nחשוב: כדי שתוכל לחבר מחדש עם הרשאות נכונות, אחרי הניתוק כאן צריך גם לבטל את האפליקציה ב-https://myaccount.google.com/connections (חפש Fuzion Webz)."
+      )
+    )
+      return;
     setDisconnecting(true);
     try {
       const res = await fetch("/api/seo/disconnect", { method: "POST" });
       if (!res.ok) throw new Error();
-      toast.success("נותק");
+      toast.success("נותק. עכשיו בטל את הגישה ב-Google Account ואז חבר שוב.", {
+        duration: 8000,
+      });
       setStatus(null);
       setSnapshots([]);
       setTopQueries([]);
