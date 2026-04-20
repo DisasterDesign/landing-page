@@ -107,6 +107,30 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Integrations */}
+      <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6 space-y-3">
+        <h3 className="text-lg font-bold">אינטגרציות</h3>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          חבר מקורות לידים חיצוניים שיזרמו אוטומטית למערכת.
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <a
+            href="/admin/integrations/facebook"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl text-sm"
+          >
+            <span>📘</span>
+            Facebook Lead Ads
+          </a>
+          <a
+            href="/admin/seo"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl text-sm"
+          >
+            <span>🔍</span>
+            Google (SEO + Analytics)
+          </a>
+        </div>
+      </div>
+
       {/* Push notifications */}
       <PushNotificationToggle />
 

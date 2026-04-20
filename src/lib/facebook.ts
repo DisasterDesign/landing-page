@@ -1,0 +1,223 @@
+import { createHmac, timingSafeEqual } from "crypto";
+
+const GRAPH = "https://graph.facebook.com/v19.0";
+const OAUTH = "https://www.facebook.com/v19.0/dialog/oauth";
+
+export const FACEBOOK_SCOPES = [
+  "pages_show_list",
+  "pages_read_engagement",
+  "pages_manage_metadata",
+  "leads_retrieval",
+  "business_management",
+];
+
+export interface MetaConfig {
+  appId: string;
+  appSecret: string;
+  redirectUri: string;
+  verifyToken: string;
+}
+
+export function getMetaConfig(): MetaConfig | null {
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  const redirectUri = process.env.META_REDIRECT_URI;
+  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  if (!appId || !appSecret || !redirectUri || !verifyToken) return null;
+  return { appId, appSecret, redirectUri, verifyToken };
+}
+
+export function buildAuthUrl(state: string): string {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error("Meta OAuth is not configured");
+  const params = new URLSearchParams({
+    client_id: cfg.appId,
+    redirect_uri: cfg.redirectUri,
+    state,
+    scope: FACEBOOK_SCOPES.join(","),
+    response_type: "code",
+  });
+  return `${OAUTH}?${params.toString()}`;
+}
+
+interface ShortTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in?: number;
+}
+
+async function metaFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Meta ${res.status}: ${body.slice(0, 500)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function exchangeCodeForUserToken(code: string): Promise<string> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error("Meta OAuth is not configured");
+  const params = new URLSearchParams({
+    client_id: cfg.appId,
+    client_secret: cfg.appSecret,
+    redirect_uri: cfg.redirectUri,
+    code,
+  });
+  const data = await metaFetch<ShortTokenResponse>(
+    `${GRAPH}/oauth/access_token?${params.toString()}`
+  );
+  return data.access_token;
+}
+
+export async function exchangeForLongLivedUserToken(shortToken: string): Promise<string> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error("Meta OAuth is not configured");
+  const params = new URLSearchParams({
+    grant_type: "fb_exchange_token",
+    client_id: cfg.appId,
+    client_secret: cfg.appSecret,
+    fb_exchange_token: shortToken,
+  });
+  const data = await metaFetch<ShortTokenResponse>(
+    `${GRAPH}/oauth/access_token?${params.toString()}`
+  );
+  return data.access_token;
+}
+
+export interface ManagedPage {
+  id: string;
+  name: string;
+  /** A page access token derived from a long-lived user token never expires. */
+  access_token: string;
+  category?: string;
+  tasks?: string[];
+}
+
+export async function listManagedPages(longLivedUserToken: string): Promise<ManagedPage[]> {
+  const url = `${GRAPH}/me/accounts?fields=id,name,access_token,category,tasks&access_token=${encodeURIComponent(longLivedUserToken)}`;
+  const data = await metaFetch<{ data: ManagedPage[] }>(url);
+  return data.data ?? [];
+}
+
+export async function subscribePageToLeadgen(
+  pageId: string,
+  pageAccessToken: string
+): Promise<void> {
+  const params = new URLSearchParams({
+    subscribed_fields: "leadgen",
+    access_token: pageAccessToken,
+  });
+  await metaFetch<{ success: boolean }>(
+    `${GRAPH}/${encodeURIComponent(pageId)}/subscribed_apps?${params.toString()}`,
+    { method: "POST" }
+  );
+}
+
+export async function unsubscribePage(
+  pageId: string,
+  pageAccessToken: string
+): Promise<void> {
+  const params = new URLSearchParams({ access_token: pageAccessToken });
+  await metaFetch<{ success: boolean }>(
+    `${GRAPH}/${encodeURIComponent(pageId)}/subscribed_apps?${params.toString()}`,
+    { method: "DELETE" }
+  ).catch(() => {
+    // Silent — user is disconnecting either way.
+  });
+}
+
+export interface LeadFieldDatum {
+  name: string;
+  values: string[];
+}
+
+export interface LeadDetail {
+  id: string;
+  created_time: string;
+  field_data: LeadFieldDatum[];
+  form_id?: string;
+  form_name?: string;
+  ad_id?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+}
+
+export async function getLead(
+  leadId: string,
+  pageAccessToken: string
+): Promise<LeadDetail> {
+  const fields = "id,created_time,field_data,form_id,form_name,ad_id,campaign_id,campaign_name";
+  const url = `${GRAPH}/${encodeURIComponent(leadId)}?fields=${fields}&access_token=${encodeURIComponent(pageAccessToken)}`;
+  return metaFetch<LeadDetail>(url);
+}
+
+/**
+ * Verify Meta's X-Hub-Signature-256 header.
+ * @param rawBody — the exact bytes Meta sent (must NOT be re-stringified)
+ * @param signatureHeader — value of X-Hub-Signature-256 (e.g. "sha256=abc...")
+ * @param appSecret — META_APP_SECRET
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  appSecret: string
+): boolean {
+  if (!signatureHeader || !signatureHeader.startsWith("sha256=")) return false;
+  const provided = signatureHeader.slice("sha256=".length);
+  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  if (provided.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(provided, "hex"), Buffer.from(expected, "hex"));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Map Meta's lead field_data array to standard contact fields.
+ */
+export function mapLeadFieldsToContact(lead: LeadDetail): {
+  name: string;
+  email: string;
+  phone: string | null;
+  message: string;
+} {
+  const get = (...candidates: string[]): string | null => {
+    for (const cand of candidates) {
+      const found = lead.field_data.find((f) => f.name === cand);
+      if (found && found.values?.[0]) return found.values[0];
+    }
+    return null;
+  };
+
+  const fullName = get("full_name");
+  const firstName = get("first_name");
+  const lastName = get("last_name");
+  const name =
+    fullName ?? [firstName, lastName].filter(Boolean).join(" ") ?? "ליד מפייסבוק";
+
+  const email = get("email") ?? "";
+  const phone = get("phone_number", "phone");
+
+  // Build a "message" out of any non-standard fields (custom questions)
+  const standardKeys = new Set([
+    "full_name",
+    "first_name",
+    "last_name",
+    "email",
+    "phone_number",
+    "phone",
+  ]);
+  const customLines = lead.field_data
+    .filter((f) => !standardKeys.has(f.name) && f.values?.[0])
+    .map((f) => `${f.name}: ${f.values.join(", ")}`);
+  const message =
+    customLines.length > 0
+      ? customLines.join("\n")
+      : lead.form_name
+      ? `התקבל מטופס: ${lead.form_name}`
+      : "ליד מפייסבוק (ללא תוכן נוסף)";
+
+  return { name, email, phone, message };
+}

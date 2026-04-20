@@ -87,6 +87,7 @@ model User {
   blogPosts     BlogPost[]
   notifications Notification[] @relation("NotificationRecipient")
   googleIntegration GoogleIntegration?
+  facebookIntegrations FacebookIntegration[]
   utmLinks      UtmLink[]
   pushSubscriptions PushSubscription[]
   contactNotes  ContactNote[]
@@ -173,10 +174,15 @@ model ContactSubmission {
   isRead          Boolean       @default(false)
   status          ContactStatus @default(NEW)
   tags            String[]
-  source          String?
-  nextFollowUpAt  DateTime?
-  lastContactedAt DateTime?
-  createdAt       DateTime      @default(now())
+  source             String?
+  externalLeadId     String?       @unique
+  externalFormId     String?
+  externalFormName   String?
+  externalCampaignId String?
+  externalAdId       String?
+  nextFollowUpAt     DateTime?
+  lastContactedAt    DateTime?
+  createdAt          DateTime      @default(now())
 
   notes ContactNote[]
 
@@ -426,6 +432,20 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model FacebookIntegration {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageId            String   @unique
+  pageName          String
+  pageAccessToken   String   // AES-256-GCM encrypted
+  subscribedAt      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([userId])
 }

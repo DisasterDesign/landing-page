@@ -31,6 +31,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow public Meta webhook endpoint
+  if (pathname.startsWith("/api/webhooks/facebook")) {
+    return NextResponse.next();
+  }
+
   // Allow public POST to /api/contacts
   if (pathname === "/api/contacts" && req.method === "POST") {
     return NextResponse.next();
