@@ -14,7 +14,7 @@ export const createTaskSchema = z.object({
   status: z.enum(["TODO", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   projectId: z.string().optional(),
-  assigneeId: z.string().optional(),
+  assigneeIds: z.array(z.string().min(1)).min(1, "At least one assignee required"),
   dueDate: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -25,7 +25,7 @@ export const updateTaskSchema = z.object({
   status: z.enum(["TODO", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   projectId: z.string().nullable().optional(),
-  assigneeId: z.string().nullable().optional(),
+  assigneeIds: z.array(z.string().min(1)).min(1).optional(),
   dueDate: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -106,6 +106,7 @@ export const clientPatchSchema = z.object({
   amount: z.number().nullable().optional(),
   expense: z.number().min(0).nullable().optional(),
   cardcomFee: z.number().min(0).nullable().optional(),
+  websiteUrl: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   paymentDate: z.string().nullable().optional(),
 });

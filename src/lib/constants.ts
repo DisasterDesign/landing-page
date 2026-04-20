@@ -25,11 +25,11 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const TEAM_MEMBERS: TeamMember[] = [
   {
-    name: "Roei Yehezkel",
+    name: "Roy Yehezkel",
     nameHe: "רועי יחזקאל",
     role: "Co-Founder",
     roleHe: "מייסד שותף",
-    email: "roei@fuzionwebz.com",
+    email: "roy@fuzionwebz.com",
     bio: "עם עשור של ניסיון בעולמות השיווק והדיגיטל, עבודה עם חברות ומותגים מובילים בארץ ובעולם. מתמחה במיתוג עסקי, שיווק דיגיטלי ובניית אתרים חכמים שמייצרים תוצאות אמיתיות. יוזם ומוביל יוזמות נוספות, עם חשיבה עסקית רחבה וחיבור עמוק לעולם החדשנות והטכנולוגיה.",
     image: "/images/team/roei.jpg",
   },

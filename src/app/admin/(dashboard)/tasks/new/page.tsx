@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
+import AssigneePicker from "@/components/admin/AssigneePicker";
 
 interface User {
   id: string;
@@ -17,7 +18,7 @@ export default function NewTaskPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
 
   useEffect(() => {
@@ -48,8 +49,8 @@ export default function NewTaskPage() {
       return;
     }
 
-    if (!assigneeId) {
-      toast.error("יש לבחור משתמש לשיוך");
+    if (assigneeIds.length === 0) {
+      toast.error("יש לבחור לפחות משתמש אחד");
       return;
     }
 
@@ -62,7 +63,7 @@ export default function NewTaskPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,
-          assigneeId,
+          assigneeIds,
           dueDate: dueDate || undefined,
         }),
       });
@@ -126,27 +127,19 @@ export default function NewTaskPage() {
           />
         </div>
 
-        {/* Assignee */}
+        {/* Assignees */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-300">
             משויך ל <span className="text-pink">*</span>
           </label>
-          <select
-            value={assigneeId}
-            onChange={(e) => setAssigneeId(e.target.value)}
-            required
-            disabled={loadingUsers}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white outline-none focus:border-pink transition-colors disabled:opacity-50"
-          >
-            <option value="">{loadingUsers ? "טוען..." : "בחר משתמש"}</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-          {!loadingUsers && users.length === 0 && (
-            <p className="text-xs text-red-400">לא נטענו משתמשים — בדוק חיבור לשרת.</p>
+          {loadingUsers ? (
+            <div className="h-10 bg-gray-800 rounded-xl animate-pulse" />
+          ) : (
+            <AssigneePicker
+              users={users}
+              selectedIds={assigneeIds}
+              onChange={setAssigneeIds}
+            />
           )}
         </div>
 

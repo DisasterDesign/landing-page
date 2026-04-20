@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
+import AssigneePicker from "@/components/admin/AssigneePicker";
 
 interface Comment {
   id: string;
@@ -17,7 +18,7 @@ interface TaskDetail {
   description: string | null;
   dueDate: string | null;
   tags: string[];
-  assignee: { id: string; name: string } | null;
+  assignees: { id: string; name: string }[];
   comments: Comment[];
 }
 
@@ -46,7 +47,7 @@ export default function TaskDetailPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [tags, setTags] = useState("");
 
@@ -62,7 +63,7 @@ export default function TaskDetailPage() {
         setTask(t);
         setTitle(t.title);
         setDescription(t.description || "");
-        setAssigneeId(t.assignee?.id || "");
+        setAssigneeIds((t.assignees ?? []).map((a: { id: string }) => a.id));
         setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : "");
         setTags(t.tags?.join(", ") || "");
       }
@@ -92,7 +93,7 @@ export default function TaskDetailPage() {
         body: JSON.stringify({
           title,
           description: description || null,
-          assigneeId: assigneeId || null,
+          assigneeIds,
           dueDate: dueDate || null,
           tags: tags
             .split(",")
@@ -221,19 +222,12 @@ export default function TaskDetailPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelClasses}>אחראי</label>
-            <select
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              className={selectClasses}
-            >
-              <option value="">לא שויך</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+            <label className={labelClasses}>משויך ל</label>
+            <AssigneePicker
+              users={users}
+              selectedIds={assigneeIds}
+              onChange={setAssigneeIds}
+            />
           </div>
 
           <div>

@@ -25,7 +25,7 @@ export async function GET() {
       prisma.task.count({ where: { status: "TODO" } }),
       prisma.task.count({ where: { status: "DONE" } }),
       prisma.task.count({
-        where: { status: "TODO", assigneeId: session.user.id },
+        where: { status: "TODO", assignees: { some: { id: session.user.id } } },
       }),
       prisma.contactSubmission.count({ where: { isRead: false } }),
       prisma.task.count({

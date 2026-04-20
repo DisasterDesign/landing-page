@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import { updateTaskSchema } from "@/lib/validations";
 import { createNotification } from "@/lib/notifications";
 
-// GET - Auth required: single task with comments
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,7 +20,7 @@ export async function GET(
       where: { id },
       include: {
         project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignees: { select: { id: true, name: true, email: true } },
         creator: { select: { id: true, name: true, email: true } },
         comments: {
           include: {
@@ -46,7 +45,6 @@ export async function GET(
   }
 }
 
-// PATCH - Auth required: update task
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -68,12 +66,13 @@ export async function PATCH(
       );
     }
 
-    const { dueDate, ...rest } = parsed.data;
+    const { dueDate, assigneeIds, ...rest } = parsed.data;
 
     const previous = await prisma.task.findUnique({
       where: { id },
-      select: { assigneeId: true },
+      include: { assignees: { select: { id: true } } },
     });
+    const previousIds = new Set((previous?.assignees ?? []).map((a) => a.id));
 
     const task = await prisma.task.update({
       where: { id },
@@ -82,29 +81,34 @@ export async function PATCH(
         ...(dueDate !== undefined
           ? { dueDate: dueDate ? new Date(dueDate) : null }
           : {}),
+        ...(assigneeIds !== undefined
+          ? { assignees: { set: assigneeIds.map((aid) => ({ id: aid })) } }
+          : {}),
       },
       include: {
         project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignees: { select: { id: true, name: true, email: true } },
         creator: { select: { id: true, name: true, email: true } },
       },
     });
 
-    if (
-      task.assigneeId &&
-      task.assigneeId !== previous?.assigneeId
-    ) {
-      await createNotification(
-        {
-          recipientId: task.assigneeId,
-          type: "TASK_ASSIGNED",
-          title: "משימה חדשה שויכה אליך",
-          body: task.title,
-          taskId: task.id,
-        },
-        session.user.id
-      );
-    }
+    // Notify only newly added assignees
+    const actorId = session.user.id;
+    const newlyAdded = task.assignees.filter((a) => !previousIds.has(a.id));
+    await Promise.all(
+      newlyAdded.map((a) =>
+        createNotification(
+          {
+            recipientId: a.id,
+            type: "TASK_ASSIGNED",
+            title: "משימה חדשה שויכה אליך",
+            body: task.title,
+            taskId: task.id,
+          },
+          actorId
+        )
+      )
+    );
 
     return NextResponse.json(task);
   } catch (error) {
@@ -116,9 +120,8 @@ export async function PATCH(
   }
 }
 
-// DELETE - Auth required: delete task
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -128,9 +131,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-
     await prisma.task.delete({ where: { id } });
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting task:", error);

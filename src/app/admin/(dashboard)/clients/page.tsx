@@ -12,11 +12,12 @@ interface Client {
   amount: number | null;
   expense: number | null;
   cardcomFee: number | null;
+  websiteUrl: string | null;
   startDate: string | null;
   paymentDate: string | null;
 }
 
-type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "startDate" | "paymentDate";
+type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "websiteUrl" | "startDate" | "paymentDate";
 
 // Israeli VAT rate as of January 2025 (raised from 17%); still 18% in 2026.
 const VAT_RATE = 18;
@@ -291,6 +292,37 @@ export default function ClientsPage() {
       );
     }
 
+    // Special render: website URL → globe icon link
+    if (field === "websiteUrl") {
+      const url = client.websiteUrl;
+      return (
+        <div className="flex items-center gap-1.5 min-h-[32px]">
+          {url ? (
+            <a
+              href={url.startsWith("http") ? url : `https://${url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-cyan hover:underline text-xs flex items-center gap-1 px-2 py-1.5 rounded hover:bg-gray-700/30"
+              title={url}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-9v18m-9-9h18" />
+              </svg>
+              פתח
+            </a>
+          ) : null}
+          <button
+            onClick={() => startEditing(client, "websiteUrl")}
+            className="cursor-pointer text-xs text-gray-500 hover:text-white px-2 py-1 rounded hover:bg-gray-700/50 transition-colors"
+            title="ערוך כתובת"
+          >
+            {url ? "✎" : "+ הוסף"}
+          </button>
+        </div>
+      );
+    }
+
     let display: string;
     if (field === "status") {
       display = statusDisplay(client.status);
@@ -341,6 +373,7 @@ export default function ClientsPage() {
             <tr className="bg-gray-800 border-b border-gray-700">
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-12">#</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">אתר</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">הערות</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סכום (כולל מע״מ ₪)</th>
@@ -371,6 +404,7 @@ export default function ClientsPage() {
                     {client.number}
                   </td>
                   <td className="px-1 py-0.5">{renderCell(client, "name")}</td>
+                  <td className="px-1 py-0.5">{renderCell(client, "websiteUrl")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "notes")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "amount")}</td>
@@ -414,7 +448,7 @@ export default function ClientsPage() {
           </tbody>
           <tfoot>
             <tr className="bg-gray-800/80 border-t border-gray-600 font-medium">
-              <td className="px-3 py-2.5" colSpan={4}>
+              <td className="px-3 py-2.5" colSpan={5}>
                 <span className="text-gray-400">סה&quot;כ ({clients.length} לקוחות)</span>
               </td>
               <td className="px-3 py-2.5 font-mono text-white">

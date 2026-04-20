@@ -22,6 +22,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import Modal from "@/components/ui/Modal";
+import AssigneePicker from "@/components/admin/AssigneePicker";
 
 // ---------- Types ----------
 
@@ -31,9 +32,44 @@ interface Task {
   id: string;
   title: string;
   status: TaskStatus;
-  assignee?: { id: string; name: string } | null;
+  assignees: { id: string; name: string }[];
   dueDate?: string | null;
   order: number;
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function AssigneesBadge({ assignees }: { assignees: Task["assignees"] }) {
+  if (!assignees || assignees.length === 0) return null;
+  if (assignees.length === 1) {
+    return (
+      <div
+        title={assignees[0].name}
+        className="w-6 h-6 rounded-full bg-pink/20 text-pink flex items-center justify-center text-[10px] font-bold"
+      >
+        {initialsOf(assignees[0].name)}
+      </div>
+    );
+  }
+  return (
+    <div className="flex -space-x-1.5 rtl:space-x-reverse" title={assignees.map((a) => a.name).join(" + ")}>
+      {assignees.slice(0, 3).map((a) => (
+        <div
+          key={a.id}
+          className="w-6 h-6 rounded-full bg-pink/20 text-pink flex items-center justify-center text-[10px] font-bold border-2 border-gray-800"
+        >
+          {initialsOf(a.name)}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 interface User {
@@ -69,15 +105,6 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
         opacity: isDragging ? 0.4 : 1,
       };
 
-  const initials = task.assignee
-    ? task.assignee.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : null;
-
   return (
     <div
       ref={overlay ? undefined : setNodeRef}
@@ -101,12 +128,7 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
         ) : (
           <span />
         )}
-
-        {initials && (
-          <div className="w-6 h-6 rounded-full bg-pink/20 text-pink flex items-center justify-center text-[10px] font-bold">
-            {initials}
-          </div>
-        )}
+        <AssigneesBadge assignees={task.assignees} />
       </div>
     </div>
   );
@@ -115,15 +137,6 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
 // ---------- MobileTaskCard (no DnD) ----------
 
 function MobileTaskCard({ task }: { task: Task }) {
-  const initials = task.assignee
-    ? task.assignee.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : null;
-
   return (
     <Link
       href={`/admin/tasks/${task.id}`}
@@ -138,11 +151,7 @@ function MobileTaskCard({ task }: { task: Task }) {
         ) : (
           <span />
         )}
-        {initials && (
-          <div className="w-6 h-6 rounded-full bg-pink/20 text-pink flex items-center justify-center text-[10px] font-bold">
-            {initials}
-          </div>
-        )}
+        <AssigneesBadge assignees={task.assignees} />
       </div>
     </Link>
   );
@@ -202,7 +211,7 @@ export default function TasksPage() {
   const [activeTab, setActiveTab] = useState<TaskStatus>("TODO");
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newAssignee, setNewAssignee] = useState("");
+  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
   const [newDueDate, setNewDueDate] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -239,7 +248,7 @@ export default function TasksPage() {
   }, [fetchData]);
 
   const filteredTasks = tasks.filter((t) => {
-    if (filterAssignee && t.assignee?.id !== filterAssignee) return false;
+    if (filterAssignee && !t.assignees.some((a) => a.id === filterAssignee)) return false;
     return true;
   });
 
@@ -288,8 +297,8 @@ export default function TasksPage() {
   const handleQuickCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    if (!newAssignee) {
-      toast.error("יש לבחור משתמש");
+    if (newAssigneeIds.length === 0) {
+      toast.error("יש לבחור לפחות משתמש אחד");
       return;
     }
     setCreating(true);
@@ -299,7 +308,7 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTitle.trim(),
-          assigneeId: newAssignee,
+          assigneeIds: newAssigneeIds,
           ...(newDueDate ? { dueDate: newDueDate } : {}),
         }),
       });
@@ -307,7 +316,7 @@ export default function TasksPage() {
       toast.success("המשימה נוצרה");
       setCreateOpen(false);
       setNewTitle("");
-      setNewAssignee("");
+      setNewAssigneeIds([]);
       setNewDueDate("");
       fetchData();
     } catch {
@@ -483,22 +492,11 @@ export default function TasksPage() {
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">משויך ל *</label>
-            <select
-              value={newAssignee}
-              onChange={(e) => setNewAssignee(e.target.value)}
-              required
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
-            >
-              <option value="">בחר משתמש</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-            {users.length === 0 && (
-              <p className="text-xs text-red-400 mt-1">לא נטענו משתמשים — רענן ונסה שוב.</p>
-            )}
+            <AssigneePicker
+              users={users}
+              selectedIds={newAssigneeIds}
+              onChange={setNewAssigneeIds}
+            />
           </div>
 
           <div>
@@ -514,7 +512,7 @@ export default function TasksPage() {
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
-              disabled={creating || !newTitle.trim() || !newAssignee}
+              disabled={creating || !newTitle.trim() || newAssigneeIds.length === 0}
               className="flex-1 bg-pink hover:bg-pink-light disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
             >
               {creating ? "יוצר..." : "צור משימה"}

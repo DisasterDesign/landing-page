@@ -30,6 +30,8 @@ export async function PATCH(
     if ("cardcomFee" in body)
       updateData.cardcomFee =
         body.cardcomFee !== null && body.cardcomFee !== "" ? parseFloat(body.cardcomFee) : null;
+    if ("websiteUrl" in body)
+      updateData.websiteUrl = body.websiteUrl ? String(body.websiteUrl).trim() || null : null;
     if ("startDate" in body)
       updateData.startDate =
         body.startDate ? new Date(body.startDate).toISOString() : null;

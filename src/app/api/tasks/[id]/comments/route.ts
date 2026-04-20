@@ -37,18 +37,23 @@ export async function POST(
 
     const task = await prisma.task.findUnique({
       where: { id },
-      select: { assigneeId: true, title: true },
+      select: { title: true, assignees: { select: { id: true } } },
     });
-    if (task?.assigneeId) {
-      await createNotification(
-        {
-          recipientId: task.assigneeId,
-          type: "TASK_COMMENTED",
-          title: `${comment.author.name} הוסיף תגובה`,
-          body: task.title,
-          taskId: id,
-        },
-        session.user.id
+    if (task) {
+      const actorId = session.user.id;
+      await Promise.all(
+        task.assignees.map((a) =>
+          createNotification(
+            {
+              recipientId: a.id,
+              type: "TASK_COMMENTED",
+              title: `${comment.author.name} הוסיף תגובה`,
+              body: task.title,
+              taskId: id,
+            },
+            actorId
+          )
+        )
       );
     }
 

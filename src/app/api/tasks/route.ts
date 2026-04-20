@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     if (status) where.status = status as Prisma.EnumTaskStatusFilter;
     if (projectId) where.projectId = projectId;
-    if (assigneeId) where.assigneeId = assigneeId;
+    if (assigneeId) where.assignees = { some: { id: assigneeId } };
     if (priority) where.priority = priority as Prisma.EnumPriorityFilter;
 
     const [tasks, total] = await Promise.all([
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           project: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignees: { select: { id: true, name: true, email: true } },
           creator: { select: { id: true, name: true, email: true } },
           _count: { select: { comments: true } },
         },
@@ -77,33 +77,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { dueDate, ...rest } = parsed.data;
+    const { dueDate, assigneeIds, ...rest } = parsed.data;
 
     const task = await prisma.task.create({
       data: {
         ...rest,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         creatorId: session.user.id!,
+        assignees: { connect: assigneeIds.map((id) => ({ id })) },
       },
       include: {
         project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignees: { select: { id: true, name: true, email: true } },
         creator: { select: { id: true, name: true, email: true } },
       },
     });
 
-    if (task.assigneeId) {
-      await createNotification(
-        {
-          recipientId: task.assigneeId,
-          type: "TASK_ASSIGNED",
-          title: "משימה חדשה שויכה אליך",
-          body: task.title,
-          taskId: task.id,
-        },
-        session.user.id
-      );
-    }
+    // Notify each assignee (createNotification skips actor automatically)
+    const actorId = session.user.id;
+    await Promise.all(
+      task.assignees.map((a) =>
+        createNotification(
+          {
+            recipientId: a.id,
+            type: "TASK_ASSIGNED",
+            title: "משימה חדשה שויכה אליך",
+            body: task.title,
+            taskId: task.id,
+          },
+          actorId
+        )
+      )
+    );
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

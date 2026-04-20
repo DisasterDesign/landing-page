@@ -11,7 +11,7 @@ export async function GET() {
 
     const tasks = await prisma.task.findMany({
       where: {
-        assigneeId: session.user.id,
+        assignees: { some: { id: session.user.id } },
         status: { not: "DONE" },
       },
       select: {

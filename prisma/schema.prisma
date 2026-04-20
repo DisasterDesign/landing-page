@@ -81,7 +81,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedTasks Task[]   @relation("AssignedTasks")
+  assignedTasks Task[]   @relation("TaskAssignees")
   createdTasks  Task[]   @relation("CreatedTasks")
   comments      Comment[]
   blogPosts     BlogPost[]
@@ -116,8 +116,7 @@ model Task {
   projectId  String?
   project    Project? @relation(fields: [projectId], references: [id])
 
-  assigneeId String?
-  assignee   User?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  assignees User[] @relation("TaskAssignees")
 
   creatorId String
   creator   User     @relation("CreatedTasks", fields: [creatorId], references: [id])
@@ -257,6 +256,7 @@ model Client {
   amount      Float?
   expense     Float?
   cardcomFee  Float?
+  websiteUrl  String?
   startDate   DateTime?
   paymentDate DateTime?
   createdAt   DateTime  @default(now())
