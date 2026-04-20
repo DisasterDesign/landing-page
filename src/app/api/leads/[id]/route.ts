@@ -1,0 +1,86 @@
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+
+const patchSchema = z.object({
+  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"]).optional(),
+  nextFollowUpAt: z.string().nullable().optional(), // ISO date or null
+  isRead: z.boolean().optional(),
+});
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const lead = await prisma.contactSubmission.findUnique({
+      where: { id },
+      include: {
+        notes: {
+          orderBy: { createdAt: "asc" },
+          include: { author: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!lead) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(lead);
+  } catch (error) {
+    console.error("Lead get error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const parsed = patchSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const data: Record<string, unknown> = {};
+    if (parsed.data.status !== undefined) {
+      data.status = parsed.data.status;
+      if (parsed.data.status !== "NEW") data.isRead = true;
+    }
+    if (parsed.data.isRead !== undefined) data.isRead = parsed.data.isRead;
+    if (parsed.data.nextFollowUpAt !== undefined) {
+      data.nextFollowUpAt = parsed.data.nextFollowUpAt
+        ? new Date(parsed.data.nextFollowUpAt)
+        : null;
+    }
+
+    const lead = await prisma.contactSubmission.update({ where: { id }, data });
+    return NextResponse.json(lead);
+  } catch (error) {
+    console.error("Lead patch error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

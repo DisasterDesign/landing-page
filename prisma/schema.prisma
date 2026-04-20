@@ -89,6 +89,7 @@ model User {
   googleIntegration GoogleIntegration?
   utmLinks      UtmLink[]
   pushSubscriptions PushSubscription[]
+  contactNotes  ContactNote[]
 }
 
 model Project {
@@ -163,20 +164,38 @@ model Comment {
 }
 
 model ContactSubmission {
-  id        String        @id @default(cuid())
-  name      String
-  email     String
-  phone     String?
-  message   String
-  service   String?
-  isRead    Boolean       @default(false)
-  status    ContactStatus @default(NEW)
-  tags      String[]
-  createdAt DateTime      @default(now())
+  id              String        @id @default(cuid())
+  name            String
+  email           String
+  phone           String?
+  message         String
+  service         String?
+  isRead          Boolean       @default(false)
+  status          ContactStatus @default(NEW)
+  tags            String[]
+  source          String?
+  nextFollowUpAt  DateTime?
+  lastContactedAt DateTime?
+  createdAt       DateTime      @default(now())
+
+  notes ContactNote[]
 
   @@index([isRead])
   @@index([status])
+  @@index([nextFollowUpAt])
   @@index([createdAt])
+}
+
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   ContactSubmission @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
 }
 
 // ==================
