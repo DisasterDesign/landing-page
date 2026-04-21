@@ -47,24 +47,25 @@ export default function Modal({ isOpen, onClose, children, title }: ModalProps) 
   );
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden";
-
-      // Focus the modal on open
-      requestAnimationFrame(() => {
-        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusable && focusable.length > 0) {
-          focusable[0].focus();
-        }
-      });
-    }
+    if (!isOpen) return;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => {
+      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable && focusable.length > 0) {
+        focusable[0].focus();
+      }
+    });
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, handleKeyDown]);
 
   return (
