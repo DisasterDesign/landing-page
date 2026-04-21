@@ -18,6 +18,18 @@ function getIconDataUrl(): string {
   return cachedIconDataUrl;
 }
 
+let cachedBrandFont: ArrayBuffer | null = null;
+function getBrandFont(): ArrayBuffer | null {
+  if (cachedBrandFont !== null) return cachedBrandFont;
+  try {
+    const buf = readFileSync(join(process.cwd(), "public", "fonts", "fuzionfirst", "FuzionFirst-Bold.otf"));
+    cachedBrandFont = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  } catch {
+    cachedBrandFont = null;
+  }
+  return cachedBrandFont;
+}
+
 /**
  * Renders the shared FUZION WEBZ Open Graph card.
  * Pass an English subtitle (e.g. "ABOUT") to label the page; Hebrew is not
@@ -25,6 +37,7 @@ function getIconDataUrl(): string {
  */
 export function renderOgImage(subtitle?: string): ImageResponse {
   const iconDataUrl = getIconDataUrl();
+  const brandFont = getBrandFont();
   const tagline = subtitle ? `Digital Design Studio · ${subtitle}` : "Digital Design Studio";
 
   return new ImageResponse(
@@ -39,7 +52,7 @@ export function renderOgImage(subtitle?: string): ImageResponse {
           justifyContent: "center",
           backgroundColor: "#000000",
           color: "#ffffff",
-          fontFamily: "Arial, sans-serif",
+          fontFamily: brandFont ? "FuzionFirst, Arial, sans-serif" : "Arial, sans-serif",
           gap: "60px",
         }}
       >
@@ -103,6 +116,20 @@ export function renderOgImage(subtitle?: string): ImageResponse {
         </div>
       </div>
     ),
-    { ...OG_IMAGE_SIZE }
+    {
+      ...OG_IMAGE_SIZE,
+      ...(brandFont
+        ? {
+            fonts: [
+              {
+                name: "FuzionFirst",
+                data: brandFont,
+                weight: 700,
+                style: "normal",
+              },
+            ],
+          }
+        : {}),
+    }
   );
 }
