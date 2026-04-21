@@ -264,6 +264,12 @@ export default function AgreementsPage() {
                       >
                         צפה
                       </button>
+                      <a
+                        href={`/api/agreements/${a.id}/download`}
+                        className="text-pink hover:text-pink/80 text-xs underline-offset-2 hover:underline"
+                      >
+                        הורד
+                      </a>
                       {a.status === "DRAFT" && (
                         <button
                           onClick={() => handleDelete(a)}
