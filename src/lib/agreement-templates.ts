@@ -1,6 +1,22 @@
+import { readFileSync } from "fs";
+import { join } from "path";
+
 export type AgreementTier = "BASIC" | "ADVANCED" | "PREMIUM";
 
-export const AGREEMENT_DOCUMENT_VERSION = 2;
+export const AGREEMENT_DOCUMENT_VERSION = 3;
+
+let cachedLogoDataUrl: string | null = null;
+function getLogoDataUrl(): string {
+  if (!cachedLogoDataUrl) {
+    try {
+      const svg = readFileSync(join(process.cwd(), "public", "icon-black.svg"));
+      cachedLogoDataUrl = `data:image/svg+xml;base64,${svg.toString("base64")}`;
+    } catch {
+      cachedLogoDataUrl = "";
+    }
+  }
+  return cachedLogoDataUrl;
+}
 
 export interface AgreementData {
   customerName: string;
@@ -92,8 +108,8 @@ export function renderAgreement(
   const setup = data.oneTimeFee && data.oneTimeFee > 0 ? data.oneTimeFee : null;
 
   const customer = escapeHtml(data.customerName);
-  const business = escapeHtml(data.businessName || "—");
-  const idNumber = escapeHtml(data.idNumber || "—");
+  const business = escapeHtml(data.businessName || "-");
+  const idNumber = escapeHtml(data.idNumber || "-");
   const phone = escapeHtml(data.phone);
   const email = escapeHtml(data.email);
   const date = escapeHtml(data.date);
@@ -111,12 +127,13 @@ export function renderAgreement(
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<title>הסכם שירותי בניית ותחזוקת אתר — ${escapeHtml(meta.label)}</title>
+<title>הסכם שירותי בניית ותחזוקת אתר ${escapeHtml(meta.label)}</title>
 <style>
   body { font-family: 'Heebo', Arial, sans-serif; color: #111; max-width: 820px; margin: 0 auto; padding: 32px; line-height: 1.7; }
   .brand-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 2px solid #111; margin-bottom: 24px; }
+  .brand-logo img { width: 64px; height: 64px; display: block; }
   .brand-name { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
-  .brand-meta { font-size: 11px; color: #666; text-align: left; }
+  .brand-meta { font-size: 11px; color: #666; text-align: right; line-height: 1.5; }
   h1 { font-size: 22px; text-align: center; margin: 0 0 4px; }
   h2 { font-size: 16px; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #111; }
   .subtitle { text-align: center; color: #555; margin-bottom: 24px; font-size: 14px; }
@@ -145,19 +162,22 @@ export function renderAgreement(
 <body>
 
 <div class="brand-header">
-  <div class="brand-name">Fuzion Webz</div>
   <div class="brand-meta">
     סטודיו לבניית ותחזוקת אתרים<br/>
-    contact@fuzionwebz.com · www.fuzionwebz.com
+    info@fuzionwebz.com<br/>
+    www.fuzionwebz.com
+  </div>
+  <div class="brand-logo">
+    ${getLogoDataUrl() ? `<img src="${getLogoDataUrl()}" alt="Fuzion Webz" />` : `<div class="brand-name">Fuzion Webz</div>`}
   </div>
 </div>
 
 <h1>הסכם שירותי בניית ותחזוקת אתר</h1>
-<p class="subtitle">${tier ? `מסלול ${escapeHtml(meta.label)} · ` : ""}תאריך: ${date}</p>
+<p class="subtitle">${tier ? `מסלול ${escapeHtml(meta.label)}, תאריך: ${date}` : `תאריך: ${date}`}</p>
 
 <h2>1. הצדדים להסכם</h2>
 <table class="parties">
-  <tr><th>נותן השירות</th><td>Fuzion Webz · ע.מ./ח.פ. — · contact@fuzionwebz.com</td></tr>
+  <tr><th>נותן השירות</th><td>Fuzion Webz</td></tr>
   <tr><th>הלקוח / שם מלא</th><td>${customer}</td></tr>
   <tr><th>שם עסק</th><td>${business}</td></tr>
   <tr><th>ח.פ. / ע.מ.</th><td>${idNumber}</td></tr>
@@ -165,7 +185,7 @@ export function renderAgreement(
   <tr><th>אימייל</th><td>${email}</td></tr>
 </table>
 
-<h2>2. השירות הניתן${tier ? ` — מסלול ${escapeHtml(meta.label)}` : ""}</h2>
+<h2>2. השירות הניתן${tier ? `: מסלול ${escapeHtml(meta.label)}` : ""}</h2>
 <ul>
   ${includes.map((item) => `<li>${escapeHtml(item)}</li>`).join("\n  ")}
 </ul>
@@ -174,10 +194,10 @@ export function renderAgreement(
 <h2>3. תמורה ותנאי תשלום</h2>
 <div class="price-box">
   <p><strong>תשלום חודשי:</strong> ${fmtMoney(monthly)} ₪ + מע״מ כחוק</p>
-  ${setup ? `<p><strong>סכום הקמה חד פעמי:</strong> ${fmtMoney(setup)} ₪ + מע״מ — ישולם עם חתימת ההסכם</p>` : ""}
+  ${setup ? `<p><strong>סכום הקמה חד פעמי:</strong> ${fmtMoney(setup)} ₪ + מע״מ. ישולם עם חתימת ההסכם.</p>` : ""}
 </div>
 <div class="clause">
-  <p>התשלום החודשי ייגבה בהוראת קבע באמצעי תשלום מאובטח (כרטיס אשראי או הוראה לחיוב חשבון). עיכוב בתשלום של מעל 30 ימים יוביל להשבתת השירות עד להסדר חוב.</p>
+  <p>התשלום החודשי ייגבה בהוראת קבע מכרטיס אשראי בלבד, באמצעות סולק מאובטח. עיכוב בתשלום של מעל 30 ימים יוביל להשבתת השירות עד להסדר חוב.</p>
   <p>נותן השירות רשאי לעדכן את התעריף בהודעה מוקדמת בכתב של 30 יום לפחות.</p>
 </div>
 
@@ -188,27 +208,27 @@ export function renderAgreement(
 
 <h2>5. בעלות על קבצי האתר</h2>
 <div class="clause">
-  <p>קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות לאורך כל תקופת ההתקשרות. בתום תקופת 24 החודשים הראשונה ולאחר תשלום מלא של כל המגיע — הקבצים יועברו לבעלות הלקוח לפי דרישתו, בכתב.</p>
+  <p>קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות לאורך כל תקופת ההתקשרות. בתום תקופת 24 החודשים הראשונה ולאחר תשלום מלא של כל המגיע, הקבצים יועברו לבעלות הלקוח לפי דרישתו בכתב.</p>
 </div>
 
 <h2>6. בעלות על תכנים</h2>
 <div class="clause">
-  <p>תכנים שסיפק הלקוח (טקסטים, תמונות, סרטונים, מותג, לוגו) — בבעלותו המלאה של הלקוח לאורך כל הדרך, וזכויות אלה אינן עוברות לנותן השירות. הלקוח מתחייב שכל התכנים שהוא מספק נכונים וחוקיים, ושאין בהם הפרת זכויות יוצרים, סימני מסחר או חוקי פרטיות.</p>
+  <p>תכנים שסיפק הלקוח (טקסטים, תמונות, סרטונים, מותג, לוגו) הם בבעלותו המלאה של הלקוח לאורך כל הדרך, וזכויות אלה אינן עוברות לנותן השירות. הלקוח מתחייב שכל התכנים שהוא מספק נכונים וחוקיים, ושאין בהם הפרת זכויות יוצרים, סימני מסחר או חוקי פרטיות.</p>
 </div>
 
 <h2>7. העברת חומרים והתקדמות הפרויקט</h2>
 <div class="clause">
-  <p>הלקוח מתחייב להעביר את כל החומרים הדרושים לפיתוח האתר תוך זמן סביר, ולהגיב לבקשות אישור תוכן/עיצוב. אישור או אי-מענה תוך 7 ימי עסקים ממועד הבקשה — ייחשבו כאישור שתיקה והפרויקט יתקדם בהתאם.</p>
+  <p>הלקוח מתחייב להעביר את כל החומרים הדרושים לפיתוח האתר תוך זמן סביר ולהגיב לבקשות אישור תוכן או עיצוב. אם הלקוח לא יספק התייחסות בכתב תוך 7 ימי עסקים ממועד הבקשה, ייחשב הדבר כאישור מכללא של החומר ונותן השירות יהיה רשאי להתקדם בהתאם, מבלי שייגרע מאחריותו לאיכות הביצוע.</p>
 </div>
 
 <h2>8. אי-תשלום והשבתה</h2>
 <div class="clause">
-  <p>איחור של 30 יום בתשלום יוביל להשבתת האתר. הקבצים יישמרו במערכת נותן השירות 60 יום נוספים. לאחר 60 יום מההשבתה — נותן השירות רשאי למחוק את הקבצים ללא חבות.</p>
+  <p>איחור של 30 יום בתשלום יוביל להשבתת האתר. הקבצים יישמרו במערכת נותן השירות 60 יום נוספים. לאחר 60 יום מההשבתה, נותן השירות רשאי למחוק את הקבצים ללא חבות.</p>
 </div>
 
 <h2>9. הגבלת אחריות</h2>
 <div class="clause">
-  <p>נותן השירות לא יישא באחריות לנזקים עקיפים, אובדן הכנסה, אובדן נתונים, הפסד עסקי או נזקים תוצאתיים שעלולים להיגרם בעת או בעקבות השימוש באתר. אחריותו המקסימלית של נותן השירות לכל עילה תהא מוגבלת לסכום שהלקוח שילם בפועל ב-12 החודשים שקדמו לאירוע.</p>
+  <p>השירות ניתן "AS IS" לפי הצהרת הלקוח על דרישותיו. נותן השירות אינו אחראי, בכל צורה שהיא, לכל נזק ישיר, עקיף, נסיבתי, תוצאתי, פיננסי, עסקי או אישי שייגרם ללקוח או לצד שלישי כתוצאה מהשימוש באתר, השבתתו, אבדן נתונים, פגיעת אבטחה או כל פעולה או מחדל הקשורים בו. הלקוח מצהיר כי הוא לוקח על עצמו את מלוא הסיכון בהפעלת האתר ובניהול תכניו, וכי לא תקום לו עילת תביעה כלשהי כלפי נותן השירות מעבר להחזר תשלום שלא בתמורה לשירות שניתן בפועל.</p>
 </div>
 
 <h2>10. סודיות הדדית</h2>
@@ -245,9 +265,11 @@ export function renderAgreement(
       <div style="margin-top: 6px; font-size: 12px; color: #666;">תאריך: ${date}</div>
     </td>
     <td>
-      <div class="signature-label">חתימת נותן השירות: Fuzion Webz</div>
-      <div style="height: 90px; display: flex; align-items: end; font-style: italic; color: #555;">________________________</div>
-      <div style="margin-top: 6px; font-size: 12px; color: #666;">תאריך: ${date}</div>
+      <div class="signature-label">חתימת נותן השירות</div>
+      ${getLogoDataUrl()
+        ? `<img src="${getLogoDataUrl()}" alt="Fuzion Webz" style="max-height:80px; display:block;" />`
+        : `<div style="height: 80px; display: flex; align-items: end; font-style: italic; color: #555;">Fuzion Webz</div>`}
+      <div style="margin-top: 6px; font-size: 12px; color: #666;">Fuzion Webz, תאריך: ${date}</div>
     </td>
   </tr>
 </table>
@@ -262,7 +284,7 @@ ${signedAt || signedIp || signedUA ? `
 </div>` : ""}
 
 <div class="footer-note">
-  הסכם זה הופק והוחתם דיגיטלית במערכת Fuzion Webz · גרסת מסמך v${AGREEMENT_DOCUMENT_VERSION}
+  הסכם זה הופק והוחתם דיגיטלית במערכת Fuzion Webz. גרסת מסמך v${AGREEMENT_DOCUMENT_VERSION}
 </div>
 
 </body>

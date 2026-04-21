@@ -120,9 +120,13 @@ body {
   background-color: white;
   color: #FFFFFF;
   font-family: "Birzia", "Meruba", "Anomalia", system-ui, sans-serif;
-  cursor: none;
   overflow-x: hidden;
 }
+
+/* Hide system cursor only when our custom cursor is actually mounted.
+   CustomCursor adds .js-custom-cursor on mount; if it fails to load the
+   native cursor stays visible. */
+body.js-custom-cursor { cursor: none; }
 
 /* Headings keep the original Meruba font — only running text uses Birzia */
 h1, h2, h3, h4, h5, h6 {
@@ -364,9 +368,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (pointer: coarse) {
-  body {
-    cursor: auto;
-  }
+  body.js-custom-cursor { cursor: auto; }
 }
 
 ::selection {

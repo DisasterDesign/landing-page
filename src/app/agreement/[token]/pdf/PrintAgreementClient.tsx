@@ -33,18 +33,18 @@ export default function PrintAgreementClient({ content, status, customerName, si
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-100">
-      {/* Toolbar — hidden when printing */}
+      {/* Toolbar (hidden when printing) */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 print:hidden">
         <div>
           <div className="text-sm font-bold text-gray-900">
-            הסכם — {customerName}
+            הסכם של {customerName}
           </div>
           <div className="text-xs text-gray-500">
             {status === "SIGNED" && signedAt
               ? `נחתם ${new Date(signedAt).toLocaleDateString("he-IL")}`
               : status === "SIGNED"
               ? "נחתם"
-              : "טיוטה — לא חתום"}
+              : "טיוטה (לא חתום)"}
           </div>
         </div>
         <button

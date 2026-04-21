@@ -225,7 +225,15 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
 
         {/* Agreement preview */}
         <section>
-          <h2 className="text-xs tracking-[0.3em] uppercase text-gray-500 mb-3">תוכן ההסכם</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs tracking-[0.3em] uppercase text-gray-500">תוכן ההסכם</h2>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span>גלול בתוך המסמך לקריאה מלאה</span>
+              <svg className="w-3.5 h-3.5 animate-bounce text-pink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </div>
+          </div>
           <article
             className="bg-white text-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
           >
@@ -243,7 +251,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 space-y-5">
           <div>
             <h2 className="text-xl font-bold">פרטי החותם</h2>
-            <p className="text-sm text-gray-400 mt-1">אנא וודא שכל הפרטים נכונים — הם יופיעו על ההסכם החתום.</p>
+            <p className="text-sm text-gray-400 mt-1">אנא וודא שכל הפרטים נכונים. הם יופיעו על ההסכם החתום.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

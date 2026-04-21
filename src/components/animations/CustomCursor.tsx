@@ -14,6 +14,17 @@ export default function CustomCursor() {
   const springX = useSpring(cursorX, { damping: 25, stiffness: 300 });
   const springY = useSpring(cursorY, { damping: 25, stiffness: 300 });
 
+  // Opt-in body class so globals.css only hides the system cursor when our
+  // custom cursor is actually active. If this component fails to mount the
+  // class is never added and the native cursor stays visible.
+  useEffect(() => {
+    if (isTouch) return;
+    document.body.classList.add("js-custom-cursor");
+    return () => {
+      document.body.classList.remove("js-custom-cursor");
+    };
+  }, [isTouch]);
+
   useEffect(() => {
     if (isTouch) return;
 
@@ -47,7 +58,7 @@ export default function CustomCursor() {
   if (isTouch) return null;
 
   const sizes = {
-    default: 12,
+    default: 14,
     pointer: 48,
     view: 64,
     drag: 48,
@@ -57,7 +68,7 @@ export default function CustomCursor() {
 
   return (
     <motion.div
-      className="fixed top-0 left-0 z-[9999] pointer-events-none mix-blend-difference flex items-center justify-center"
+      className="fixed top-0 left-0 z-[9999] pointer-events-none flex items-center justify-center"
       style={{
         x: springX,
         y: springY,
@@ -73,10 +84,10 @@ export default function CustomCursor() {
       transition={{ type: "spring", damping: 20, stiffness: 300 }}
     >
       <div
-        className="rounded-full bg-white"
+        className="rounded-full bg-white shadow-[0_0_0_1.5px_rgba(0,0,0,0.85),0_2px_10px_rgba(0,0,0,0.35)]"
         style={{
-          width: cursorVariant === "default" ? 12 : "100%",
-          height: cursorVariant === "default" ? 12 : "100%",
+          width: cursorVariant === "default" ? 14 : "100%",
+          height: cursorVariant === "default" ? 14 : "100%",
           transition: "width 0.2s, height 0.2s",
         }}
       />
