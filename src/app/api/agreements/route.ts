@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const content = renderAgreement(tier, {
+    const content = renderAgreement(tier ?? null, {
       customerName,
       businessName,
       idNumber,
@@ -76,14 +76,14 @@ export async function POST(request: NextRequest) {
       email,
       monthlyPrice,
       oneTimeFee: oneTimeFee ?? null,
-      tier,
+      tier: tier ?? null,
       additionalServices: cleanedExtras,
       date: new Date().toLocaleDateString("he-IL"),
     });
 
     const agreement = await prisma.agreement.create({
       data: {
-        tier,
+        tier: tier ?? null,
         additionalServices: cleanedExtras,
         monthlyPrice,
         oneTimeFee: oneTimeFee ?? null,

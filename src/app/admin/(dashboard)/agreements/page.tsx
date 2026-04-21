@@ -58,6 +58,8 @@ const TIER_PRICE: Record<Tier, number> = {
   PREMIUM: 299,
 };
 
+type TierChoice = Tier | "CUSTOM";
+
 export default function AgreementsPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function AgreementsPage() {
   const [viewing, setViewing] = useState<Agreement | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [tier, setTier] = useState<Tier>("ADVANCED");
+  const [tierChoice, setTierChoice] = useState<TierChoice>("ADVANCED");
   const [monthlyPrice, setMonthlyPrice] = useState<string>(String(TIER_PRICE.ADVANCED));
   const [oneTimeFee, setOneTimeFee] = useState<string>("");
   const [additionalServices, setAdditionalServices] = useState<string[]>([]);
@@ -94,7 +96,7 @@ export default function AgreementsPage() {
   }, [fetchList]);
 
   const resetForm = () => {
-    setTier("ADVANCED");
+    setTierChoice("ADVANCED");
     setMonthlyPrice(String(TIER_PRICE.ADVANCED));
     setOneTimeFee("");
     setAdditionalServices([]);
@@ -106,9 +108,13 @@ export default function AgreementsPage() {
     setEmail("");
   };
 
-  const pickTier = (next: Tier) => {
-    setTier(next);
-    setMonthlyPrice(String(TIER_PRICE[next]));
+  const pickTier = (next: TierChoice) => {
+    setTierChoice(next);
+    if (next === "CUSTOM") {
+      setMonthlyPrice("");
+    } else {
+      setMonthlyPrice(String(TIER_PRICE[next]));
+    }
   };
 
   const addClause = () => {
@@ -147,7 +153,7 @@ export default function AgreementsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tier,
+          tier: tierChoice === "CUSTOM" ? null : tierChoice,
           additionalServices,
           monthlyPrice: monthly,
           oneTimeFee: setup,
@@ -307,26 +313,30 @@ export default function AgreementsPage() {
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="הסכם חדש">
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
           <div>
-            <label className="block text-sm text-gray-400 mb-2">מסלול בסיס *</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["BASIC", "ADVANCED", "PREMIUM"] as Tier[]).map((t) => (
+            <label className="block text-sm text-gray-400 mb-2">סוג ההסכם *</label>
+            <div className="grid grid-cols-4 gap-2">
+              {(["BASIC", "ADVANCED", "PREMIUM", "CUSTOM"] as TierChoice[]).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => pickTier(t)}
                   className={`px-3 py-3 rounded-xl border text-sm font-bold transition-colors ${
-                    tier === t
+                    tierChoice === t
                       ? "border-pink bg-pink/15 text-white"
                       : "border-gray-700 text-gray-400 hover:border-gray-600"
                   }`}
                 >
-                  <div>{TIER_LABEL[t]}</div>
-                  <div className="text-xs font-normal mt-0.5 opacity-80">{TIER_PRICE[t]} ₪</div>
+                  <div>{t === "CUSTOM" ? "מותאם" : TIER_LABEL[t]}</div>
+                  <div className="text-xs font-normal mt-0.5 opacity-80">
+                    {t === "CUSTOM" ? "הזן מחיר" : `${TIER_PRICE[t]} ₪`}
+                  </div>
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-gray-500 mt-2">
-              בחר את המסלול הסטנדרטי, ולמטה אפשר להוסיף סעיפים נוספים שיוסיפו לתוכן ההסכם.
+              {tierChoice === "CUSTOM"
+                ? "מסלול מותאם — מחיר וסעיפים נקבעים על-ידך. הוסף סעיפים למטה לתיאור השירות."
+                : "המסלול קובע את רשימת השירותים הסטנדרטית. ניתן להוסיף סעיפים נוספים מתחת."}
             </p>
           </div>
 
