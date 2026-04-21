@@ -86,7 +86,46 @@ const columns: { id: TaskStatus; label: string; color: string }[] = [
 
 // ---------- TaskCard Component ----------
 
-function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
+function StatusToggle({
+  status,
+  onToggle,
+}: {
+  status: TaskStatus;
+  onToggle: () => void;
+}) {
+  const done = status === "DONE";
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-label={done ? "סמן כלא בוצע" : "סמן כבוצע"}
+      title={done ? "סמן כלא בוצע" : "סמן כבוצע"}
+      className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+        done
+          ? "bg-green-500 border-green-500 text-white"
+          : "border-gray-600 hover:border-green-500 text-transparent hover:text-green-500/50"
+      }`}
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+    </button>
+  );
+}
+
+function TaskCard({
+  task,
+  overlay,
+  onToggleStatus,
+}: {
+  task: Task;
+  overlay?: boolean;
+  onToggleStatus?: (task: Task) => void;
+}) {
   const router = useRouter();
   const {
     attributes,
@@ -118,7 +157,18 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
         overlay ? "shadow-2xl ring-2 ring-pink/50" : ""
       }`}
     >
-      <p className="text-sm font-medium text-white leading-snug">{task.title}</p>
+      <div className="flex items-start gap-3">
+        {onToggleStatus && (
+          <StatusToggle status={task.status} onToggle={() => onToggleStatus(task)} />
+        )}
+        <p
+          className={`flex-1 text-sm font-medium leading-snug ${
+            task.status === "DONE" ? "text-gray-500 line-through" : "text-white"
+          }`}
+        >
+          {task.title}
+        </p>
+      </div>
 
       <div className="flex items-center justify-between gap-2">
         {task.dueDate ? (
@@ -136,13 +186,27 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
 
 // ---------- MobileTaskCard (no DnD) ----------
 
-function MobileTaskCard({ task }: { task: Task }) {
+function MobileTaskCard({
+  task,
+  onToggleStatus,
+}: {
+  task: Task;
+  onToggleStatus: (task: Task) => void;
+}) {
   return (
-    <Link
-      href={`/admin/tasks/${task.id}`}
-      className="block bg-gray-800 rounded-xl p-4 border border-gray-700 active:bg-gray-700 transition-colors space-y-3"
-    >
-      <p className="text-sm font-medium text-white leading-snug">{task.title}</p>
+    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 active:bg-gray-700 transition-colors space-y-3">
+      <div className="flex items-start gap-3">
+        <StatusToggle status={task.status} onToggle={() => onToggleStatus(task)} />
+        <Link href={`/admin/tasks/${task.id}`} className="flex-1 min-w-0">
+          <p
+            className={`text-sm font-medium leading-snug ${
+              task.status === "DONE" ? "text-gray-500 line-through" : "text-white"
+            }`}
+          >
+            {task.title}
+          </p>
+        </Link>
+      </div>
       <div className="flex items-center justify-between gap-2">
         {task.dueDate ? (
           <span className="text-[11px] text-gray-500">
@@ -153,7 +217,7 @@ function MobileTaskCard({ task }: { task: Task }) {
         )}
         <AssigneesBadge assignees={task.assignees} />
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -162,9 +226,11 @@ function MobileTaskCard({ task }: { task: Task }) {
 function KanbanColumn({
   column,
   tasks,
+  onToggleStatus,
 }: {
   column: (typeof columns)[0];
   tasks: Task[];
+  onToggleStatus: (task: Task) => void;
 }) {
   const { setNodeRef } = useSortable({
     id: column.id,
@@ -188,7 +254,7 @@ function KanbanColumn({
       >
         <div className="p-3 space-y-3 flex-1">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard key={task.id} task={task} onToggleStatus={onToggleStatus} />
           ))}
         </div>
       </SortableContext>
@@ -326,6 +392,30 @@ export default function TasksPage() {
     }
   };
 
+  const handleToggleStatus = useCallback(async (task: Task) => {
+    const next: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, status: next } : t))
+    );
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(next === "DONE" ? "סומן כבוצע" : "הוחזר ללבצע", {
+        duration: 1500,
+        style: { fontSize: "13px" },
+      });
+    } catch {
+      toast.error("שגיאה בעדכון");
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t))
+      );
+    }
+  }, []);
+
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveTask(null);
     const { active, over } = event;
@@ -417,6 +507,7 @@ export default function TasksPage() {
                 key={col.id}
                 column={col}
                 tasks={getColumnTasks(col.id)}
+                onToggleStatus={handleToggleStatus}
               />
             ))}
           </div>
@@ -461,7 +552,7 @@ export default function TasksPage() {
             </p>
           ) : (
             getColumnTasks(activeTab).map((task) => (
-              <MobileTaskCard key={task.id} task={task} />
+              <MobileTaskCard key={task.id} task={task} onToggleStatus={handleToggleStatus} />
             ))
           )}
         </div>
