@@ -67,7 +67,8 @@ export const agreementTierEnum = z.enum(["BASIC", "ADVANCED", "PREMIUM"]);
 export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
 
 export const createAgreementSchema = z.object({
-  tier: agreementTierEnum.nullable().optional(),
+  tier: agreementTierEnum,
+  additionalServices: z.array(z.string().min(1).max(300)).max(30).optional().default([]),
   monthlyPrice: z.number().positive("מחיר חודשי חייב להיות חיובי"),
   oneTimeFee: z.number().positive().nullable().optional(),
   customerName: z.string().min(1, "שם חובה"),
@@ -80,7 +81,8 @@ export const createAgreementSchema = z.object({
 
 export const updateAgreementSchema = z.object({
   status: agreementStatusEnum.optional(),
-  tier: agreementTierEnum.nullable().optional(),
+  tier: agreementTierEnum.optional(),
+  additionalServices: z.array(z.string().min(1).max(300)).max(30).optional(),
   monthlyPrice: z.number().positive().optional(),
   oneTimeFee: z.number().positive().nullable().optional(),
   customerName: z.string().min(1).optional(),

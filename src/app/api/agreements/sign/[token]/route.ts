@@ -106,6 +106,7 @@ export async function POST(
       monthlyPrice: existing.monthlyPrice,
       oneTimeFee: existing.oneTimeFee,
       tier: existing.tier,
+      additionalServices: existing.additionalServices,
       date: signedAt.toLocaleDateString("he-IL"),
       signatureData,
       signedAt: signedAt.toISOString(),

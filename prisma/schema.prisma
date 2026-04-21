@@ -316,10 +316,11 @@ model ClientNote {
 }
 
 model Agreement {
-  id              String          @id @default(cuid())
-  tier            AgreementTier?  // optional — used as a price-template hint, not a constraint
-  monthlyPrice    Float           // editable by creator; defaults to tier price when tier is picked
-  oneTimeFee      Float?          // optional setup fee
+  id                 String          @id @default(cuid())
+  tier               AgreementTier?  // base tier (required for new agreements; nullable for legacy rows)
+  additionalServices String[]        @default([])  // extra service clauses appended to the tier base list
+  monthlyPrice       Float           // editable by creator; defaults to tier price when tier is picked
+  oneTimeFee         Float?          // optional setup fee
   customerName    String
   businessName    String?
   idNumber        String?

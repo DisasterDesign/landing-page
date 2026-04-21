@@ -3,7 +3,7 @@ import { join } from "path";
 
 export type AgreementTier = "BASIC" | "ADVANCED" | "PREMIUM";
 
-export const AGREEMENT_DOCUMENT_VERSION = 3;
+export const AGREEMENT_DOCUMENT_VERSION = 4;
 
 let cachedLogoDataUrl: string | null = null;
 function getLogoDataUrl(): string {
@@ -28,6 +28,7 @@ export interface AgreementData {
   monthlyPrice: number;
   oneTimeFee?: number | null;
   tier?: AgreementTier | null;
+  additionalServices?: string[];
   signatureData?: string;
   signedAt?: string;
   signedIp?: string;
@@ -103,7 +104,8 @@ export function renderAgreement(
   data: AgreementData
 ): string {
   const meta = tier ? TIER_META[tier] : { label: "מותאם אישית", price: data.monthlyPrice };
-  const includes = tier ? TIER_INCLUDES[tier] : CUSTOM_INCLUDES;
+  const baseIncludes = tier ? TIER_INCLUDES[tier] : CUSTOM_INCLUDES;
+  const extras = (data.additionalServices ?? []).map((s) => s.trim()).filter(Boolean);
   const monthly = data.monthlyPrice;
   const setup = data.oneTimeFee && data.oneTimeFee > 0 ? data.oneTimeFee : null;
 
@@ -187,8 +189,13 @@ export function renderAgreement(
 
 <h2>2. השירות הניתן${tier ? `: מסלול ${escapeHtml(meta.label)}` : ""}</h2>
 <ul>
-  ${includes.map((item) => `<li>${escapeHtml(item)}</li>`).join("\n  ")}
+  ${baseIncludes.map((item) => `<li>${escapeHtml(item)}</li>`).join("\n  ")}
 </ul>
+${extras.length > 0 ? `
+<p style="font-weight: 700; margin: 14px 0 6px; font-size: 14px;">סעיפים נוספים שהוסכמו עם הלקוח:</p>
+<ul>
+  ${extras.map((item) => `<li>${escapeHtml(item)}</li>`).join("\n  ")}
+</ul>` : ""}
 <p style="font-size: 12px; color: #555;">בנוסף ניתן להוסיף בתשלום נפרד: צ׳אט-בוט AI מותאם, פיתוח פיצ׳רים מיוחדים ואינטגרציות מורכבות.</p>
 
 <h2>3. תמורה ותנאי תשלום</h2>

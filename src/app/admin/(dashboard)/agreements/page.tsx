@@ -58,8 +58,6 @@ const TIER_PRICE: Record<Tier, number> = {
   PREMIUM: 299,
 };
 
-type TierChoice = "CUSTOM" | Tier;
-
 export default function AgreementsPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,9 +65,11 @@ export default function AgreementsPage() {
   const [viewing, setViewing] = useState<Agreement | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [tierChoice, setTierChoice] = useState<TierChoice>("CUSTOM");
-  const [monthlyPrice, setMonthlyPrice] = useState<string>("");
+  const [tier, setTier] = useState<Tier>("ADVANCED");
+  const [monthlyPrice, setMonthlyPrice] = useState<string>(String(TIER_PRICE.ADVANCED));
   const [oneTimeFee, setOneTimeFee] = useState<string>("");
+  const [additionalServices, setAdditionalServices] = useState<string[]>([]);
+  const [newClause, setNewClause] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [idNumber, setIdNumber] = useState("");
@@ -94,9 +94,11 @@ export default function AgreementsPage() {
   }, [fetchList]);
 
   const resetForm = () => {
-    setTierChoice("CUSTOM");
-    setMonthlyPrice("");
+    setTier("ADVANCED");
+    setMonthlyPrice(String(TIER_PRICE.ADVANCED));
     setOneTimeFee("");
+    setAdditionalServices([]);
+    setNewClause("");
     setCustomerName("");
     setBusinessName("");
     setIdNumber("");
@@ -104,11 +106,24 @@ export default function AgreementsPage() {
     setEmail("");
   };
 
-  const pickTier = (choice: TierChoice) => {
-    setTierChoice(choice);
-    if (choice !== "CUSTOM") {
-      setMonthlyPrice(String(TIER_PRICE[choice]));
+  const pickTier = (next: Tier) => {
+    setTier(next);
+    setMonthlyPrice(String(TIER_PRICE[next]));
+  };
+
+  const addClause = () => {
+    const trimmed = newClause.trim();
+    if (!trimmed) return;
+    if (additionalServices.length >= 30) {
+      toast.error("ניתן להוסיף עד 30 סעיפים");
+      return;
     }
+    setAdditionalServices([...additionalServices, trimmed]);
+    setNewClause("");
+  };
+
+  const removeClause = (index: number) => {
+    setAdditionalServices(additionalServices.filter((_, i) => i !== index));
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -132,7 +147,8 @@ export default function AgreementsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tier: tierChoice === "CUSTOM" ? null : tierChoice,
+          tier,
+          additionalServices,
           monthlyPrice: monthly,
           oneTimeFee: setup,
           customerName: customerName.trim(),
@@ -291,29 +307,72 @@ export default function AgreementsPage() {
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="הסכם חדש">
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
           <div>
-            <label className="block text-sm text-gray-400 mb-2">תבנית מסלול</label>
-            <div className="grid grid-cols-4 gap-2">
-              {(["CUSTOM", "BASIC", "ADVANCED", "PREMIUM"] as TierChoice[]).map((t) => (
+            <label className="block text-sm text-gray-400 mb-2">מסלול בסיס *</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["BASIC", "ADVANCED", "PREMIUM"] as Tier[]).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => pickTier(t)}
                   className={`px-3 py-3 rounded-xl border text-sm font-bold transition-colors ${
-                    tierChoice === t
+                    tier === t
                       ? "border-pink bg-pink/15 text-white"
                       : "border-gray-700 text-gray-400 hover:border-gray-600"
                   }`}
                 >
-                  <div>{t === "CUSTOM" ? "מותאם" : TIER_LABEL[t]}</div>
-                  <div className="text-xs font-normal mt-0.5 opacity-80">
-                    {t === "CUSTOM" ? "קבע מחיר" : `${TIER_PRICE[t]} ₪`}
-                  </div>
+                  <div>{TIER_LABEL[t]}</div>
+                  <div className="text-xs font-normal mt-0.5 opacity-80">{TIER_PRICE[t]} ₪</div>
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-gray-500 mt-2">
-              התבנית רק קובעת רשימת שירותים מוצעים. המחיר תמיד נקבע ע״י המוכר.
+              בחר את המסלול הסטנדרטי, ולמטה אפשר להוסיף סעיפים נוספים שיוסיפו לתוכן ההסכם.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">סעיפים נוספים בהסכם</label>
+            <div className="flex gap-2">
+              <input
+                value={newClause}
+                onChange={(e) => setNewClause(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addClause();
+                  }
+                }}
+                placeholder="לדוגמה: אינטגרציה עם מערכת CRM של הלקוח"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              />
+              <button
+                type="button"
+                onClick={addClause}
+                className="px-3 py-2 bg-cyan/20 hover:bg-cyan/30 text-cyan text-sm font-bold rounded-xl transition-colors"
+              >
+                + הוסף סעיף
+              </button>
+            </div>
+            {additionalServices.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {additionalServices.map((clause, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-xl text-sm text-white"
+                  >
+                    <span className="flex-1">• {clause}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeClause(i)}
+                      className="shrink-0 text-gray-500 hover:text-red-400 text-xs"
+                      aria-label="הסר סעיף"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
