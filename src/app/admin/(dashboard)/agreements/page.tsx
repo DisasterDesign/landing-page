@@ -10,8 +10,9 @@ type Status = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
 
 interface Agreement {
   id: string;
-  tier: Tier;
+  tier: Tier | null;
   monthlyPrice: number;
+  oneTimeFee: number | null;
   customerName: string;
   businessName: string | null;
   idNumber: string | null;
@@ -57,6 +58,8 @@ const TIER_PRICE: Record<Tier, number> = {
   PREMIUM: 299,
 };
 
+type TierChoice = "CUSTOM" | Tier;
+
 export default function AgreementsPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,9 @@ export default function AgreementsPage() {
   const [viewing, setViewing] = useState<Agreement | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [tier, setTier] = useState<Tier>("ADVANCED");
+  const [tierChoice, setTierChoice] = useState<TierChoice>("CUSTOM");
+  const [monthlyPrice, setMonthlyPrice] = useState<string>("");
+  const [oneTimeFee, setOneTimeFee] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [idNumber, setIdNumber] = useState("");
@@ -89,7 +94,9 @@ export default function AgreementsPage() {
   }, [fetchList]);
 
   const resetForm = () => {
-    setTier("ADVANCED");
+    setTierChoice("CUSTOM");
+    setMonthlyPrice("");
+    setOneTimeFee("");
     setCustomerName("");
     setBusinessName("");
     setIdNumber("");
@@ -97,15 +104,37 @@ export default function AgreementsPage() {
     setEmail("");
   };
 
+  const pickTier = (choice: TierChoice) => {
+    setTierChoice(choice);
+    if (choice !== "CUSTOM") {
+      setMonthlyPrice(String(TIER_PRICE[choice]));
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     try {
+      const monthly = parseFloat(monthlyPrice);
+      if (!Number.isFinite(monthly) || monthly <= 0) {
+        toast.error("הזן מחיר חודשי תקין");
+        setCreating(false);
+        return;
+      }
+      const setup = oneTimeFee.trim() ? parseFloat(oneTimeFee) : null;
+      if (setup !== null && (!Number.isFinite(setup) || setup <= 0)) {
+        toast.error("סכום הקמה לא תקין");
+        setCreating(false);
+        return;
+      }
+
       const res = await fetch("/api/agreements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tier,
+          tier: tierChoice === "CUSTOM" ? null : tierChoice,
+          monthlyPrice: monthly,
+          oneTimeFee: setup,
           customerName: customerName.trim(),
           businessName: businessName.trim() || undefined,
           idNumber: idNumber.trim() || undefined,
@@ -182,8 +211,9 @@ export default function AgreementsPage() {
             <tr className="bg-gray-800 border-b border-gray-700">
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[140px]">שם עסק</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">מסלול</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">מסלול</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">מחיר/חודש</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הקמה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24">סטטוס</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך יצירה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך חתימה</th>
@@ -193,7 +223,7 @@ export default function AgreementsPage() {
           <tbody>
             {agreements.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center text-gray-500 py-12">
+                <td colSpan={9} className="text-center text-gray-500 py-12">
                   עוד לא יצרת הסכמים
                 </td>
               </tr>
@@ -203,9 +233,14 @@ export default function AgreementsPage() {
                   <td className="px-3 py-2.5 text-white">{a.customerName}</td>
                   <td className="px-3 py-2.5 text-gray-300">{a.businessName || "—"}</td>
                   <td className="px-3 py-2.5">
-                    <Badge variant={TIER_VARIANT[a.tier]}>{TIER_LABEL[a.tier]}</Badge>
+                    {a.tier ? (
+                      <Badge variant={TIER_VARIANT[a.tier]}>{TIER_LABEL[a.tier]}</Badge>
+                    ) : (
+                      <Badge variant="gray">מותאם</Badge>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 font-mono text-white">{a.monthlyPrice} ₪</td>
+                  <td className="px-3 py-2.5 font-mono text-gray-300">{a.oneTimeFee ? `${a.oneTimeFee} ₪` : "—"}</td>
                   <td className="px-3 py-2.5">
                     <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
                   </td>
@@ -250,23 +285,52 @@ export default function AgreementsPage() {
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="הסכם חדש">
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
           <div>
-            <label className="block text-sm text-gray-400 mb-2">מסלול</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["BASIC", "ADVANCED", "PREMIUM"] as Tier[]).map((t) => (
+            <label className="block text-sm text-gray-400 mb-2">תבנית מסלול</label>
+            <div className="grid grid-cols-4 gap-2">
+              {(["CUSTOM", "BASIC", "ADVANCED", "PREMIUM"] as TierChoice[]).map((t) => (
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setTier(t)}
+                  onClick={() => pickTier(t)}
                   className={`px-3 py-3 rounded-xl border text-sm font-bold transition-colors ${
-                    tier === t
+                    tierChoice === t
                       ? "border-pink bg-pink/15 text-white"
                       : "border-gray-700 text-gray-400 hover:border-gray-600"
                   }`}
                 >
-                  <div>{TIER_LABEL[t]}</div>
-                  <div className="text-xs font-normal mt-0.5 opacity-80">{TIER_PRICE[t]} ₪/חודש</div>
+                  <div>{t === "CUSTOM" ? "מותאם" : TIER_LABEL[t]}</div>
+                  <div className="text-xs font-normal mt-0.5 opacity-80">
+                    {t === "CUSTOM" ? "קבע מחיר" : `${TIER_PRICE[t]} ₪`}
+                  </div>
                 </button>
               ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              התבנית רק קובעת רשימת שירותים מוצעים. המחיר תמיד נקבע ע״י המוכר.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">תשלום חודשי (₪) *</label>
+              <input
+                value={monthlyPrice}
+                onChange={(e) => setMonthlyPrice(e.target.value)}
+                required
+                inputMode="numeric"
+                placeholder="1500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">סכום הקמה חד-פעמי (₪)</label>
+              <input
+                value={oneTimeFee}
+                onChange={(e) => setOneTimeFee(e.target.value)}
+                inputMode="numeric"
+                placeholder="אופציונלי"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              />
             </div>
           </div>
 
@@ -291,7 +355,7 @@ export default function AgreementsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">ח.פ. / ת.ז.</label>
+              <label className="block text-sm text-gray-400 mb-1">ח.פ. / ע.מ.</label>
               <input
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
@@ -327,7 +391,7 @@ export default function AgreementsPage() {
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
-              disabled={creating || !customerName.trim() || !phone.trim() || !email.trim()}
+              disabled={creating || !customerName.trim() || !phone.trim() || !email.trim() || !monthlyPrice.trim()}
               className="flex-1 bg-pink hover:bg-pink-light disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
             >
               {creating ? "יוצר..." : "צור הסכם"}

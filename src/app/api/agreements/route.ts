@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createAgreementSchema } from "@/lib/validations";
-import { renderAgreement, tierMonthlyPrice } from "@/lib/agreement-templates";
+import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import type { AgreementStatus, AgreementTier } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -51,28 +51,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { tier, customerName, businessName, idNumber, phone, email, clientId } = parsed.data;
-    const monthlyPrice = tierMonthlyPrice(tier);
-
-    const content = renderAgreement(tier, {
+    const {
+      tier,
+      monthlyPrice,
+      oneTimeFee,
       customerName,
       businessName,
       idNumber,
       phone,
       email,
+      clientId,
+    } = parsed.data;
+
+    const content = renderAgreement(tier ?? null, {
+      customerName,
+      businessName,
+      idNumber,
+      phone,
+      email,
+      monthlyPrice,
+      oneTimeFee: oneTimeFee ?? null,
+      tier: tier ?? null,
       date: new Date().toLocaleDateString("he-IL"),
     });
 
     const agreement = await prisma.agreement.create({
       data: {
-        tier,
+        tier: tier ?? null,
         monthlyPrice,
+        oneTimeFee: oneTimeFee ?? null,
         customerName,
         businessName: businessName || null,
         idNumber: idNumber || null,
         phone,
         email,
         content,
+        documentVersion: AGREEMENT_DOCUMENT_VERSION,
         createdBy: session.user.id,
         ...(clientId ? { clientId } : {}),
       },

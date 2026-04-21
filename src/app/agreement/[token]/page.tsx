@@ -1,8 +1,31 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import SignAgreementClient from "./SignAgreementClient";
 
 export const dynamic = "force-dynamic";
+
+const TIER_LABEL: Record<string, string> = {
+  BASIC: "בסיס",
+  ADVANCED: "מתקדם",
+  PREMIUM: "פרימיום",
+};
+
+function BrandShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div dir="rtl" className="min-h-screen bg-black text-white">
+      <div
+        className="pointer-events-none fixed inset-0 opacity-30"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "60px 60px",
+        }}
+      />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
 
 export default async function AgreementSignPage({
   params,
@@ -16,6 +39,7 @@ export default async function AgreementSignPage({
     select: {
       tier: true,
       monthlyPrice: true,
+      oneTimeFee: true,
       customerName: true,
       businessName: true,
       idNumber: true,
@@ -31,44 +55,70 @@ export default async function AgreementSignPage({
 
   if (agreement.status === "CANCELLED") {
     return (
-      <div dir="rtl" className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-6">
-        <div className="max-w-md text-center bg-gray-900 border border-gray-800 rounded-2xl p-10">
-          <h1 className="text-2xl font-bold mb-3">ההסכם בוטל</h1>
-          <p className="text-gray-400">לא ניתן לחתום על הסכם זה. אנא צור קשר עם Fuzion Webz.</p>
+      <BrandShell>
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
+            <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם בוטל</h1>
+            <p className="text-gray-400">לא ניתן לחתום על הסכם זה. אנא צור קשר עם Fuzion Webz.</p>
+            <Link href="https://www.fuzionwebz.com" className="inline-block mt-6 text-sm text-cyan hover:underline">
+              fuzionwebz.com →
+            </Link>
+          </div>
         </div>
-      </div>
+      </BrandShell>
     );
   }
 
   if (agreement.status === "SIGNED") {
     return (
-      <div dir="rtl" className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-6">
-        <div className="max-w-md text-center bg-gray-900 border border-gray-800 rounded-2xl p-10">
-          <div className="text-5xl mb-4">✓</div>
-          <h1 className="text-2xl font-bold mb-3">ההסכם כבר נחתם</h1>
-          <p className="text-gray-400">
-            ההסכם נחתם בתאריך{" "}
-            {agreement.signedAt
-              ? new Date(agreement.signedAt).toLocaleDateString("he-IL")
-              : ""}
-            . תודה!
-          </p>
+      <BrandShell>
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
+              ✓
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם נחתם</h1>
+            <p className="text-gray-400 mb-6">
+              ההסכם נחתם בתאריך{" "}
+              {agreement.signedAt
+                ? new Date(agreement.signedAt).toLocaleDateString("he-IL")
+                : ""}
+              . תודה!
+            </p>
+            <a
+              href={`/agreement/${token}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-6 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow"
+            >
+              הורדת ההסכם החתום (PDF)
+              <span>↓</span>
+            </a>
+          </div>
         </div>
-      </div>
+      </BrandShell>
     );
   }
 
   return (
-    <SignAgreementClient
-      token={token}
-      content={agreement.content}
-      initial={{
-        customerName: agreement.customerName,
-        businessName: agreement.businessName,
-        idNumber: agreement.idNumber,
-        phone: agreement.phone,
-        email: agreement.email,
-      }}
-    />
+    <BrandShell>
+      <SignAgreementClient
+        token={token}
+        content={agreement.content}
+        priceInfo={{
+          tier: agreement.tier,
+          tierLabel: agreement.tier ? TIER_LABEL[agreement.tier] : null,
+          monthlyPrice: agreement.monthlyPrice,
+          oneTimeFee: agreement.oneTimeFee,
+        }}
+        initial={{
+          customerName: agreement.customerName,
+          businessName: agreement.businessName,
+          idNumber: agreement.idNumber,
+          phone: agreement.phone,
+          email: agreement.email,
+        }}
+      />
+    </BrandShell>
   );
 }

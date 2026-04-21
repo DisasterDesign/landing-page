@@ -91,6 +91,7 @@ model User {
   utmLinks      UtmLink[]
   pushSubscriptions PushSubscription[]
   contactNotes  ContactNote[]
+  clientNotes   ClientNote[] @relation("ClientNoteAuthor")
 }
 
 model Project {
@@ -273,42 +274,69 @@ model FontStyle {
 }
 
 model Client {
-  id          String    @id @default(cuid())
-  number      Int       @default(autoincrement())
-  name        String
-  status      String    @default("")
-  notes       String?
-  amount      Float?
-  expense     Float?
-  cardcomFee  Float?
-  websiteUrl  String?
-  startDate   DateTime?
-  paymentDate DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  number       Int       @default(autoincrement())
+  name         String
+  status       String    @default("")
+  notes        String?
+  amount       Float?
+  expense      Float?
+  cardcomFee   Float?
+  websiteUrl   String?
+  // Contact / business identity (added for Client Card)
+  email        String?
+  phone        String?
+  businessName String?
+  idNumber     String?
+  source       String?   // "agreement_signed" | "manual" | "lead_converted" | "import"
+  archivedAt   DateTime?
+  startDate    DateTime?
+  paymentDate  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  agreements Agreement[]
+  agreements    Agreement[]
+  clientNotes   ClientNote[]
 
   @@index([number])
+  @@index([email])
+  @@index([phone])
+}
+
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("ClientNoteAuthor", fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
 }
 
 model Agreement {
-  id            String          @id @default(cuid())
-  tier          AgreementTier
-  monthlyPrice  Float
-  customerName  String
-  businessName  String?
-  idNumber      String?
-  phone         String
-  email         String
-  status        AgreementStatus @default(DRAFT)
-  signedAt      DateTime?
-  signatureData String?
-  content       String
-  signToken     String          @unique @default(cuid())
-  createdBy     String
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id              String          @id @default(cuid())
+  tier            AgreementTier?  // optional — used as a price-template hint, not a constraint
+  monthlyPrice    Float           // editable by creator; defaults to tier price when tier is picked
+  oneTimeFee      Float?          // optional setup fee
+  customerName    String
+  businessName    String?
+  idNumber        String?
+  phone           String
+  email           String
+  status          AgreementStatus @default(DRAFT)
+  signedAt        DateTime?
+  signatureData   String?
+  content         String
+  signToken       String          @unique @default(cuid())
+  createdBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  // Legal trail captured at signing
+  signedIp        String?
+  signedUserAgent String?
+  documentVersion Int             @default(1)
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])

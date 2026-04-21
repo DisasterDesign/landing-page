@@ -2,9 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
+interface PriceInfo {
+  tier: string | null;
+  tierLabel: string | null;
+  monthlyPrice: number;
+  oneTimeFee: number | null;
+}
+
 interface Props {
   token: string;
   content: string;
+  priceInfo: PriceInfo;
   initial: {
     customerName: string;
     businessName: string | null;
@@ -14,7 +22,9 @@ interface Props {
   };
 }
 
-export default function SignAgreementClient({ token, content, initial }: Props) {
+const fmtNum = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+
+export default function SignAgreementClient({ token, content, priceInfo, initial }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -37,7 +47,6 @@ export default function SignAgreementClient({ token, content, initial }: Props) 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Scale for retina
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * ratio;
@@ -148,90 +157,146 @@ export default function SignAgreementClient({ token, content, initial }: Props) 
 
   if (done) {
     return (
-      <div dir="rtl" className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-6">
-        <div className="max-w-md text-center bg-gray-900 border border-gray-800 rounded-2xl p-10">
-          <div className="text-6xl mb-4">✓</div>
-          <h1 className="text-2xl font-bold mb-3">ההסכם נחתם בהצלחה</h1>
-          <p className="text-gray-400">תודה! עותק חתום נשמר במערכת.</p>
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
+            ✓
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם נחתם בהצלחה</h1>
+          <p className="text-gray-400 mb-6">תודה! עותק חתום נשמר במערכת והקישור להורדה תקף לכל אורך הזמן.</p>
+          <a
+            href={`/agreement/${token}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-6 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow"
+          >
+            הורד PDF
+            <span>↓</span>
+          </a>
         </div>
       </div>
     );
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="bg-gray-900 border-b border-gray-800 py-4 px-6 text-center">
-        <h1 className="text-lg font-bold">חתימה על הסכם — Fuzion Webz</h1>
+    <>
+      {/* Brand header */}
+      <header className="px-6 pt-10 pb-6 text-center">
+        <h1
+          dir="ltr"
+          className="text-3xl md:text-5xl font-extrabold tracking-[-0.04em]"
+        >
+          FUZION <span className="text-gray-500">WEBZ</span>
+        </h1>
+        <div className="w-24 h-[2px] mx-auto mt-4 bg-gradient-to-r from-pink to-cyan" />
+        <p className="mt-4 text-[10px] sm:text-xs tracking-[0.35em] uppercase text-gray-500">
+          Digital Agreement · חתימה דיגיטלית מאובטחת
+        </p>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
-        <article
-          className="bg-white text-black rounded-2xl overflow-hidden border border-gray-300"
-          style={{ minHeight: "60vh" }}
-        >
-          <iframe
-            srcDoc={content}
-            sandbox=""
-            title="הסכם"
-            className="w-full"
-            style={{ height: "70vh", border: "0" }}
-          />
-        </article>
+      <main className="max-w-3xl mx-auto px-4 pb-16 space-y-8">
+        {/* Pricing summary card */}
+        <section className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">מסלול שירות</div>
+              <div className="text-xl md:text-2xl font-bold mt-1">
+                {priceInfo.tierLabel ? `מסלול ${priceInfo.tierLabel}` : "חבילה מותאמת אישית"}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">תשלום חודשי</div>
+              <div className="text-2xl md:text-3xl font-extrabold mt-1">
+                {fmtNum(priceInfo.monthlyPrice)}
+                <span className="text-base text-gray-400 mr-1">₪</span>
+                <span className="text-sm text-gray-500"> + מע״מ</span>
+              </div>
+            </div>
+          </div>
+          {priceInfo.oneTimeFee ? (
+            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-sm">
+              <span className="text-gray-400">סכום הקמה חד-פעמי</span>
+              <span className="font-mono">
+                {fmtNum(priceInfo.oneTimeFee)} ₪ <span className="text-xs text-gray-500">+ מע״מ</span>
+              </span>
+            </div>
+          ) : null}
+        </section>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5">
-          <h2 className="text-xl font-bold">פרטי החותם</h2>
+        {/* Agreement preview */}
+        <section>
+          <h2 className="text-xs tracking-[0.3em] uppercase text-gray-500 mb-3">תוכן ההסכם</h2>
+          <article
+            className="bg-white text-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+          >
+            <iframe
+              srcDoc={content}
+              sandbox=""
+              title="הסכם"
+              className="w-full"
+              style={{ height: "70vh", border: "0" }}
+            />
+          </article>
+        </section>
+
+        {/* Sign form */}
+        <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 space-y-5">
+          <div>
+            <h2 className="text-xl font-bold">פרטי החותם</h2>
+            <p className="text-sm text-gray-400 mt-1">אנא וודא שכל הפרטים נכונים — הם יופיעו על ההסכם החתום.</p>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">שם מלא *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">שם מלא *</label>
               <input
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-pink"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">שם העסק</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">שם העסק</label>
               <input
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-pink"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">ח.פ. / ת.ז.</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">ח.פ. / ע.מ.</label>
               <input
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-pink"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">טלפון *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">טלפון *</label>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
                 inputMode="tel"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-pink"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink"
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm text-gray-400 mb-1">אימייל *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">אימייל *</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-pink"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink"
               />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-gray-400">חתימה *</label>
+              <label className="text-xs tracking-wide text-gray-400">חתימה *</label>
               <button
                 type="button"
                 onClick={clearSignature}
@@ -242,7 +307,7 @@ export default function SignAgreementClient({ token, content, initial }: Props) 
             </div>
             <canvas
               ref={canvasRef}
-              className="w-full bg-white rounded-xl border-2 border-dashed border-gray-700 touch-none cursor-crosshair"
+              className="w-full bg-white rounded-xl border-2 border-dashed border-white/20 touch-none cursor-crosshair"
               style={{ height: 160 }}
               onMouseDown={startDraw}
               onMouseMove={draw}
@@ -261,7 +326,9 @@ export default function SignAgreementClient({ token, content, initial }: Props) 
               onChange={(e) => setAgreed(e.target.checked)}
               className="mt-1 w-4 h-4 accent-pink"
             />
-            <span>קראתי את ההסכם במלואו ואני מסכים/ה לכל התנאים המפורטים בו.</span>
+            <span>
+              קראתי את ההסכם במלואו ואני מסכים/ה לכל התנאים, לרבות תקופת ההתקשרות, התמורה ומסירת ההסכם בחתימה דיגיטלית בהתאם לחוק חתימה אלקטרונית, התשס״א-2001.
+            </span>
           </label>
 
           {error && (
@@ -273,12 +340,24 @@ export default function SignAgreementClient({ token, content, initial }: Props) 
           <button
             type="submit"
             disabled={submitting || !hasSignature || !agreed}
-            className="w-full bg-pink hover:bg-pink-light disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
+            className="w-full bg-gradient-to-r from-pink to-cyan text-black font-extrabold py-3.5 rounded-full hover:shadow-[0_0_40px_rgba(229,3,162,0.45)] disabled:opacity-40 disabled:cursor-not-allowed transition-shadow"
           >
-            {submitting ? "חותם..." : "חתום על ההסכם"}
+            {submitting ? "חותם..." : "אישור וחתימה על ההסכם"}
           </button>
+
+          <p className="text-[11px] text-center text-gray-500">
+            על ידי לחיצה על &quot;אישור וחתימה&quot; אתה מאשר שהקראת את ההסכם והבנת את תוכנו.
+            <br />
+            ייאסף ויירשם פרט מועד החתימה, כתובת ה-IP שלך וזיהוי הדפדפן לצורך תיעוד משפטי.
+          </p>
         </form>
+
+        <footer className="text-center text-xs text-gray-600 pt-6">
+          <a href="https://www.fuzionwebz.com" className="hover:text-cyan">
+            fuzionwebz.com
+          </a>
+        </footer>
       </main>
-    </div>
+    </>
   );
 }

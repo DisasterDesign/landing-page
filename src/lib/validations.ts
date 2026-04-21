@@ -67,7 +67,9 @@ export const agreementTierEnum = z.enum(["BASIC", "ADVANCED", "PREMIUM"]);
 export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
 
 export const createAgreementSchema = z.object({
-  tier: agreementTierEnum,
+  tier: agreementTierEnum.nullable().optional(),
+  monthlyPrice: z.number().positive("מחיר חודשי חייב להיות חיובי"),
+  oneTimeFee: z.number().positive().nullable().optional(),
   customerName: z.string().min(1, "שם חובה"),
   businessName: z.string().optional(),
   idNumber: z.string().optional(),
@@ -78,6 +80,9 @@ export const createAgreementSchema = z.object({
 
 export const updateAgreementSchema = z.object({
   status: agreementStatusEnum.optional(),
+  tier: agreementTierEnum.nullable().optional(),
+  monthlyPrice: z.number().positive().optional(),
+  oneTimeFee: z.number().positive().nullable().optional(),
   customerName: z.string().min(1).optional(),
   businessName: z.string().nullable().optional(),
   idNumber: z.string().nullable().optional(),
@@ -107,8 +112,16 @@ export const clientPatchSchema = z.object({
   expense: z.number().min(0).nullable().optional(),
   cardcomFee: z.number().min(0).nullable().optional(),
   websiteUrl: z.string().nullable().optional(),
+  email: z.string().email().nullable().optional().or(z.literal("")),
+  phone: z.string().nullable().optional(),
+  businessName: z.string().nullable().optional(),
+  idNumber: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   paymentDate: z.string().nullable().optional(),
+});
+
+export const createClientNoteSchema = z.object({
+  body: z.string().min(1, "תוכן הפתק חובה").max(5000),
 });
 
 // Blog

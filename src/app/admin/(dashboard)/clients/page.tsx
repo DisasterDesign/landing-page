@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 interface Client {
@@ -13,9 +14,17 @@ interface Client {
   expense: number | null;
   cardcomFee: number | null;
   websiteUrl: string | null;
+  source: string | null;
   startDate: string | null;
   paymentDate: string | null;
 }
+
+const SOURCE_LABEL: Record<string, string> = {
+  agreement_signed: "מהסכם חתום",
+  manual: "ידני",
+  lead_converted: "מליד",
+  import: "ייבוא",
+};
 
 type EditableField = "name" | "status" | "notes" | "amount" | "expense" | "websiteUrl" | "startDate" | "paymentDate";
 
@@ -401,9 +410,36 @@ export default function ClientsPage() {
                   }`}
                 >
                   <td className="px-3 py-1 text-gray-500 font-mono text-xs">
-                    {client.number}
+                    <Link
+                      href={`/admin/clients/${client.id}`}
+                      className="hover:text-pink"
+                      title="פתח כרטיס לקוח"
+                    >
+                      #{client.number}
+                    </Link>
                   </td>
-                  <td className="px-1 py-0.5">{renderCell(client, "name")}</td>
+                  <td className="px-1 py-0.5">
+                    <div className="flex items-center gap-1">
+                      <div className="flex-1 min-w-0">{renderCell(client, "name")}</div>
+                      <Link
+                        href={`/admin/clients/${client.id}`}
+                        className="shrink-0 text-gray-500 hover:text-pink p-1.5 rounded hover:bg-gray-700/50"
+                        title="פתח כרטיס לקוח"
+                        aria-label="פתח כרטיס לקוח"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </div>
+                    {client.source && SOURCE_LABEL[client.source] ? (
+                      <div className="px-2 mt-0.5">
+                        <span className="inline-block text-[10px] text-gray-500">
+                          {SOURCE_LABEL[client.source]}
+                        </span>
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="px-1 py-0.5">{renderCell(client, "websiteUrl")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "notes")}</td>

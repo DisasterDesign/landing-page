@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signAgreementSchema } from "@/lib/validations";
-import { renderAgreement } from "@/lib/agreement-templates";
+import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { notifyAllAdmins } from "@/lib/notifications";
+
+function getClientIp(request: NextRequest): string | null {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = request.headers.get("x-real-ip");
+  if (real) return real;
+  return null;
+}
 
 export async function GET(
   _request: NextRequest,
@@ -16,6 +27,7 @@ export async function GET(
         id: true,
         tier: true,
         monthlyPrice: true,
+        oneTimeFee: true,
         customerName: true,
         businessName: true,
         idNumber: true,
@@ -82,6 +94,8 @@ export async function POST(
 
     const { customerName, businessName, idNumber, phone, email, signatureData } = parsed.data;
     const signedAt = new Date();
+    const signedIp = getClientIp(request);
+    const signedUserAgent = request.headers.get("user-agent");
 
     const finalContent = renderAgreement(existing.tier, {
       customerName,
@@ -89,8 +103,23 @@ export async function POST(
       idNumber,
       phone,
       email,
+      monthlyPrice: existing.monthlyPrice,
+      oneTimeFee: existing.oneTimeFee,
+      tier: existing.tier,
       date: signedAt.toLocaleDateString("he-IL"),
       signatureData,
+      signedAt: signedAt.toISOString(),
+      signedIp: signedIp ?? undefined,
+      signedUserAgent: signedUserAgent ?? undefined,
+    });
+
+    const linkedClientId = await ensureClientForAgreement({
+      currentClientId: existing.clientId,
+      customerName,
+      businessName,
+      idNumber,
+      phone,
+      email,
     });
 
     await prisma.agreement.update({
@@ -103,15 +132,27 @@ export async function POST(
         email,
         signatureData,
         signedAt,
+        signedIp: signedIp ?? null,
+        signedUserAgent: signedUserAgent ?? null,
+        documentVersion: AGREEMENT_DOCUMENT_VERSION,
         status: "SIGNED",
         content: finalContent,
+        ...(linkedClientId ? { clientId: linkedClientId } : {}),
       },
     });
+
+    const tierLabel = existing.tier === "BASIC"
+      ? "בסיס"
+      : existing.tier === "ADVANCED"
+      ? "מתקדם"
+      : existing.tier === "PREMIUM"
+      ? "פרימיום"
+      : "מותאם אישית";
 
     await notifyAllAdmins({
       type: "AGREEMENT_SIGNED",
       title: `הסכם נחתם — ${customerName}`,
-      body: `מסלול ${existing.tier === "BASIC" ? "בסיס" : existing.tier === "ADVANCED" ? "מתקדם" : "פרימיום"}`,
+      body: `מסלול ${tierLabel} · ${existing.monthlyPrice.toLocaleString("he-IL")} ₪/חודש`,
     });
 
     return NextResponse.json({ success: true });
@@ -122,4 +163,58 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+async function ensureClientForAgreement(input: {
+  currentClientId: string | null;
+  customerName: string;
+  businessName?: string;
+  idNumber?: string;
+  phone: string;
+  email: string;
+}): Promise<string | null> {
+  if (input.currentClientId) {
+    return input.currentClientId;
+  }
+
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const normalizedPhone = input.phone.replace(/\D/g, "");
+
+  const existing = await prisma.client.findFirst({
+    where: {
+      OR: [
+        { email: { equals: normalizedEmail, mode: "insensitive" } },
+        ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+      ],
+      archivedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existing) {
+    await prisma.client.update({
+      where: { id: existing.id },
+      data: {
+        name: existing.name || input.customerName,
+        email: existing.email || normalizedEmail,
+        phone: existing.phone || normalizedPhone || input.phone,
+        businessName: existing.businessName || input.businessName || null,
+        idNumber: existing.idNumber || input.idNumber || null,
+      },
+    });
+    return existing.id;
+  }
+
+  const created = await prisma.client.create({
+    data: {
+      name: input.customerName,
+      email: normalizedEmail,
+      phone: normalizedPhone || input.phone,
+      businessName: input.businessName || null,
+      idNumber: input.idNumber || null,
+      source: "agreement_signed",
+      status: "פעיל",
+    },
+  });
+  return created.id;
 }

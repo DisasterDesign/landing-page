@@ -1,13 +1,21 @@
 export type AgreementTier = "BASIC" | "ADVANCED" | "PREMIUM";
 
-interface AgreementData {
+export const AGREEMENT_DOCUMENT_VERSION = 2;
+
+export interface AgreementData {
   customerName: string;
   businessName?: string;
   idNumber?: string;
   phone: string;
   email: string;
   date: string;
+  monthlyPrice: number;
+  oneTimeFee?: number | null;
+  tier?: AgreementTier | null;
   signatureData?: string;
+  signedAt?: string;
+  signedIp?: string;
+  signedUserAgent?: string;
 }
 
 const TIER_META: Record<AgreementTier, { label: string; price: number }> = {
@@ -53,6 +61,12 @@ const TIER_INCLUDES: Record<AgreementTier, string[]> = {
   ],
 };
 
+const CUSTOM_INCLUDES = [
+  "פיתוח לפי דרישות שהוסכמו בנפרד עם הלקוח",
+  "תחזוקה: אחסון, גיבוי, דומיין, עדכונים, ניטור",
+  "תמיכה בוואטסאפ",
+];
+
 const escapeHtml = (s: string | undefined | null) =>
   String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -61,9 +75,22 @@ const escapeHtml = (s: string | undefined | null) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-export function renderAgreement(tier: AgreementTier, data: AgreementData): string {
-  const meta = TIER_META[tier];
-  const includes = TIER_INCLUDES[tier];
+const fmtMoney = (n: number) =>
+  n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+
+export function tierMonthlyPrice(tier: AgreementTier): number {
+  return TIER_META[tier].price;
+}
+
+export function renderAgreement(
+  tier: AgreementTier | null | undefined,
+  data: AgreementData
+): string {
+  const meta = tier ? TIER_META[tier] : { label: "מותאם אישית", price: data.monthlyPrice };
+  const includes = tier ? TIER_INCLUDES[tier] : CUSTOM_INCLUDES;
+  const monthly = data.monthlyPrice;
+  const setup = data.oneTimeFee && data.oneTimeFee > 0 ? data.oneTimeFee : null;
+
   const customer = escapeHtml(data.customerName);
   const business = escapeHtml(data.businessName || "—");
   const idNumber = escapeHtml(data.idNumber || "—");
@@ -74,13 +101,22 @@ export function renderAgreement(tier: AgreementTier, data: AgreementData): strin
     ? `<img src="${escapeHtml(data.signatureData)}" alt="חתימה" style="max-width:240px;max-height:90px;display:block;" />`
     : `<div style="height:90px;border-bottom:1px solid #999;"></div>`;
 
+  const signedAt = data.signedAt ? escapeHtml(data.signedAt) : null;
+  const signedIp = data.signedIp ? escapeHtml(data.signedIp) : null;
+  const signedUA = data.signedUserAgent
+    ? escapeHtml(data.signedUserAgent.length > 120 ? data.signedUserAgent.slice(0, 117) + "..." : data.signedUserAgent)
+    : null;
+
   return `<!doctype html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<title>הסכם שירותי בניית ותחזוקת אתר — מסלול ${escapeHtml(meta.label)}</title>
+<title>הסכם שירותי בניית ותחזוקת אתר — ${escapeHtml(meta.label)}</title>
 <style>
   body { font-family: 'Heebo', Arial, sans-serif; color: #111; max-width: 820px; margin: 0 auto; padding: 32px; line-height: 1.7; }
+  .brand-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 2px solid #111; margin-bottom: 24px; }
+  .brand-name { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
+  .brand-meta { font-size: 11px; color: #666; text-align: left; }
   h1 { font-size: 22px; text-align: center; margin: 0 0 4px; }
   h2 { font-size: 16px; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #111; }
   .subtitle { text-align: center; color: #555; margin-bottom: 24px; font-size: 14px; }
@@ -91,86 +127,113 @@ export function renderAgreement(tier: AgreementTier, data: AgreementData): strin
   li { margin-bottom: 4px; font-size: 14px; }
   p { margin: 8px 0; font-size: 14px; }
   .price-box { background: #f9fafb; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin: 8px 0; font-size: 15px; }
+  .price-box strong { display: inline-block; min-width: 130px; }
   .clause { margin-bottom: 14px; }
   .signature-table { width: 100%; border-collapse: collapse; margin-top: 32px; }
   .signature-table td { border: 1px solid #ccc; padding: 16px; vertical-align: top; width: 50%; font-size: 13px; }
   .signature-label { color: #666; font-size: 12px; margin-bottom: 6px; }
-  @media print { body { padding: 12px; } }
+  .audit-trail { margin-top: 24px; padding: 12px; background: #f9fafb; border-right: 3px solid #111; font-size: 11px; color: #555; line-height: 1.5; }
+  .audit-trail strong { color: #111; }
+  .footer-note { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 10px; color: #888; text-align: center; }
+  @media print {
+    body { padding: 12px; max-width: 100%; }
+    .audit-trail { page-break-inside: avoid; }
+    .signature-table { page-break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
 
+<div class="brand-header">
+  <div class="brand-name">Fuzion Webz</div>
+  <div class="brand-meta">
+    סטודיו לבניית ותחזוקת אתרים<br/>
+    contact@fuzionwebz.com · www.fuzionwebz.com
+  </div>
+</div>
+
 <h1>הסכם שירותי בניית ותחזוקת אתר</h1>
-<p class="subtitle">מסלול ${escapeHtml(meta.label)} · תאריך: ${date}</p>
+<p class="subtitle">${tier ? `מסלול ${escapeHtml(meta.label)} · ` : ""}תאריך: ${date}</p>
 
 <h2>1. הצדדים להסכם</h2>
 <table class="parties">
   <tr><th>נותן השירות</th><td>Fuzion Webz · ע.מ./ח.פ. — · contact@fuzionwebz.com</td></tr>
   <tr><th>הלקוח / שם מלא</th><td>${customer}</td></tr>
   <tr><th>שם עסק</th><td>${business}</td></tr>
-  <tr><th>ח.פ. / ת.ז.</th><td>${idNumber}</td></tr>
+  <tr><th>ח.פ. / ע.מ.</th><td>${idNumber}</td></tr>
   <tr><th>טלפון</th><td>${phone}</td></tr>
   <tr><th>אימייל</th><td>${email}</td></tr>
 </table>
 
-<h2>2. מה כלול במסלול ${escapeHtml(meta.label)}</h2>
+<h2>2. השירות הניתן${tier ? ` — מסלול ${escapeHtml(meta.label)}` : ""}</h2>
 <ul>
   ${includes.map((item) => `<li>${escapeHtml(item)}</li>`).join("\n  ")}
 </ul>
-<p style="font-size: 12px; color: #555;">בכל המסלולים ניתן להוסיף בתשלום נוסף: צ׳אט-בוט AI מותאם, פיתוח פיצ׳רים מיוחדים ואינטגרציות מורכבות.</p>
+<p style="font-size: 12px; color: #555;">בנוסף ניתן להוסיף בתשלום נפרד: צ׳אט-בוט AI מותאם, פיתוח פיצ׳רים מיוחדים ואינטגרציות מורכבות.</p>
 
-<h2>3. תשלום</h2>
+<h2>3. תמורה ותנאי תשלום</h2>
 <div class="price-box">
-  <strong>מחיר חודשי:</strong> ${meta.price} ₪ + מע״מ.
+  <p><strong>תשלום חודשי:</strong> ${fmtMoney(monthly)} ₪ + מע״מ כחוק</p>
+  ${setup ? `<p><strong>סכום הקמה חד פעמי:</strong> ${fmtMoney(setup)} ₪ + מע״מ — ישולם עם חתימת ההסכם</p>` : ""}
 </div>
 <div class="clause">
-  <p>התשלום יבוצע בהוראת קבע חודשית באמצעי תשלום מאובטח. עיכוב בתשלום של מעל 14 ימים יוביל להשבתת השירות עד להסדר חוב.</p>
-  <p>נותן השירות רשאי לעדכן את המחיר בהודעה מוקדמת של 30 יום לפחות.</p>
+  <p>התשלום החודשי ייגבה בהוראת קבע באמצעי תשלום מאובטח (כרטיס אשראי או הוראה לחיוב חשבון). עיכוב בתשלום של מעל 30 ימים יוביל להשבתת השירות עד להסדר חוב.</p>
+  <p>נותן השירות רשאי לעדכן את התעריף בהודעה מוקדמת בכתב של 30 יום לפחות.</p>
 </div>
 
 <h2>4. תקופת ההסכם</h2>
 <div class="clause">
-  <p>ההסכם הוא לתקופה של 24 חודשים מיום החתימה. בתום התקופה ההסכם יתחדש אוטומטית, אלא אם אחד הצדדים יודיע על סיום ההתקשרות בכתב לפחות 30 יום מראש.</p>
+  <p>ההסכם הוא לתקופה של 24 חודשים מיום החתימה. בתום התקופה ההסכם יתחדש אוטומטית לתקופות נוספות של 12 חודשים, אלא אם אחד הצדדים יודיע לצד השני בכתב על סיום ההתקשרות לפחות 30 יום לפני תום התקופה.</p>
 </div>
 
-<h2>5. קבצי האתר</h2>
+<h2>5. בעלות על קבצי האתר</h2>
 <div class="clause">
-  <p>קבצי האתר יועברו לבעלות הלקוח רק לאחר השלמת 24 התשלומים החודשיים. עד אז, הקבצים נמצאים בבעלות נותן השירות.</p>
+  <p>קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות לאורך כל תקופת ההתקשרות. בתום תקופת 24 החודשים הראשונה ולאחר תשלום מלא של כל המגיע — הקבצים יועברו לבעלות הלקוח לפי דרישתו, בכתב.</p>
 </div>
 
-<h2>6. בעלות וזכויות</h2>
+<h2>6. בעלות על תכנים</h2>
 <div class="clause">
-  <p>נותן השירות נשאר בעל האתר עד סיום התקופה ותשלום מלוא התמורה. תכנים שסיפק הלקוח (טקסטים, תמונות, מותג) נשארים בבעלותו המלאה לאורך כל הדרך.</p>
+  <p>תכנים שסיפק הלקוח (טקסטים, תמונות, סרטונים, מותג, לוגו) — בבעלותו המלאה של הלקוח לאורך כל הדרך, וזכויות אלה אינן עוברות לנותן השירות. הלקוח מתחייב שכל התכנים שהוא מספק נכונים וחוקיים, ושאין בהם הפרת זכויות יוצרים, סימני מסחר או חוקי פרטיות.</p>
 </div>
 
-<h2>7. העברת חומרים והגבלת זמן אישור</h2>
+<h2>7. העברת חומרים והתקדמות הפרויקט</h2>
 <div class="clause">
-  <p>הלקוח מתחייב להעביר את כל החומרים הדרושים בזמן סביר. הגשת חומרים לאישור ללא תגובה תוך 7 ימי עסקים תיחשב כאישור שתיקה ותתקדם הבנייה.</p>
+  <p>הלקוח מתחייב להעביר את כל החומרים הדרושים לפיתוח האתר תוך זמן סביר, ולהגיב לבקשות אישור תוכן/עיצוב. אישור או אי-מענה תוך 7 ימי עסקים ממועד הבקשה — ייחשבו כאישור שתיקה והפרויקט יתקדם בהתאם.</p>
 </div>
 
-<h2>8. השבתת שירות בגין אי-תשלום</h2>
+<h2>8. אי-תשלום והשבתה</h2>
 <div class="clause">
-  <p>איחור של 14 יום בתשלום יוביל להשבתת האתר. שמירת הקבצים תימשך עד 60 יום נוספים לאחר ההשבתה. לאחר מכן, נותן השירות רשאי למחוק את הקבצים ללא חבות.</p>
+  <p>איחור של 30 יום בתשלום יוביל להשבתת האתר. הקבצים יישמרו במערכת נותן השירות 60 יום נוספים. לאחר 60 יום מההשבתה — נותן השירות רשאי למחוק את הקבצים ללא חבות.</p>
 </div>
 
 <h2>9. הגבלת אחריות</h2>
 <div class="clause">
-  <p>נותן השירות לא יישא באחריות לנזקים עקיפים, אובדן הכנסה או נזקים תוצאתיים שעלולים להיגרם בעת או בעקבות השימוש באתר. אחריותו המקסימלית מוגבלת לסכום ששולם בפועל ב-12 החודשים האחרונים.</p>
+  <p>נותן השירות לא יישא באחריות לנזקים עקיפים, אובדן הכנסה, אובדן נתונים, הפסד עסקי או נזקים תוצאתיים שעלולים להיגרם בעת או בעקבות השימוש באתר. אחריותו המקסימלית של נותן השירות לכל עילה תהא מוגבלת לסכום שהלקוח שילם בפועל ב-12 החודשים שקדמו לאירוע.</p>
 </div>
 
-<h2>10. סודיות</h2>
+<h2>10. סודיות הדדית</h2>
 <div class="clause">
-  <p>הצדדים מתחייבים לשמור על סודיות מוחלטת לגבי כל מידע עסקי או מסחרי שיתקבל במהלך ההתקשרות, גם לאחר סיומה.</p>
+  <p>הצדדים מתחייבים לשמור על סודיות מוחלטת לגבי כל מידע עסקי, מסחרי, טכני או אישי שיתקבל אצלם במהלך ההתקשרות. התחייבות זו תישאר בתוקף גם לאחר סיום ההסכם, ללא הגבלת זמן.</p>
 </div>
 
 <h2>11. כוח עליון</h2>
 <div class="clause">
-  <p>אף צד לא יחויב באחריות לעיכוב או אי-ביצוע התחייבויותיו אם נגרמו עקב נסיבות של כוח עליון, לרבות מצבי חירום, מלחמה, אסונות טבע או תקלות תשתית רחבות היקף.</p>
+  <p>אף צד לא יחויב באחריות לעיכוב או אי-ביצוע התחייבויותיו אם נגרמו עקב כוח עליון, לרבות מצבי חירום, מלחמה, פעולות איבה, אסונות טבע, מגיפה, או תקלות תשתית רחבות היקף שאינן בשליטת הצד.</p>
 </div>
 
-<h2>12. דין שיפוט</h2>
+<h2>12. חתימה דיגיטלית והוכחה משפטית</h2>
 <div class="clause">
-  <p>על הסכם זה יחול הדין הישראלי בלבד. כל שינוי ייעשה בכתב ויחייב את שני הצדדים.</p>
+  <p>חתימה דיגיטלית זו מהווה הסכמה משפטית מלאה לכל הקבוע במסמך, בהתאם ל<strong>חוק חתימה אלקטרונית, התשס״א-2001</strong>. החתימה נשמרת במערכת המוגנת של נותן השירות עם רישום מלא של מועד החתימה (UTC), כתובת ה-IP של החותם וזיהוי הדפדפן ששימש לחתימה. רישום זה מהווה ראיה לתוכן ההסכם ומועד החתימה.</p>
+</div>
+
+<h2>13. שמירת המסמך וזכות העתקה</h2>
+<div class="clause">
+  <p>נותן השירות ישמור עותק מלא של ההסכם החתום במערכת המוגנת שלו לתקופה של 7 שנים לפחות. הלקוח יכול להוריד עותק PDF של ההסכם החתום בכל עת מהקישור שנשלח לו בעת החתימה.</p>
+</div>
+
+<h2>14. שיפוט ודין</h2>
+<div class="clause">
+  <p>על הסכם זה יחול הדין הישראלי בלבד. בית המשפט המוסמך לדון בכל סכסוך שיתעורר מהסכם זה הוא בית המשפט במחוז המרכז. כל שינוי בהסכם ייעשה בכתב ויחייב את שני הצדדים.</p>
 </div>
 
 <h2>חתימות</h2>
@@ -189,10 +252,19 @@ export function renderAgreement(tier: AgreementTier, data: AgreementData): strin
   </tr>
 </table>
 
+${signedAt || signedIp || signedUA ? `
+<div class="audit-trail">
+  <strong>רישום חתימה דיגיטלית (audit trail):</strong><br/>
+  ${signedAt ? `מועד חתימה (UTC): ${signedAt}<br/>` : ""}
+  ${signedIp ? `כתובת IP של החותם: ${signedIp}<br/>` : ""}
+  ${signedUA ? `מזהה דפדפן: ${signedUA}<br/>` : ""}
+  גרסת מסמך: v${AGREEMENT_DOCUMENT_VERSION}
+</div>` : ""}
+
+<div class="footer-note">
+  הסכם זה הופק והוחתם דיגיטלית במערכת Fuzion Webz · גרסת מסמך v${AGREEMENT_DOCUMENT_VERSION}
+</div>
+
 </body>
 </html>`;
-}
-
-export function tierMonthlyPrice(tier: AgreementTier): number {
-  return TIER_META[tier].price;
 }

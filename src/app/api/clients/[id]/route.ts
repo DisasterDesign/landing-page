@@ -2,7 +2,57 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
-// PATCH - Auth required: update client field(s)
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const client = await prisma.client.findUnique({
+      where: { id },
+      include: {
+        agreements: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            tier: true,
+            monthlyPrice: true,
+            oneTimeFee: true,
+            status: true,
+            customerName: true,
+            signedAt: true,
+            createdAt: true,
+            signToken: true,
+          },
+        },
+        clientNotes: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            author: { select: { id: true, name: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+
+    if (!client) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(client);
+  } catch (error) {
+    console.error("Error fetching client:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,7 +66,6 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    // Build update data from allowed fields
     const updateData: Record<string, unknown> = {};
     if ("name" in body) updateData.name = body.name;
     if ("status" in body) updateData.status = body.status;
@@ -32,6 +81,14 @@ export async function PATCH(
         body.cardcomFee !== null && body.cardcomFee !== "" ? parseFloat(body.cardcomFee) : null;
     if ("websiteUrl" in body)
       updateData.websiteUrl = body.websiteUrl ? String(body.websiteUrl).trim() || null : null;
+    if ("email" in body)
+      updateData.email = body.email ? String(body.email).trim().toLowerCase() || null : null;
+    if ("phone" in body)
+      updateData.phone = body.phone ? String(body.phone).trim() || null : null;
+    if ("businessName" in body)
+      updateData.businessName = body.businessName ? String(body.businessName).trim() || null : null;
+    if ("idNumber" in body)
+      updateData.idNumber = body.idNumber ? String(body.idNumber).trim() || null : null;
     if ("startDate" in body)
       updateData.startDate =
         body.startDate ? new Date(body.startDate).toISOString() : null;
@@ -54,7 +111,6 @@ export async function PATCH(
   }
 }
 
-// DELETE - Auth required: delete client
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
