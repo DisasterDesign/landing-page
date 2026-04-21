@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import RevenueChart from "@/components/admin/RevenueChart";
 
 interface DashboardStats {
@@ -26,6 +27,40 @@ export default function AdminDashboardPage() {
   });
   const [myTasks, setMyTasks] = useState<MyTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [completing, setCompleting] = useState<Set<string>>(new Set());
+
+  const markDone = async (task: MyTask) => {
+    setCompleting((prev) => new Set(prev).add(task.id));
+    setMyTasks((prev) => prev.filter((t) => t.id !== task.id));
+    setStats((prev) => ({
+      ...prev,
+      myOpen: Math.max(0, prev.myOpen - 1),
+      activeTasks: Math.max(0, prev.activeTasks - 1),
+    }));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "DONE" }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("סומן כבוצע", { duration: 1500, style: { fontSize: "13px" } });
+    } catch {
+      toast.error("שגיאה בעדכון");
+      setMyTasks((prev) => [...prev, task]);
+      setStats((prev) => ({
+        ...prev,
+        myOpen: prev.myOpen + 1,
+        activeTasks: prev.activeTasks + 1,
+      }));
+    } finally {
+      setCompleting((prev) => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     async function fetchAll() {
@@ -171,16 +206,26 @@ export default function AdminDashboardPage() {
             {myTasks.map((t) => {
               const due = t.dueDate ? new Date(t.dueDate) : null;
               const overdue = due ? due.getTime() < Date.now() : false;
+              const isCompleting = completing.has(t.id);
               return (
-                <li key={t.id}>
+                <li key={t.id} className="flex items-center gap-3 py-3 hover:bg-gray-800/40 px-2 -mx-2 rounded-lg transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => markDone(t)}
+                    disabled={isCompleting}
+                    aria-label="סמן כבוצע"
+                    title="סמן כבוצע"
+                    className="shrink-0 w-6 h-6 rounded-full border-2 border-gray-600 hover:border-green-500 text-transparent hover:text-green-500/50 disabled:opacity-50 flex items-center justify-center transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </button>
                   <Link
                     href={`/admin/tasks/${t.id}`}
-                    className="flex items-center gap-3 py-3 hover:bg-gray-800/40 px-2 -mx-2 rounded-lg transition-colors"
+                    className="flex-1 flex items-center gap-3 min-w-0"
                   >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-pink" aria-hidden />
-                    <span className="flex-1 text-sm text-white truncate">
-                      {t.title}
-                    </span>
+                    <span className="flex-1 text-sm text-white truncate">{t.title}</span>
                     {due && (
                       <span
                         className={`text-[11px] shrink-0 ${
