@@ -5,5 +5,5 @@ export const size = OG_IMAGE_SIZE;
 export const contentType = OG_IMAGE_CONTENT_TYPE;
 
 export default function Image() {
-  return renderOgImage();
+  return renderOgImage("Privacy");
 }
