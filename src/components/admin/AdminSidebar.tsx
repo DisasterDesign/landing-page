@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import VersionTag from "@/components/VersionTag";
 
 const navItems = [
   {
@@ -197,6 +198,13 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
             );
           })}
         </nav>
+
+        {/* Version tag */}
+        {!collapsed && (
+          <div className="border-t border-gray-700 px-3 py-2 flex justify-end">
+            <VersionTag variant="admin" />
+          </div>
+        )}
 
         {/* User section */}
         <div className="border-t border-gray-700 p-3">

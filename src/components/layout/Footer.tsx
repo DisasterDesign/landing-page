@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { FOOTER_LINKS, SOCIAL_LINKS, SITE_NAME } from "@/lib/constants";
+import VersionTag from "@/components/VersionTag";
 
 export default function Footer() {
   return (
@@ -89,9 +90,12 @@ export default function Footer() {
               </a>
             ))}
           </div>
-          <p className="text-gray-500 text-xs">
-            © {new Date().getFullYear()} {SITE_NAME}. כל הזכויות שמורות.
-          </p>
+          <div className="flex items-center gap-4">
+            <VersionTag variant="public" />
+            <p className="text-gray-500 text-xs">
+              © {new Date().getFullYear()} {SITE_NAME}. כל הזכויות שמורות.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

@@ -31,6 +31,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow public version endpoint (used by VersionTag refresh button)
+  if (pathname === "/api/version") {
+    return NextResponse.next();
+  }
+
   // Allow public Meta webhook endpoint
   if (pathname.startsWith("/api/webhooks/facebook")) {
     return NextResponse.next();
