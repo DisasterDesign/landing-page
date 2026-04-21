@@ -76,12 +76,13 @@ export default async function Image() {
           />
           <div
             style={{
-              fontSize: "26px",
+              fontSize: "22px",
+              letterSpacing: "8px",
               color: "#cccccc",
-              direction: "rtl",
+              textTransform: "uppercase",
             }}
           >
-            סטודיו לעיצוב ובניית אתרים
+            Digital Design Studio
           </div>
         </div>
       </div>
