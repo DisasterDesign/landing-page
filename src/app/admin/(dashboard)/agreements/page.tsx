@@ -10,6 +10,7 @@ import { confirmDanger } from "@/lib/confirm";
 
 type Tier = "BASIC" | "ADVANCED" | "PREMIUM";
 type Status = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
+type PaymentStatus = "PENDING" | "SENT" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 interface Agreement {
   id: string;
@@ -27,6 +28,11 @@ interface Agreement {
   content: string;
   createdAt: string;
   client?: { id: string; name: string } | null;
+  paymentStatus: PaymentStatus;
+  paymentUrl: string | null;
+  paidAmount: number | null;
+  paidAt: string | null;
+  invoiceNumber: string | null;
 }
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -53,6 +59,22 @@ const STATUS_VARIANT: Record<Status, "gray" | "cyan" | "green" | "red"> = {
   SENT: "cyan",
   SIGNED: "green",
   CANCELLED: "red",
+};
+
+const PAYMENT_LABEL: Record<PaymentStatus, string> = {
+  PENDING: "טרם נשלח",
+  SENT: "נשלח לתשלום",
+  COMPLETED: "שולם",
+  FAILED: "נכשל",
+  CANCELLED: "בוטל",
+};
+
+const PAYMENT_VARIANT: Record<PaymentStatus, "gray" | "cyan" | "green" | "red" | "yellow"> = {
+  PENDING: "gray",
+  SENT: "cyan",
+  COMPLETED: "green",
+  FAILED: "red",
+  CANCELLED: "gray",
 };
 
 const TIER_PRICE: Record<Tier, number> = {
@@ -256,6 +278,32 @@ export default function AgreementsPage() {
     }
   };
 
+  const copyPaymentLink = async (a: Agreement) => {
+    // Reuse existing URL if there is one, otherwise ask the server to generate.
+    try {
+      let url = a.paymentUrl;
+      if (!url) {
+        const res = await fetch("/api/payments/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agreementId: a.id }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "שגיאה ביצירת לינק תשלום");
+        }
+        const json = (await res.json()) as { url: string };
+        url = json.url;
+        fetchList();
+      }
+      if (!url) throw new Error("לא נוצר לינק תשלום");
+      await navigator.clipboard.writeText(url);
+      toast.success("לינק תשלום הועתק");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה");
+    }
+  };
+
   const handleDelete = async (a: Agreement) => {
     const isSigned = a.status === "SIGNED";
     const ok = await confirmDanger({
@@ -314,6 +362,7 @@ export default function AgreementsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">מחיר/חודש</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הקמה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24">סטטוס</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">תשלום</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-44">לקוח מקושר</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך יצירה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך חתימה</th>
@@ -323,7 +372,7 @@ export default function AgreementsPage() {
           <tbody>
             {agreements.length === 0 ? (
               <tr>
-                <td colSpan={10} className="text-center text-gray-500 py-12">
+                <td colSpan={11} className="text-center text-gray-500 py-12">
                   עוד לא יצרת הסכמים
                 </td>
               </tr>
@@ -343,6 +392,19 @@ export default function AgreementsPage() {
                   <td className="px-3 py-2.5 font-mono text-gray-300">{a.oneTimeFee ? `${a.oneTimeFee} ₪` : "—"}</td>
                   <td className="px-3 py-2.5">
                     <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-col items-start gap-0.5">
+                      <Badge variant={PAYMENT_VARIANT[a.paymentStatus]}>
+                        {PAYMENT_LABEL[a.paymentStatus]}
+                      </Badge>
+                      {a.paymentStatus === "COMPLETED" && a.paidAmount != null && (
+                        <span className="text-[10px] text-green-400 font-mono">
+                          {a.paidAmount} ₪
+                          {a.invoiceNumber ? ` · #${a.invoiceNumber}` : ""}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5 text-xs">
                     {relinkingId === a.id ? (
@@ -416,6 +478,15 @@ export default function AgreementsPage() {
                       >
                         הורד
                       </a>
+                      {a.paymentStatus !== "COMPLETED" && (
+                        <button
+                          onClick={() => copyPaymentLink(a)}
+                          className="text-green-400 hover:text-green-300 text-xs underline-offset-2 hover:underline"
+                          title={a.paymentUrl ? "העתק לינק תשלום קיים" : "צור לינק תשלום"}
+                        >
+                          {a.paymentUrl ? "העתק לינק תשלום" : "צור לינק תשלום"}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(a)}
                         className="text-red-400 hover:text-red-300 text-xs underline-offset-2 hover:underline"

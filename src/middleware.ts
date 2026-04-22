@@ -41,6 +41,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow public Cardcom payment webhook (server-to-server, no auth header)
+  if (pathname === "/api/payments/webhook") {
+    return NextResponse.next();
+  }
+
   // Allow public POST to /api/contacts
   if (pathname === "/api/contacts" && req.method === "POST") {
     return NextResponse.next();

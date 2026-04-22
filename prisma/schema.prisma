@@ -34,8 +34,10 @@ enum Priority {
 
 enum PaymentStatus {
   PENDING
+  SENT
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum LicenseType {
@@ -342,9 +344,20 @@ model Agreement {
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])
 
+  // Cardcom payment integration
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentUrl    String?       // LowProfile checkout URL returned by Cardcom
+  paymentId     String?       // Cardcom LowProfileId (per-attempt)
+  cardcomDealId String?       // Cardcom InternalDealNumber after successful charge
+  cardcomToken  String?       // Token for future recurring charges
+  invoiceNumber String?       // Cardcom invoice number, if generated
+  paidAt        DateTime?
+  paidAmount    Float?
+
   @@index([status])
   @@index([clientId])
   @@index([signToken])
+  @@index([paymentStatus])
 }
 
 model FontOrder {

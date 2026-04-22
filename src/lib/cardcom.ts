@@ -1,0 +1,236 @@
+/**
+ * Cardcom LowProfile API client.
+ * Docs: https://secure.cardcom.solutions/api/v11/
+ *
+ * Three calls used by this app:
+ *   - createPaymentPage(input)  → opens a hosted checkout URL for an agreement
+ *   - chargeToken(token, amount, …)  → recurring monthly charge against a saved token
+ *   - verifyWebhookSource(req)  → light defensive check on incoming webhook
+ *
+ * The webhook itself does no signature verification (Cardcom doesn't sign),
+ * so we *also* trust ReturnValue + DealResponse from the body and confirm the
+ * deal by status code only. For paranoid double-check, a follow-up GetLowProfileResult
+ * call could be added — left as Phase 2.
+ */
+
+const CARDCOM_BASE = "https://secure.cardcom.solutions/api/v11";
+
+export function getCardcomConfig(): {
+  terminal: number;
+  apiName: string;
+  apiPassword: string;
+} | null {
+  const terminal = process.env.CARDCOM_TERMINAL;
+  const apiName = process.env.CARDCOM_API_NAME;
+  const apiPassword = process.env.CARDCOM_API_PASSWORD;
+  if (!terminal || !apiName || !apiPassword) return null;
+  const tNum = Number(terminal);
+  if (!Number.isFinite(tNum)) return null;
+  return { terminal: tNum, apiName, apiPassword };
+}
+
+export interface CreatePaymentInput {
+  agreementId: string;          // → ReturnValue (we get back in webhook)
+  amount: number;               // total ILS to charge now
+  productName: string;          // shows on Cardcom checkout + invoice
+  saveToken: boolean;           // true = ChargeAndCreateToken (for recurring)
+  successUrl: string;           // where Cardcom redirects on success
+  failedUrl: string;            // where Cardcom redirects on failure
+  webhookUrl: string;           // server-to-server callback
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+}
+
+export interface CreatePaymentResult {
+  url: string;
+  lowProfileId: string;
+}
+
+export class CardcomError extends Error {
+  status?: number;
+  body?: unknown;
+  constructor(message: string, status?: number, body?: unknown) {
+    super(message);
+    this.name = "CardcomError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+interface LowProfileCreateResponse {
+  LowProfileId?: string;
+  Url?: string;
+  ResponseCode?: number;
+  Description?: string;
+  // older field names
+  Status?: number;
+  Message?: string;
+}
+
+/**
+ * Creates a hosted Cardcom checkout page for a signed agreement.
+ * Returns the URL to redirect the customer to.
+ */
+export async function createPaymentPage(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+  const cfg = getCardcomConfig();
+  if (!cfg) throw new CardcomError("Cardcom credentials not configured");
+
+  const body = {
+    TerminalNumber: cfg.terminal,
+    ApiName: cfg.apiName,
+    Operation: input.saveToken ? "ChargeAndCreateToken" : "ChargeOnly",
+    Amount: Number(input.amount.toFixed(2)),
+    SuccessRedirectUrl: input.successUrl,
+    FailedRedirectUrl: input.failedUrl,
+    WebHookUrl: input.webhookUrl,
+    ReturnValue: input.agreementId,
+    ProductName: input.productName,
+    Language: "he",
+    ISOCoinId: 1, // ILS
+    Document: {
+      Name: input.customer.name,
+      Email: input.customer.email,
+      ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
+    },
+  };
+
+  const res = await fetch(`${CARDCOM_BASE}/LowProfile/Create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  let json: LowProfileCreateResponse;
+  try {
+    json = (await res.json()) as LowProfileCreateResponse;
+  } catch {
+    throw new CardcomError(`Cardcom returned non-JSON (status ${res.status})`, res.status);
+  }
+
+  if (!res.ok) {
+    throw new CardcomError(`Cardcom HTTP ${res.status}: ${json?.Description ?? "unknown"}`, res.status, json);
+  }
+
+  // Cardcom v11 success: ResponseCode === 0
+  const code = json.ResponseCode ?? json.Status;
+  if (code !== 0 || !json.Url || !json.LowProfileId) {
+    throw new CardcomError(
+      `Cardcom rejected request: ${json.Description ?? json.Message ?? "unknown"} (code ${code})`,
+      undefined,
+      json
+    );
+  }
+
+  return { url: json.Url, lowProfileId: json.LowProfileId };
+}
+
+export interface ChargeTokenInput {
+  token: string;
+  amount: number;
+  productName: string;
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  externalReference?: string;
+}
+
+interface ChargeTokenResponse {
+  ResponseCode?: number;
+  Description?: string;
+  InternalDealNumber?: number | string;
+  DocumentNumber?: number | string;
+}
+
+/**
+ * Charges a previously-saved Cardcom token (recurring monthly billing).
+ */
+export async function chargeToken(input: ChargeTokenInput): Promise<{
+  dealId: string;
+  invoiceNumber?: string;
+}> {
+  const cfg = getCardcomConfig();
+  if (!cfg) throw new CardcomError("Cardcom credentials not configured");
+
+  const body = {
+    TerminalNumber: cfg.terminal,
+    ApiName: cfg.apiName,
+    Token: input.token,
+    Amount: Number(input.amount.toFixed(2)),
+    ISOCoinId: 1,
+    ProductName: input.productName,
+    Document: {
+      Name: input.customer.name,
+      Email: input.customer.email,
+      ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
+    },
+    ...(input.externalReference ? { ExternalReference: input.externalReference } : {}),
+  };
+
+  const res = await fetch(`${CARDCOM_BASE}/Transactions/ChargeToken`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  let json: ChargeTokenResponse;
+  try {
+    json = (await res.json()) as ChargeTokenResponse;
+  } catch {
+    throw new CardcomError(`Cardcom returned non-JSON (status ${res.status})`, res.status);
+  }
+
+  if (!res.ok || json.ResponseCode !== 0 || json.InternalDealNumber == null) {
+    throw new CardcomError(
+      `Cardcom token charge failed: ${json.Description ?? "unknown"}`,
+      res.status,
+      json
+    );
+  }
+
+  return {
+    dealId: String(json.InternalDealNumber),
+    invoiceNumber: json.DocumentNumber != null ? String(json.DocumentNumber) : undefined,
+  };
+}
+
+/**
+ * Webhook payload sent by Cardcom after a successful checkout.
+ * Field names follow Cardcom v11 conventions; some installations send
+ * additional fields. Treat all fields as optional.
+ */
+export interface CardcomWebhookPayload {
+  ReturnValue?: string;            // our agreement.id
+  DealResponse?: number;           // 0 = success
+  ResponseCode?: number;           // alternate field name
+  InternalDealNumber?: number | string;
+  Token?: string;
+  CardOwnerName?: string;
+  CardOwnerEmail?: string;
+  CardOwnerPhone?: string;
+  Sum?: number | string;           // amount actually charged
+  Amount?: number | string;        // alternate
+  DocumentNumber?: number | string;
+  LowProfileId?: string;
+  // catch-all
+  [key: string]: unknown;
+}
+
+/** Returns true if the webhook payload looks like a successful Cardcom POST. */
+export function isWebhookSuccess(p: CardcomWebhookPayload): boolean {
+  const code = p.DealResponse ?? p.ResponseCode;
+  return code === 0 || (typeof code === "string" && code === "0");
+}
+
+export function extractWebhookAmount(p: CardcomWebhookPayload): number | null {
+  const raw = p.Sum ?? p.Amount;
+  if (raw == null) return null;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw));
+  return Number.isFinite(n) ? n : null;
+}

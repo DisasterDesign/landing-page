@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { notifyAllAdmins } from "@/lib/notifications";
+import { ensurePaymentUrlForAgreement } from "@/lib/payments";
 
 function getClientIp(request: NextRequest): string | null {
   const xff = request.headers.get("x-forwarded-for");
@@ -156,7 +157,18 @@ export async function POST(
       body: `מסלול ${tierLabel} · ${existing.monthlyPrice.toLocaleString("he-IL")} ₪/חודש`,
     });
 
-    return NextResponse.json({ success: true });
+    // Best-effort: create a Cardcom payment page so the client can pay
+    // immediately after signing. If this fails (Cardcom down, missing creds),
+    // we still return success — the admin can resend the payment link later.
+    let paymentUrl: string | null = null;
+    try {
+      const result = await ensurePaymentUrlForAgreement(existing.id);
+      paymentUrl = result?.url ?? null;
+    } catch (err) {
+      console.error("Failed to create Cardcom payment page after sign:", err);
+    }
+
+    return NextResponse.json({ success: true, paymentUrl });
   } catch (error) {
     console.error("Error signing agreement:", error);
     return NextResponse.json(

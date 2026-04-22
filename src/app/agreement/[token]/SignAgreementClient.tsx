@@ -147,6 +147,14 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || "שגיאה בחתימה");
       }
+      const json = (await res.json().catch(() => ({}))) as { paymentUrl?: string };
+
+      // If the server prepared a payment page, send the customer there.
+      // Otherwise show the in-page thank-you.
+      if (json.paymentUrl) {
+        window.location.href = json.paymentUrl;
+        return;
+      }
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בחתימה");
