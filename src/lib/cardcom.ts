@@ -1,16 +1,6 @@
 /**
  * Cardcom LowProfile API client.
  * Docs: https://secure.cardcom.solutions/api/v11/
- *
- * Three calls used by this app:
- *   - createPaymentPage(input)  → opens a hosted checkout URL for an agreement
- *   - chargeToken(token, amount, …)  → recurring monthly charge against a saved token
- *   - verifyWebhookSource(req)  → light defensive check on incoming webhook
- *
- * The webhook itself does no signature verification (Cardcom doesn’t sign),
- * so we *also* trust ReturnValue + DealResponse from the body and confirm the
- * deal by status code only. For paranoid double-check, a follow-up GetLowProfileResult
- * call could be added — left as Phase 2.
  */
 
 const CARDCOM_BASE = "https://secure.cardcom.solutions/api/v11";
@@ -80,6 +70,7 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
   const body = {
     TerminalNumber: cfg.terminal,
     ApiName: cfg.apiName,
+    ApiPassword: cfg.apiPassword,
     Operation: input.saveToken ? "ChargeAndCreateToken" : "ChargeOnly",
     Amount: Number(input.amount.toFixed(2)),
     SuccessRedirectUrl: input.successUrl,
@@ -166,6 +157,7 @@ export async function chargeToken(input: ChargeTokenInput): Promise<{
   const body = {
     TerminalNumber: cfg.terminal,
     ApiName: cfg.apiName,
+    ApiPassword: cfg.apiPassword,
     Token: input.token,
     Amount: Number(input.amount.toFixed(2)),
     CoinID: 1,
