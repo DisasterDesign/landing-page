@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { confirmDanger } from "@/lib/confirm";
 import {
   AreaChart,
   Area,
@@ -197,12 +198,14 @@ export default function SeoPage() {
   };
 
   const handleDisconnect = async () => {
-    if (
-      !confirm(
-        "לנתק את חשבון Google?\n\nחשוב: כדי שתוכל לחבר מחדש עם הרשאות נכונות, אחרי הניתוק כאן צריך גם לבטל את האפליקציה ב-https://myaccount.google.com/connections (חפש Fuzion Webz)."
-      )
-    )
-      return;
+    const ok = await confirmDanger({
+      title: "ניתוק חשבון Google",
+      message:
+        "כדי לחבר מחדש עם הרשאות נכונות, לאחר הניתוק כאן צריך גם לבטל את האפליקציה ב-myaccount.google.com/connections (חפש Fuzion Webz).",
+      confirmLabel: "נתק",
+      dangerous: true,
+    });
+    if (!ok) return;
     setDisconnecting(true);
     try {
       const res = await fetch("/api/seo/disconnect", { method: "POST" });

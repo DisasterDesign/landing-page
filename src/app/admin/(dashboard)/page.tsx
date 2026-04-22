@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import RevenueChart from "@/components/admin/RevenueChart";
+import { success as hapticSuccess } from "@/lib/haptic";
 
 interface DashboardStats {
   activeTasks: number;
@@ -30,6 +31,7 @@ export default function AdminDashboardPage() {
   const [completing, setCompleting] = useState<Set<string>>(new Set());
 
   const markDone = async (task: MyTask) => {
+    hapticSuccess();
     setCompleting((prev) => new Set(prev).add(task.id));
     setMyTasks((prev) => prev.filter((t) => t.id !== task.id));
     setStats((prev) => ({

@@ -5,6 +5,8 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
+import PullToRefresh from "@/components/ui/PullToRefresh";
+import { confirmDanger } from "@/lib/confirm";
 
 type Tier = "BASIC" | "ADVANCED" | "PREMIUM";
 type Status = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
@@ -256,10 +258,15 @@ export default function AgreementsPage() {
 
   const handleDelete = async (a: Agreement) => {
     const isSigned = a.status === "SIGNED";
-    const message = isSigned
-      ? `⚠ הסכם זה כבר נחתם ע״י ${a.customerName}.\n\nמחיקה תסיר את ההסכם החתום מהמערכת לצמיתות (כולל החתימה הדיגיטלית, ה-IP וה-audit trail).\nהפעולה אינה הפיכה.\n\nלהמשיך?`
-      : `למחוק את ההסכם של ${a.customerName}?`;
-    if (!confirm(message)) return;
+    const ok = await confirmDanger({
+      title: isSigned ? `מחיקת הסכם חתום של ${a.customerName}` : `מחיקת הסכם של ${a.customerName}`,
+      message: isSigned
+        ? "ההסכם נחתם דיגיטלית. המחיקה תסיר את החתימה, את ה-IP ואת ה-audit trail לצמיתות. הפעולה אינה הפיכה."
+        : "הסכם זה יימחק. הפעולה אינה הפיכה.",
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/agreements/${a.id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -282,6 +289,7 @@ export default function AgreementsPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={fetchList}>
     <div dir="rtl" className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">הסכמים</h1>
@@ -632,5 +640,6 @@ export default function AgreementsPage() {
         )}
       </Modal>
     </div>
+    </PullToRefresh>
   );
 }

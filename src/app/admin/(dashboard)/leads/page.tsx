@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 
 type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "SPAM";
 
@@ -100,6 +101,7 @@ export default function LeadsPage() {
   }, [load]);
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div dir="rtl" className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-2xl font-bold">לידים — מעקב</h2>
@@ -201,6 +203,7 @@ export default function LeadsPage() {
         <LeadDrawer leadId={selectedId} onClose={() => setSelectedId(null)} onChange={load} />
       )}
     </div>
+    </PullToRefresh>
   );
 }
 

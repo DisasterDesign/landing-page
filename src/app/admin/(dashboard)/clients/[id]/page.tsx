@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
+import { confirmDanger } from "@/lib/confirm";
 
 type AgreementStatus = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
 type Tier = "BASIC" | "ADVANCED" | "PREMIUM";
@@ -176,7 +177,15 @@ export default function ClientDetailPage({
 
   const archiveClient = async (restore: boolean) => {
     if (!client) return;
-    if (!restore && !confirm("להעביר את הלקוח לארכיון?")) return;
+    if (!restore) {
+      const ok = await confirmDanger({
+        title: "העברת הלקוח לארכיון",
+        message: "הלקוח יוסתר מהרשימה הראשית. ניתן יהיה לשחזר אותו בכל עת.",
+        confirmLabel: "העבר לארכיון",
+        dangerous: false,
+      });
+      if (!ok) return;
+    }
     try {
       const res = await fetch(`/api/clients/${id}/archive`, {
         method: "POST",

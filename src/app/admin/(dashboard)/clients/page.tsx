@@ -4,7 +4,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 import { parseUrlPaste, type ParsedRow } from "@/lib/import-urls";
+import { confirmDanger } from "@/lib/confirm";
+import { tapMedium } from "@/lib/haptic";
 
 interface Client {
   id: string;
@@ -224,8 +227,15 @@ export default function ClientsPage() {
 
   const deleteClient = async (id: string) => {
     const client = clients.find((c) => c.id === id);
-    if (!confirm(`למחוק את ${client?.name || "לקוח"}?`)) return;
+    const ok = await confirmDanger({
+      title: `מחיקת לקוח`,
+      message: `הלקוח "${client?.name || "לקוח"}" יימחק לצמיתות. הפעולה אינה הפיכה.`,
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
 
+    tapMedium();
     setClients((prev) => prev.filter((c) => c.id !== id));
     try {
       const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
@@ -452,6 +462,7 @@ export default function ClientsPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={fetchClients}>
     <div dir="rtl" className="p-4 md:p-6 max-w-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">לקוחות</h1>
@@ -756,5 +767,6 @@ export default function ClientsPage() {
         )}
       </Modal>
     </div>
+    </PullToRefresh>
   );
 }

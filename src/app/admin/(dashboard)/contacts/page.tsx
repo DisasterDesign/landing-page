@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import { confirmDanger } from "@/lib/confirm";
+import PullToRefresh from "@/components/ui/PullToRefresh";
 
 type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "SPAM";
 
@@ -138,7 +140,13 @@ export default function ContactsPage() {
   };
 
   const deleteOne = async (id: string) => {
-    if (!confirm("למחוק את ההודעה?")) return;
+    const ok = await confirmDanger({
+      title: "מחיקת הודעה",
+      message: "ההודעה תימחק לצמיתות.",
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
     setContacts((prev) => prev.filter((c) => c.id !== id));
     selected.delete(id);
     try {
@@ -155,7 +163,15 @@ export default function ContactsPage() {
     status?: Status
   ) => {
     if (selected.size === 0) return;
-    if (action === "delete" && !confirm(`למחוק ${selected.size} הודעות?`)) return;
+    if (action === "delete") {
+      const ok = await confirmDanger({
+        title: `מחיקת ${selected.size} הודעות`,
+        message: "כל ההודעות שנבחרו יימחקו לצמיתות.",
+        confirmLabel: "מחק הכל",
+        dangerous: true,
+      });
+      if (!ok) return;
+    }
 
     const ids = Array.from(selected);
     try {
@@ -190,6 +206,7 @@ export default function ContactsPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={fetchContacts}>
     <div className="space-y-5" dir="rtl">
       <Toaster position="top-center" />
 
@@ -460,5 +477,6 @@ export default function ContactsPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

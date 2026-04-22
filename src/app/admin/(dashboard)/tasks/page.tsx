@@ -23,6 +23,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Modal from "@/components/ui/Modal";
 import AssigneePicker from "@/components/admin/AssigneePicker";
+import PullToRefresh from "@/components/ui/PullToRefresh";
+import { success as hapticSuccess, tapLight } from "@/lib/haptic";
 
 // ---------- Types ----------
 
@@ -394,6 +396,8 @@ export default function TasksPage() {
 
   const handleToggleStatus = useCallback(async (task: Task) => {
     const next: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
+    if (next === "DONE") hapticSuccess();
+    else tapLight();
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, status: next } : t))
     );
@@ -462,6 +466,7 @@ export default function TasksPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={fetchData}>
     <div className="tasks-area space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-2xl font-bold">משימות</h2>
@@ -560,7 +565,7 @@ export default function TasksPage() {
         <button
           onClick={() => setCreateOpen(true)}
           aria-label="משימה חדשה"
-          className="md:hidden fixed bottom-7 right-5 z-40 w-12 h-12 rounded-full bg-cyan hover:bg-cyan/80 shadow-lg shadow-cyan/30 flex items-center justify-center text-black"
+          className="md:hidden fixed safe-bottom right-5 z-40 w-14 h-14 rounded-full bg-cyan hover:bg-cyan/80 shadow-lg shadow-cyan/30 flex items-center justify-center text-black"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -619,5 +624,6 @@ export default function TasksPage() {
         </form>
       </Modal>
     </div>
+    </PullToRefresh>
   );
 }

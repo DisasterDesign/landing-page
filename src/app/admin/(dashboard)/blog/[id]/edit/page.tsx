@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import BlogEditor from "@/components/admin/BlogEditor";
+import { confirmDanger } from "@/lib/confirm";
 
 const CATEGORIES = [
   "מדריכים",
@@ -137,7 +138,13 @@ export default function EditBlogPostPage({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("האם אתה בטוח שברצונך למחוק את המאמר?")) return;
+    const ok = await confirmDanger({
+      title: "מחיקת מאמר",
+      message: "המאמר יימחק מהבלוג לצמיתות. הפעולה אינה הפיכה.",
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/blog/edit/${id}`, { method: "DELETE" });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDanger } from "@/lib/confirm";
 
 const CATEGORIES = [
   { value: "serif", label: "סריף" },
@@ -157,7 +158,13 @@ export default function EditFontPage({
   };
 
   const handleDeleteStyle = async (styleId: string) => {
-    if (!confirm("למחוק סגנון זה?")) return;
+    const ok = await confirmDanger({
+      title: "מחיקת סגנון",
+      message: "סגנון הפונט יימחק מהפונט הזה.",
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/fonts/admin/${id}/styles`, {
@@ -175,7 +182,13 @@ export default function EditFontPage({
   };
 
   const handleDelete = async () => {
-    if (!confirm("למחוק את הפונט הזה לצמיתות?")) return;
+    const ok = await confirmDanger({
+      title: "מחיקת פונט",
+      message: "הפונט יימחק לצמיתות מהחנות, כולל כל הסגנונות שלו. הפעולה אינה הפיכה.",
+      confirmLabel: "מחק לצמיתות",
+      dangerous: true,
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/fonts/admin/${id}`, { method: "DELETE" });

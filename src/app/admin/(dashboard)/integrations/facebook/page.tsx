@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { confirmDanger } from "@/lib/confirm";
 
 interface ConnectedIntegration {
   id: string;
@@ -100,7 +101,13 @@ export default function FacebookIntegrationPage() {
   };
 
   const disconnect = async (pageId: string, pageName: string) => {
-    if (!confirm(`לנתק את "${pageName}"? לידים שכבר נכנסו יישמרו, אבל לא יגיעו חדשים.`)) return;
+    const ok = await confirmDanger({
+      title: `ניתוק ${pageName}`,
+      message: "לידים שכבר התקבלו יישמרו במערכת, אבל לא יתקבלו לידים חדשים מה-Page הזה. ניתן יהיה לחבר מחדש בכל עת.",
+      confirmLabel: "נתק",
+      dangerous: true,
+    });
+    if (!ok) return;
     setDisconnecting(pageId);
     try {
       const res = await fetch("/api/integrations/facebook/disconnect", {

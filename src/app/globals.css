@@ -371,6 +371,52 @@ h1, h2, h3, h4, h5, h6 {
   body.js-custom-cursor { cursor: auto; }
 }
 
+/* ==========================================================================
+   Safe-area utilities (iOS notch / home indicator).
+   Used wherever fixed-positioned UI would otherwise sit underneath the
+   notch, dynamic island, or home indicator.
+   ========================================================================== */
+.safe-pt { padding-top: env(safe-area-inset-top); }
+.safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+.safe-pl { padding-left: env(safe-area-inset-left); }
+.safe-pr { padding-right: env(safe-area-inset-right); }
+.safe-px { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+/* Add to fixed top elements (eg. sticky toast container) */
+.safe-top { top: env(safe-area-inset-top); }
+
+/* Add to fixed bottom elements (FABs, mobile bottom nav, hamburger) */
+.safe-bottom { bottom: calc(env(safe-area-inset-bottom) + 1.75rem); }
+
+/* Apply on the body wrapper for fullscreen scroll containers */
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Touch target floor (HIG 44pt) — applies only on touch devices, only inside
+   the admin shell, to small inline action buttons/links. Desktop visuals
+   remain pixel-identical. */
+@media (pointer: coarse) {
+  .admin-light a.text-xs,
+  .admin-light button.text-xs,
+  .admin-light .text-xs > a,
+  .admin-light .text-xs > button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  /* Inline checkboxes / status toggles get a generous touch area */
+  .admin-light input[type="checkbox"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
+
 ::selection {
   background-color: #E503A2;
   color: #FFFFFF;

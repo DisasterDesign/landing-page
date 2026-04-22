@@ -227,11 +227,11 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile hamburger FAB — centered at bottom */}
+      {/* Mobile hamburger FAB — centered at bottom (above home indicator) */}
       <button
         onClick={() => setMobileOpen(true)}
         aria-label="פתח תפריט"
-        className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full bg-pink hover:bg-pink-light text-white flex items-center justify-center shadow-lg shadow-pink/40 active:scale-95 transition-transform font-birzia"
+        className="md:hidden fixed safe-bottom left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full bg-pink hover:bg-pink-light text-white flex items-center justify-center shadow-lg shadow-pink/40 active:scale-95 transition-transform font-birzia"
       >
         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -249,7 +249,7 @@ export default function AdminSidebar({ userName }: AdminSidebarProps) {
 
       {/* Mobile drawer panel */}
       <aside
-        className={`md:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gray-900 border-l border-gray-700 z-50 flex flex-col transition-transform duration-300 font-birzia ${
+        className={`md:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-gray-900 border-l border-gray-700 z-50 flex flex-col transition-transform duration-300 font-birzia safe-pt safe-pb ${
           mobileOpen ? "translate-x-0" : "translate-x-full"
         }`}
         aria-hidden={!mobileOpen}
