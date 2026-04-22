@@ -7,7 +7,7 @@
  *   - chargeToken(token, amount, …)  → recurring monthly charge against a saved token
  *   - verifyWebhookSource(req)  → light defensive check on incoming webhook
  *
- * The webhook itself does no signature verification (Cardcom doesn't sign),
+ * The webhook itself does no signature verification (Cardcom doesn’t sign),
  * so we *also* trust ReturnValue + DealResponse from the body and confirm the
  * deal by status code only. For paranoid double-check, a follow-up GetLowProfileResult
  * call could be added — left as Phase 2.
@@ -95,6 +95,13 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
     },
+    InvoiceLines: [
+      {
+        Description: input.productName,
+        Price: Number(input.amount.toFixed(2)),
+        Quantity: 1,
+      },
+    ],
   };
 
   const res = await fetch(`${CARDCOM_BASE}/LowProfile/Create`, {
@@ -169,6 +176,13 @@ export async function chargeToken(input: ChargeTokenInput): Promise<{
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
     },
+    InvoiceLines: [
+      {
+        Description: input.productName,
+        Price: Number(input.amount.toFixed(2)),
+        Quantity: 1,
+      },
+    ],
     ...(input.externalReference ? { ExternalReference: input.externalReference } : {}),
   };
 
