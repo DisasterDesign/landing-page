@@ -67,10 +67,12 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
   const cfg = getCardcomConfig();
   if (!cfg) throw new CardcomError("Cardcom credentials not configured");
 
+  // ApiPassword intentionally NOT included at top-level for LowProfile/Create
+  // — per Cardcom v11 docs it belongs only inside AdvancedDefinition for
+  // refunds/cancellations.
   const body = {
     TerminalNumber: cfg.terminal,
     ApiName: cfg.apiName,
-    ApiPassword: cfg.apiPassword,
     Operation: input.saveToken ? "ChargeAndCreateToken" : "ChargeOnly",
     Amount: Number(input.amount.toFixed(2)),
     SuccessRedirectUrl: input.successUrl,
@@ -79,9 +81,9 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
     ReturnValue: input.agreementId,
     ProductName: input.productName,
     Language: "he",
-    CoinID: 1,
+    ISOCoinId: 1, // ILS
     Document: {
-      DocTypeToCreate: 101,
+      DocumentTypeToCreate: "Auto",
       Name: input.customer.name,
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
@@ -154,16 +156,18 @@ export async function chargeToken(input: ChargeTokenInput): Promise<{
   const cfg = getCardcomConfig();
   if (!cfg) throw new CardcomError("Cardcom credentials not configured");
 
+  // ChargeToken (direct token charging, step 3 in Cardcom flow) DOES need
+  // ApiPassword at the top level.
   const body = {
     TerminalNumber: cfg.terminal,
     ApiName: cfg.apiName,
     ApiPassword: cfg.apiPassword,
     Token: input.token,
     Amount: Number(input.amount.toFixed(2)),
-    CoinID: 1,
+    ISOCoinId: 1,
     ProductName: input.productName,
     Document: {
-      DocTypeToCreate: 101,
+      DocumentTypeToCreate: "Auto",
       Name: input.customer.name,
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
