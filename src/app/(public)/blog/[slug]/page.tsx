@@ -42,6 +42,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: post.metaTitle || `${post.title} | ${SITE_NAME}`,
     description: post.metaDesc || post.excerpt || undefined,
+    alternates: {
+      canonical: `${SITE_URL}/blog/${post.slug}`,
+    },
     openGraph: {
       title: post.metaTitle || post.title,
       description: post.metaDesc || post.excerpt || undefined,
@@ -63,28 +66,47 @@ export default async function BlogPostPage({ params }: Props) {
     ? await getAdjacentPosts(post.publishedAt)
     : { prev: null, next: null };
 
+  const canonicalImage =
+    post.coverImage || `${SITE_URL}/blog/${post.slug}/opengraph-image`;
+  const plainExcerpt =
+    post.excerpt ||
+    post.content.replace(/<[^>]+>/g, "").trim().slice(0, 200);
+
   // Schema.org JSON-LD
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": "BlogPosting",
     headline: post.title,
-    description: post.excerpt || undefined,
-    image: post.coverImage || undefined,
+    description: post.metaDesc || post.excerpt || undefined,
+    image: [canonicalImage],
     datePublished: post.publishedAt?.toISOString(),
     dateModified: post.updatedAt.toISOString(),
     author: {
-      "@type": "Person",
-      name: post.author.name,
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
     },
     publisher: {
       "@type": "Organization",
       name: SITE_NAME,
       url: SITE_URL,
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/icon-white.svg`,
+        width: 360,
+        height: 360,
+      },
     },
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": `${SITE_URL}/blog/${post.slug}`,
     },
+    inLanguage: "he",
+    isPartOf: {
+      "@type": "Blog",
+      "@id": `${SITE_URL}/blog`,
+    },
+    articleBody: plainExcerpt,
   };
 
   return (

@@ -150,19 +150,16 @@ export default function BlogPageClient() {
 
                       {/* Main card */}
                       <div className="relative bg-gray-900 border border-gray-800 rounded-2xl p-6 transition-all duration-300 group-hover:border-gray-600 group-hover:-translate-y-1">
-                        {/* Cover image or gradient placeholder */}
-                        {post.coverImage ? (
-                          <div className="aspect-video rounded-xl mb-4 overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={post.coverImage}
-                              alt={post.title}
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                          </div>
-                        ) : (
-                          <div className="aspect-video bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl mb-4" />
-                        )}
+                        {/* Cover image — falls back to generated OG card when coverImage is null */}
+                        <div className="aspect-video rounded-xl mb-4 overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={post.coverImage || `/blog/${post.slug}/opengraph-image`}
+                            alt={post.title}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        </div>
 
                         {/* Category badge */}
                         {post.category && (

@@ -49,18 +49,16 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
 
   return (
     <div className="min-h-screen bg-black">
-      {/* Cover Image Hero */}
-      {post.coverImage && (
-        <div className="relative w-full h-[40vh] md:h-[50vh]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={post.coverImage}
-            alt={post.title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
-        </div>
-      )}
+      {/* Cover Image Hero — falls back to generated OG card when coverImage is null */}
+      <div className="relative w-full h-[40vh] md:h-[50vh]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={post.coverImage || `/blog/${post.slug}/opengraph-image`}
+          alt={post.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+      </div>
 
       <article className="py-16 md:py-24 px-6">
         <div className="max-w-3xl mx-auto">
