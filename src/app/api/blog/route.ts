@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 12));
     const category = searchParams.get("category");
     const all = searchParams.get("all") === "true";
+    const statusParam = searchParams.get("status");
 
     let showAll = false;
     if (all) {
@@ -38,6 +39,12 @@ export async function GET(request: NextRequest) {
     }
     if (category) {
       where.category = category;
+    }
+    if (showAll && statusParam) {
+      const allowed = ["DRAFT", "READY", "SCHEDULED", "PUBLISHED", "ARCHIVED"];
+      if (allowed.includes(statusParam)) {
+        where.status = statusParam;
+      }
     }
 
     const [posts, total] = await Promise.all([
@@ -89,9 +96,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { slug, published, ...rest } = parsed.data;
+    const { slug, published, status, ...rest } = parsed.data;
 
     const finalSlug = slug?.trim() || generateSlug(rest.title);
+    const finalStatus = status ?? (published ? "PUBLISHED" : "DRAFT");
 
     const post = await prisma.blogPost.create({
       data: {
@@ -99,6 +107,7 @@ export async function POST(request: NextRequest) {
         slug: finalSlug,
         published: published ?? false,
         publishedAt: published ? new Date() : null,
+        status: finalStatus,
         authorId: session.user.id!,
       },
       include: {

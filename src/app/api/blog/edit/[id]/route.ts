@@ -42,6 +42,17 @@ export async function PATCH(
       data.publishedAt = new Date();
     }
 
+    // Keep `status` in sync when `published` is explicitly toggled,
+    // unless the caller explicitly set `status` in the same payload.
+    if (parsed.data.published === true && parsed.data.status === undefined) {
+      data.status = "PUBLISHED";
+    } else if (
+      parsed.data.published === false &&
+      parsed.data.status === undefined
+    ) {
+      data.status = "DRAFT";
+    }
+
     const post = await prisma.blogPost.update({
       where: { id },
       data,

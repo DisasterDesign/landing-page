@@ -73,6 +73,14 @@ enum ContactStatus {
   SPAM
 }
 
+enum BlogPostStatus {
+  DRAFT
+  READY
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -225,6 +233,14 @@ model BlogPost {
   metaTitle   String?
   metaDesc    String?
 
+  scheduledAt    DateTime?
+  status         BlogPostStatus @default(DRAFT)
+  targetKeyword  String?
+  keywords       String[]
+  contentScore   Int?
+  lastReviewedAt DateTime?
+  reviewNotes    String?
+
   authorId String
   author   User   @relation(fields: [authorId], references: [id])
 
@@ -233,6 +249,7 @@ model BlogPost {
 
   @@index([published, publishedAt])
   @@index([category])
+  @@index([status, scheduledAt])
 }
 
 // ==================

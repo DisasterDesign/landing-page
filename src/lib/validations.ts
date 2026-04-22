@@ -139,6 +139,14 @@ export const bulkClientUrlsSchema = z.object({
 });
 
 // Blog
+export const blogPostStatusEnum = z.enum([
+  "DRAFT",
+  "READY",
+  "SCHEDULED",
+  "PUBLISHED",
+  "ARCHIVED",
+]);
+
 export const createBlogPostSchema = z.object({
   title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
@@ -150,6 +158,9 @@ export const createBlogPostSchema = z.object({
   published: z.boolean().optional(),
   metaTitle: z.string().optional(),
   metaDesc: z.string().optional(),
+  targetKeyword: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
+  status: blogPostStatusEnum.optional(),
 });
 
 export const updateBlogPostSchema = z.object({
@@ -163,6 +174,28 @@ export const updateBlogPostSchema = z.object({
   published: z.boolean().optional(),
   metaTitle: z.string().optional(),
   metaDesc: z.string().optional(),
+  targetKeyword: z.string().nullable().optional(),
+  keywords: z.array(z.string()).optional(),
+  status: blogPostStatusEnum.optional(),
+});
+
+export const scheduleBlogPostSchema = z.object({
+  scheduledAt: z.string().datetime().nullable(),
+});
+
+export const bulkCreateBlogPostSchema = z.object({
+  posts: z.array(createBlogPostSchema).min(1).max(50),
+});
+
+export const bulkScheduleBlogPostSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  intervalDays: z.number().int().min(1).max(90).optional(),
+});
+
+export const reviewBlogPostSchema = z.object({
+  postId: z.string().min(1),
+  contentScore: z.number().int().min(0).max(100),
+  reviewNotes: z.string().optional(),
 });
 
 // ==================
