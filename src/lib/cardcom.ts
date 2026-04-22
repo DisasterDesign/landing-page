@@ -30,13 +30,13 @@ export function getCardcomConfig(): {
 }
 
 export interface CreatePaymentInput {
-  agreementId: string;          // → ReturnValue (we get back in webhook)
-  amount: number;               // total ILS to charge now
-  productName: string;          // shows on Cardcom checkout + invoice
-  saveToken: boolean;           // true = ChargeAndCreateToken (for recurring)
-  successUrl: string;           // where Cardcom redirects on success
-  failedUrl: string;            // where Cardcom redirects on failure
-  webhookUrl: string;           // server-to-server callback
+  agreementId: string;
+  amount: number;
+  productName: string;
+  saveToken: boolean;
+  successUrl: string;
+  failedUrl: string;
+  webhookUrl: string;
   customer: {
     name: string;
     email: string;
@@ -65,7 +65,6 @@ interface LowProfileCreateResponse {
   Url?: string;
   ResponseCode?: number;
   Description?: string;
-  // older field names
   Status?: number;
   Message?: string;
 }
@@ -89,19 +88,20 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
     ReturnValue: input.agreementId,
     ProductName: input.productName,
     Language: "he",
-    ISOCoinId: 1, // ILS
+    CoinID: 1,
     Document: {
+      DocTypeToCreate: 101,
       Name: input.customer.name,
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
+      Products: [
+        {
+          Description: input.productName,
+          UnitCost: Number(input.amount.toFixed(2)),
+          Quantity: 1,
+        },
+      ],
     },
-    InvoiceLines: [
-      {
-        Description: input.productName,
-        Price: Number(input.amount.toFixed(2)),
-        Quantity: 1,
-      },
-    ],
   };
 
   const res = await fetch(`${CARDCOM_BASE}/LowProfile/Create`, {
@@ -122,7 +122,6 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
     throw new CardcomError(`Cardcom HTTP ${res.status}: ${json?.Description ?? "unknown"}`, res.status, json);
   }
 
-  // Cardcom v11 success: ResponseCode === 0
   const code = json.ResponseCode ?? json.Status;
   if (code !== 0 || !json.Url || !json.LowProfileId) {
     throw new CardcomError(
@@ -169,20 +168,21 @@ export async function chargeToken(input: ChargeTokenInput): Promise<{
     ApiName: cfg.apiName,
     Token: input.token,
     Amount: Number(input.amount.toFixed(2)),
-    ISOCoinId: 1,
+    CoinID: 1,
     ProductName: input.productName,
     Document: {
+      DocTypeToCreate: 101,
       Name: input.customer.name,
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
+      Products: [
+        {
+          Description: input.productName,
+          UnitCost: Number(input.amount.toFixed(2)),
+          Quantity: 1,
+        },
+      ],
     },
-    InvoiceLines: [
-      {
-        Description: input.productName,
-        Price: Number(input.amount.toFixed(2)),
-        Quantity: 1,
-      },
-    ],
     ...(input.externalReference ? { ExternalReference: input.externalReference } : {}),
   };
 
@@ -214,29 +214,22 @@ export async function chargeToken(input: ChargeTokenInput): Promise<{
   };
 }
 
-/**
- * Webhook payload sent by Cardcom after a successful checkout.
- * Field names follow Cardcom v11 conventions; some installations send
- * additional fields. Treat all fields as optional.
- */
 export interface CardcomWebhookPayload {
-  ReturnValue?: string;            // our agreement.id
-  DealResponse?: number;           // 0 = success
-  ResponseCode?: number;           // alternate field name
+  ReturnValue?: string;
+  DealResponse?: number;
+  ResponseCode?: number;
   InternalDealNumber?: number | string;
   Token?: string;
   CardOwnerName?: string;
   CardOwnerEmail?: string;
   CardOwnerPhone?: string;
-  Sum?: number | string;           // amount actually charged
-  Amount?: number | string;        // alternate
+  Sum?: number | string;
+  Amount?: number | string;
   DocumentNumber?: number | string;
   LowProfileId?: string;
-  // catch-all
   [key: string]: unknown;
 }
 
-/** Returns true if the webhook payload looks like a successful Cardcom POST. */
 export function isWebhookSuccess(p: CardcomWebhookPayload): boolean {
   const code = p.DealResponse ?? p.ResponseCode;
   return code === 0 || (typeof code === "string" && code === "0");
