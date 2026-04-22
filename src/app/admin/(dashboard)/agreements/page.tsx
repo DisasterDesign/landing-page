@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
@@ -60,6 +61,16 @@ const TIER_PRICE: Record<Tier, number> = {
 
 type TierChoice = Tier | "CUSTOM";
 
+interface ClientLite {
+  id: string;
+  number: number;
+  name: string;
+  businessName: string | null;
+  email: string | null;
+  phone: string | null;
+  idNumber: string | null;
+}
+
 export default function AgreementsPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +88,12 @@ export default function AgreementsPage() {
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [clientId, setClientId] = useState<string>("");
+
+  // Client list (for create-time picker + inline relink action)
+  const [clientsList, setClientsList] = useState<ClientLite[]>([]);
+  const [relinkingId, setRelinkingId] = useState<string | null>(null);
+  const [savingLinkFor, setSavingLinkFor] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     try {
@@ -91,9 +108,23 @@ export default function AgreementsPage() {
     }
   }, []);
 
+  const fetchClients = useCallback(async () => {
+    try {
+      const res = await fetch("/api/clients");
+      if (!res.ok) return;
+      const json = await res.json();
+      setClientsList(
+        ((json.data ?? []) as ClientLite[]).slice().sort((a, b) => a.number - b.number)
+      );
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   useEffect(() => {
     fetchList();
-  }, [fetchList]);
+    fetchClients();
+  }, [fetchList, fetchClients]);
 
   const resetForm = () => {
     setTierChoice("ADVANCED");
@@ -106,6 +137,39 @@ export default function AgreementsPage() {
     setIdNumber("");
     setPhone("");
     setEmail("");
+    setClientId("");
+  };
+
+  const onPickClient = (id: string) => {
+    setClientId(id);
+    if (!id) return;
+    const c = clientsList.find((x) => x.id === id);
+    if (!c) return;
+    // Auto-fill empty fields from selected client (don't overwrite typed input)
+    if (!customerName.trim()) setCustomerName(c.name);
+    if (!businessName.trim() && c.businessName) setBusinessName(c.businessName);
+    if (!idNumber.trim() && c.idNumber) setIdNumber(c.idNumber);
+    if (!phone.trim() && c.phone) setPhone(c.phone);
+    if (!email.trim() && c.email) setEmail(c.email);
+  };
+
+  const updateAgreementClient = async (agreementId: string, newClientId: string | null) => {
+    setSavingLinkFor(agreementId);
+    try {
+      const res = await fetch(`/api/agreements/${agreementId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: newClientId }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("הקישור עודכן", { duration: 1500, style: { fontSize: "13px" } });
+      setRelinkingId(null);
+      fetchList();
+    } catch {
+      toast.error("שגיאה בעדכון הקישור");
+    } finally {
+      setSavingLinkFor(null);
+    }
   };
 
   const pickTier = (next: TierChoice) => {
@@ -162,6 +226,7 @@ export default function AgreementsPage() {
           idNumber: idNumber.trim() || undefined,
           phone: phone.trim(),
           email: email.trim(),
+          ...(clientId ? { clientId } : {}),
         }),
       });
       if (!res.ok) {
@@ -237,6 +302,7 @@ export default function AgreementsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">מחיר/חודש</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הקמה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24">סטטוס</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-44">לקוח מקושר</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך יצירה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך חתימה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-44 sticky left-0 bg-gray-800 z-10 border-l border-gray-700 md:static md:border-l-0">פעולות</th>
@@ -245,7 +311,7 @@ export default function AgreementsPage() {
           <tbody>
             {agreements.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center text-gray-500 py-12">
+                <td colSpan={10} className="text-center text-gray-500 py-12">
                   עוד לא יצרת הסכמים
                 </td>
               </tr>
@@ -265,6 +331,52 @@ export default function AgreementsPage() {
                   <td className="px-3 py-2.5 font-mono text-gray-300">{a.oneTimeFee ? `${a.oneTimeFee} ₪` : "—"}</td>
                   <td className="px-3 py-2.5">
                     <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs">
+                    {relinkingId === a.id ? (
+                      <div className="flex items-center gap-1">
+                        <select
+                          autoFocus
+                          defaultValue={a.client?.id ?? ""}
+                          disabled={savingLinkFor === a.id}
+                          onChange={(e) => updateAgreementClient(a.id, e.target.value || null)}
+                          onBlur={() => setRelinkingId(null)}
+                          className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-pink"
+                        >
+                          <option value="">— ללא קישור —</option>
+                          {clientsList.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              #{c.number} {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : a.client ? (
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/admin/clients/${a.client.id}`}
+                          className="text-cyan hover:underline truncate"
+                          title={`פתח כרטיס לקוח: ${a.client.name}`}
+                        >
+                          {a.client.name}
+                        </Link>
+                        <button
+                          onClick={() => setRelinkingId(a.id)}
+                          className="text-gray-500 hover:text-pink text-[10px]"
+                          title="שנה קישור"
+                          aria-label="שנה קישור"
+                        >
+                          ✎
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setRelinkingId(a.id)}
+                        className="text-gray-500 hover:text-pink underline-offset-2 hover:underline"
+                      >
+                        + קשר ללקוח
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-gray-400 text-xs">
                     {new Date(a.createdAt).toLocaleDateString("he-IL")}
@@ -407,6 +519,25 @@ export default function AgreementsPage() {
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">קישור ללקוח קיים (אופציונלי)</label>
+            <select
+              value={clientId}
+              onChange={(e) => onPickClient(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+            >
+              <option value="">— ללא קישור (יווצר/יקושר אוטומטית בעת חתימה) —</option>
+              {clientsList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  #{c.number} {c.name}{c.businessName ? ` · ${c.businessName}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-500 mt-1">
+              בחירה תמלא אוטומטית פרטים ריקים מהלקוח. אם תשאיר ריק, בעת חתימה הלקוח ייווצר/יקושר אוטומטית לפי האימייל/טלפון.
+            </p>
           </div>
 
           <div>
