@@ -126,6 +126,18 @@ export const createClientNoteSchema = z.object({
   body: z.string().min(1, "תוכן הפתק חובה").max(5000),
 });
 
+export const bulkClientUrlsSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        clientId: z.string().min(1),
+        websiteUrl: z.string().min(1).max(2000),
+      })
+    )
+    .min(1)
+    .max(500),
+});
+
 // Blog
 export const createBlogPostSchema = z.object({
   title: z.string().min(1, "Title is required"),
