@@ -83,12 +83,6 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (existing.status !== "DRAFT") {
-      return NextResponse.json(
-        { error: "ניתן למחוק רק הסכמים בטיוטה" },
-        { status: 400 }
-      );
-    }
 
     await prisma.agreement.delete({ where: { id } });
     return NextResponse.json({ success: true });

@@ -255,7 +255,11 @@ export default function AgreementsPage() {
   };
 
   const handleDelete = async (a: Agreement) => {
-    if (!confirm(`למחוק את ההסכם של ${a.customerName}?`)) return;
+    const isSigned = a.status === "SIGNED";
+    const message = isSigned
+      ? `⚠ הסכם זה כבר נחתם ע״י ${a.customerName}.\n\nמחיקה תסיר את ההסכם החתום מהמערכת לצמיתות (כולל החתימה הדיגיטלית, ה-IP וה-audit trail).\nהפעולה אינה הפיכה.\n\nלהמשיך?`
+      : `למחוק את ההסכם של ${a.customerName}?`;
+    if (!confirm(message)) return;
     try {
       const res = await fetch(`/api/agreements/${a.id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -404,14 +408,12 @@ export default function AgreementsPage() {
                       >
                         הורד
                       </a>
-                      {a.status === "DRAFT" && (
-                        <button
-                          onClick={() => handleDelete(a)}
-                          className="text-red-400 hover:text-red-300 text-xs underline-offset-2 hover:underline"
-                        >
-                          מחק
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDelete(a)}
+                        className="text-red-400 hover:text-red-300 text-xs underline-offset-2 hover:underline"
+                      >
+                        מחק
+                      </button>
                     </div>
                   </td>
                 </tr>
