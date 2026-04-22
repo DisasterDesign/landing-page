@@ -16,7 +16,8 @@ interface Props {
 }
 
 export default async function Image({ params }: Props) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
 
   const post = await prisma.blogPost.findUnique({
     where: { slug, published: true },

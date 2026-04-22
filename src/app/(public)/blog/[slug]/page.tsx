@@ -35,7 +35,8 @@ async function getAdjacentPosts(publishedAt: Date) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const post = await getPost(slug);
   if (!post) return { title: "מאמר לא נמצא" };
 
@@ -58,7 +59,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function BlogPostPage({ params }: Props) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const post = await getPost(slug);
   if (!post) notFound();
 
