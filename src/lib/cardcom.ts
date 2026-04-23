@@ -1,9 +1,14 @@
 /**
  * Cardcom LowProfile API client.
  * Docs: https://secure.cardcom.solutions/api/v11/
+ *
+ * This file ALSO wraps Cardcom's legacy SOAP endpoint
+ * (BillGoldService.asmx) for creating and cancelling recurring orders —
+ * v11 REST has no endpoint for that. See createRecurringOrder() below.
  */
 
 const CARDCOM_BASE = "https://secure.cardcom.solutions/api/v11";
+const BILLGOLD_URL = "https://secure.cardcom.solutions/Interface/BillGoldService.asmx";
 
 export function getCardcomConfig(): {
   terminal: number;
@@ -20,6 +25,25 @@ export function getCardcomConfig(): {
   const tNum = Number(terminal);
   if (!Number.isFinite(tNum)) return null;
   return { terminal: tNum, apiName, apiPassword };
+}
+
+/**
+ * Legacy BillGoldService auth — a SEPARATE username/password pair from the
+ * v11 REST credentials. Provisioned in the Cardcom Dashboard under the
+ * "שם משתמש וסיסמה לממשקים" section. Required for recurring-order SOAP calls.
+ */
+export function getBillGoldConfig(): {
+  terminal: number;
+  userName: string;
+  password: string;
+} | null {
+  const terminal = process.env.CARDCOM_TERMINAL || "149683";
+  const userName = process.env.CARDCOM_BILLGOLD_USERNAME || "jWKlFC665ftyMxMw8AKQ";
+  const password = process.env.CARDCOM_BILLGOLD_PASSWORD || "I3iWutMOIzjcrTkpGGgB";
+  if (!terminal || !userName || !password) return null;
+  const tNum = Number(terminal);
+  if (!Number.isFinite(tNum)) return null;
+  return { terminal: tNum, userName, password };
 }
 
 export interface CreatePaymentInput {
@@ -226,6 +250,7 @@ export interface CardcomWebhookPayload {
   Amount?: number | string;
   DocumentNumber?: number | string;
   LowProfileId?: string;
+  RecurringId?: number | string;
   [key: string]: unknown;
 }
 
@@ -239,4 +264,114 @@ export function extractWebhookAmount(p: CardcomWebhookPayload): number | null {
   if (raw == null) return null;
   const n = typeof raw === "number" ? raw : parseFloat(String(raw));
   return Number.isFinite(n) ? n : null;
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export interface CreateRecurringOrderInput {
+  agreementId: string;
+  cardcomToken: string;
+  monthlyAmount: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  productDescription: string;
+}
+
+/**
+ * Registers a monthly recurring charge with Cardcom via the BillGold SOAP
+ * endpoint. Call AFTER the first LowProfile charge succeeds and a token was
+ * issued — Cardcom will then charge the card on its own each month and POST
+ * the usual webhook back with a RecurringId field set.
+ */
+export async function createRecurringOrder(
+  input: CreateRecurringOrderInput
+): Promise<{ recurringId: number; accountId: number }> {
+  const cfg = getBillGoldConfig();
+  if (!cfg) throw new CardcomError("BillGold credentials not configured");
+
+  const nextBill = new Date();
+  nextBill.setDate(nextBill.getDate() + 30);
+  const nextBillStr = nextBill.toISOString().split("T")[0]; // YYYY-MM-DD
+
+  const soapBody = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AddUpdateRecurringOrder xmlns="https://www.cardcom.co.il/">
+      <TerminalNumber>${cfg.terminal}</TerminalNumber>
+      <UserName>${escapeXml(cfg.userName)}</UserName>
+      <Password>${escapeXml(cfg.password)}</Password>
+      <RecurringOrder>
+        <Operation>NewAndUpdate</Operation>
+        <Account>
+          <CompanyName>${escapeXml(input.customerName)}</CompanyName>
+          <ContactName>${escapeXml(input.customerName)}</ContactName>
+          <Email>${escapeXml(input.customerEmail)}</Email>
+          ${input.customerPhone ? `<PhMobile>${escapeXml(input.customerPhone)}</PhMobile>` : ""}
+          <RecurringPaymentsActive>true</RecurringPaymentsActive>
+          <IsDocumentLangEnglish>false</IsDocumentLangEnglish>
+        </Account>
+        <CreditCard>
+          <Token>${escapeXml(input.cardcomToken)}</Token>
+        </CreditCard>
+        <RecurringPayments>
+          <ExtRecurringPayments>
+            <Operation>NewAndUpdate</Operation>
+            <TimeIntervalId>1</TimeIntervalId>
+            <FinalDebitCoinId>1</FinalDebitCoinId>
+            <DocTypeToCreate>3</DocTypeToCreate>
+            <NextDateToBill>${nextBillStr}</NextDateToBill>
+            <TotalNumOfBills>0</TotalNumOfBills>
+            <NumOfPaymentsAlreadyCharged>1</NumOfPaymentsAlreadyCharged>
+            <IsActive>true</IsActive>
+            <IsInvoiceCreate>true</IsInvoiceCreate>
+            <InternalDecription>${escapeXml(input.productDescription)}</InternalDecription>
+            <ReturnValue>${escapeXml(input.agreementId)}</ReturnValue>
+            <FlexItem><Price>${input.monthlyAmount.toFixed(2)}</Price></FlexItem>
+          </ExtRecurringPayments>
+        </RecurringPayments>
+      </RecurringOrder>
+    </AddUpdateRecurringOrder>
+  </soap:Body>
+</soap:Envelope>`;
+
+  const res = await fetch(BILLGOLD_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+      SOAPAction: '"https://www.cardcom.co.il/AddUpdateRecurringOrder"',
+    },
+    body: soapBody,
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new CardcomError(`BillGold HTTP ${res.status}`, res.status, text);
+  }
+
+  const codeMatch = text.match(/<ResponseCode>(-?\d+)<\/ResponseCode>/);
+  const descMatch = text.match(/<Description>([^<]*)<\/Description>/);
+  const code = codeMatch ? Number(codeMatch[1]) : -1;
+  if (code !== 0) {
+    throw new CardcomError(
+      `BillGold rejected: ${descMatch?.[1] ?? "unknown"} (code ${code})`,
+      undefined,
+      text
+    );
+  }
+
+  const recurringIdMatch = text.match(/<RecurringId>(\d+)<\/RecurringId>/);
+  const accountIdMatch = text.match(/<AccountId>(\d+)<\/AccountId>/);
+
+  return {
+    recurringId: recurringIdMatch ? Number(recurringIdMatch[1]) : 0,
+    accountId: accountIdMatch ? Number(accountIdMatch[1]) : 0,
+  };
 }

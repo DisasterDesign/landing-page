@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   isWebhookSuccess,
   extractWebhookAmount,
+  createRecurringOrder,
   type CardcomWebhookPayload,
 } from "@/lib/cardcom";
 import { notifyAllAdmins } from "@/lib/notifications";
@@ -15,6 +16,10 @@ import { notifyAllAdmins } from "@/lib/notifications";
  * Cardcom does NOT sign webhooks, so we trust the body's status code +
  * ReturnValue. The agreement.id we put in ReturnValue is a server-generated
  * cuid and not enumerable by an attacker, so this is reasonably safe.
+ *
+ * Two flavors of webhook land here:
+ *   1. First charge (LowProfile) — has ReturnValue=agreementId, no RecurringId.
+ *   2. Recurring auto-charge (BillGold) — carries RecurringId.
  */
 export async function POST(request: NextRequest) {
   let payload: CardcomWebhookPayload;
@@ -39,36 +44,56 @@ export async function POST(request: NextRequest) {
     ResponseCode: payload.ResponseCode,
     InternalDealNumber: payload.InternalDealNumber,
     LowProfileId: payload.LowProfileId,
+    RecurringId: payload.RecurringId,
   });
 
-  const agreementId = typeof payload.ReturnValue === "string" ? payload.ReturnValue : null;
-  if (!agreementId) {
-    return NextResponse.json({ ok: true, ignored: "no ReturnValue" });
+  if (payload.RecurringId != null) {
+    await handleRecurringCharge(payload);
+    return NextResponse.json({ ok: true });
   }
+
+  await handleFirstCharge(payload);
+  return NextResponse.json({ ok: true });
+}
+
+// Cardcom may also GET the URL during setup checks; respond OK
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
+async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> {
+  const agreementId = typeof payload.ReturnValue === "string" ? payload.ReturnValue : null;
+  if (!agreementId) return;
 
   const agreement = await prisma.agreement.findUnique({
     where: { id: agreementId },
-    select: { id: true, paymentStatus: true, customerName: true, monthlyPrice: true, clientId: true },
+    select: {
+      id: true,
+      paymentStatus: true,
+      customerName: true,
+      monthlyPrice: true,
+      clientId: true,
+      cardcomRecurringId: true,
+      email: true,
+      phone: true,
+    },
   });
   if (!agreement) {
     console.warn(`Cardcom webhook: agreement ${agreementId} not found`);
-    return NextResponse.json({ ok: true, ignored: "agreement not found" });
+    return;
   }
 
   // Idempotency: don't re-process a completed payment
-  if (agreement.paymentStatus === "COMPLETED") {
-    return NextResponse.json({ ok: true, ignored: "already completed" });
-  }
+  if (agreement.paymentStatus === "COMPLETED") return;
 
   if (!isWebhookSuccess(payload)) {
     await prisma.agreement.update({
       where: { id: agreementId },
       data: { paymentStatus: "FAILED" },
     });
-    return NextResponse.json({ ok: true, status: "failed" });
+    return;
   }
 
-  // Success path
   const paidAmount = extractWebhookAmount(payload);
   const cardcomDealId =
     payload.InternalDealNumber != null ? String(payload.InternalDealNumber) : null;
@@ -104,17 +129,106 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  // Fire-and-forget admin notification (don't block webhook response)
   notifyAllAdmins({
     type: "AGREEMENT_SIGNED",
     title: `תשלום התקבל — ${agreement.customerName}`,
     body: `סכום: ${paidAmount ?? "?"} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after payment failed:", e));
 
-  return NextResponse.json({ ok: true, status: "completed" });
+  // Register the monthly recurring schedule with Cardcom after the response
+  // goes out. after() keeps the work on the same invocation without delaying
+  // the 200 back to Cardcom.
+  if (
+    cardcomToken &&
+    agreement.monthlyPrice > 0 &&
+    !agreement.cardcomRecurringId
+  ) {
+    after(async () => {
+      try {
+        const r = await createRecurringOrder({
+          agreementId,
+          cardcomToken,
+          monthlyAmount: agreement.monthlyPrice,
+          customerName: agreement.customerName,
+          customerEmail: agreement.email,
+          customerPhone: agreement.phone ?? undefined,
+          productDescription: `חבילה חודשית — ${agreement.customerName}`,
+        });
+        await prisma.agreement.update({
+          where: { id: agreementId },
+          data: { cardcomRecurringId: r.recurringId },
+        });
+      } catch (err) {
+        console.error("Cardcom recurring setup failed:", err);
+        await notifyAllAdmins({
+          type: "AGREEMENT_SIGNED",
+          title: `⚠️ הוראת קבע לא נוצרה — ${agreement.customerName}`,
+          body: `החיוב הראשון הצליח. הקמת החיוב החודשי נכשלה — להקים ידנית מול Cardcom.`,
+        }).catch(() => {});
+      }
+    });
+  }
 }
 
-// Cardcom may also GET the URL during setup checks; respond OK
-export async function GET() {
-  return NextResponse.json({ ok: true });
+async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
+  const recurringId = Number(p.RecurringId);
+  if (!Number.isFinite(recurringId)) return;
+
+  const agreement = await prisma.agreement.findFirst({
+    where: { cardcomRecurringId: recurringId },
+    select: {
+      id: true,
+      clientId: true,
+      customerName: true,
+      monthlyPrice: true,
+    },
+  });
+  if (!agreement) {
+    console.warn(`Cardcom recurring webhook: unknown RecurringId=${recurringId}`);
+    return;
+  }
+
+  const amount = extractWebhookAmount(p) ?? agreement.monthlyPrice;
+  const dealId = p.InternalDealNumber != null ? String(p.InternalDealNumber) : null;
+  const invoice = p.DocumentNumber != null ? String(p.DocumentNumber) : null;
+  const success = isWebhookSuccess(p);
+
+  if (dealId) {
+    const existing = await prisma.agreementCharge.findFirst({
+      where: { cardcomDealId: dealId },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.agreementCharge.create({
+      data: {
+        agreementId: agreement.id,
+        amount,
+        cardcomDealId: dealId,
+        invoiceNumber: invoice,
+        cardcomRecurringId: recurringId,
+        success,
+        rawPayload: p as object,
+      },
+    });
+    if (success && agreement.clientId) {
+      await tx.client.update({
+        where: { id: agreement.clientId },
+        data: {
+          amount: { increment: amount },
+          paymentDate: new Date(),
+        },
+      });
+    }
+  });
+
+  notifyAllAdmins({
+    type: "AGREEMENT_SIGNED",
+    title: success
+      ? `💰 חיוב חודשי התקבל — ${agreement.customerName}`
+      : `⚠️ חיוב חודשי נכשל — ${agreement.customerName}`,
+    body: `₪${amount}${invoice ? ` · חשבונית #${invoice}` : ""}`,
+  }).catch((e) => console.error("notify admins after recurring charge failed:", e));
 }

@@ -368,14 +368,33 @@ model Agreement {
   paymentId     String?       // Cardcom LowProfileId (per-attempt)
   cardcomDealId String?       // Cardcom InternalDealNumber after successful charge
   cardcomToken  String?       // Token for future recurring charges
+  cardcomRecurringId Int?     // Cardcom's ID for the recurring schedule (BillGoldService)
   invoiceNumber String?       // Cardcom invoice number, if generated
   paidAt        DateTime?
   paidAmount    Float?
+
+  charges       AgreementCharge[]
 
   @@index([status])
   @@index([clientId])
   @@index([signToken])
   @@index([paymentStatus])
+}
+
+model AgreementCharge {
+  id                 String    @id @default(cuid())
+  agreementId        String
+  agreement          Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  amount             Float
+  cardcomDealId      String?   // InternalDealNumber for this specific charge (unique per Cardcom deal)
+  invoiceNumber      String?   // DocumentNumber (חשבונית מס)
+  cardcomRecurringId Int?      // null for the first/LowProfile charge; populated for recurring auto-charges
+  success            Boolean   @default(true)
+  chargedAt          DateTime  @default(now())
+  rawPayload         Json?     // raw webhook body for debugging
+
+  @@index([agreementId, chargedAt])
+  @@index([cardcomDealId])
 }
 
 model FontOrder {
