@@ -59,7 +59,7 @@ async function processLead(
   const lead: LeadDetail = await getLead(leadId, pageAccessToken);
 
   // Double-check form ID after fetch (webhook payload may omit form_id).
-  const allowedFormId = process.env.FACEBOOK_LEAD_FORM_ID;
+  const allowedFormId = process.env.FACEBOOK_LEAD_FORM_ID || "1505628047948105";
   if (allowedFormId && lead.form_id && lead.form_id !== allowedFormId) {
     console.info(
       `FB webhook: skipping lead ${lead.id} from form ${lead.form_id} (expected ${allowedFormId})`
@@ -132,8 +132,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Optional scoping via env — if set, ignore anything not matching.
-  const allowedPageId = process.env.META_PAGE_ID;
-  const allowedFormId = process.env.FACEBOOK_LEAD_FORM_ID;
+  // Hardcoded fallbacks due to Vercel env injection bug.
+  const allowedPageId = process.env.META_PAGE_ID || "482956251578120";
+  const allowedFormId = process.env.FACEBOOK_LEAD_FORM_ID || "1505628047948105";
 
   // Process leads in the background after responding 200 (so we stay <5s)
   // Actually we'll await — the calls are fast, and Vercel may not run our
