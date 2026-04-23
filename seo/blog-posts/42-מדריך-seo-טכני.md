@@ -228,6 +228,15 @@ Google Search Console הוא כלי חינם שהוא בעצם "דשבורד" ש
 
 ---
 
+
+## קראו גם
+
+- [קידום אתרים SEO](https://www.fuzionwebz.com/blog/קידום-אתרים-seo-לעסקים-קטנים)
+- [דומיין ואחסון](https://www.fuzionwebz.com/blog/דומיין-ואחסון-לאתר--מדריך-למתחילים-moag01fl-yr9c)
+- [תעודת SSL חשובה](https://www.fuzionwebz.com/blog/תעודת-ssl--למה-חובה-ואיך-מתקינים-moag01lr-gdp6)
+- [תמונות מותאמות](https://www.fuzionwebz.com/blog/אופטימיזציית-תמונות-לאתר--מדריך-מעשי-moag0243-sdbs)
+- [ביצועים וSEO](https://www.fuzionwebz.com/blog/איך-לבדוק-את-הביצועים-של-האתר-שלכם--כלים-חינמיים-moag02ga-dc7f)
+
 ## הצעד הבא שלכם
 
 שלך לבדיקת ה-SEO הטכני הראשון שלך? התחילו עם Google Search Console — זה יגיד לכם בדיוק מה צריך לתקן.

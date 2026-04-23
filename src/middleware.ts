@@ -42,7 +42,7 @@ export default auth((req) => {
   }
 
   // TEMP: debug env endpoint
-  if (pathname.startsWith("/api/_debug")) {
+  if (pathname.startsWith("/api/debug")) {
     return NextResponse.next();
   }
 

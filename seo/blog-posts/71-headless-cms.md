@@ -127,6 +127,14 @@ Headless CMS דורש בדרך כלל:
 
 אבל זה לא מחייב שכל עסק קטן צריך לעבור. זה תלוי בצרכים שלכם.
 
+
+## קראו גם
+
+- [API של CMS](https://www.fuzionwebz.com/blog/מה-זה-api-ולמה-זה-חשוב-לאתר-העסקי-שלכם-moag01rv-xe35)
+- [אינטגרציות headless](https://www.fuzionwebz.com/blog/אינטגרציות-לאתר--crm-תשלומים-ניוזלטר-וכל-מה-שצריך-moag08en-xo61)
+- [SEO בheadless](https://www.fuzionwebz.com/blog/seo-טכני--צ׳קליסט-מלא-לאתר-שרוצה-לדרג-בגוגל-moag034w-62du)
+- [ביצועים בheadless](https://www.fuzionwebz.com/blog/איך-לבדוק-את-הביצועים-של-האתר-שלכם--כלים-חינמיים-moag02ga-dc7f)
+
 ## הצעד הבא שלכם
 
 אם אתם תוהה אם Headless CMS זה נכון עבור עסק שלכם, או אם אתם כבר שוקלים את הקפצה, בפוזיון ויבז אנחנו עוזרים לעסקים להחליט.
