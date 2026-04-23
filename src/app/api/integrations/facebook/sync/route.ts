@@ -122,8 +122,10 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("Facebook sync error:", error);
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: message },
       { status: 500 }
     );
   }
