@@ -31,15 +31,36 @@ export async function GET() {
       return NextResponse.json({ steps });
     }
 
-    // Step 3: call Meta form leads endpoint
-    const formId = process.env.FACEBOOK_LEAD_FORM_ID || "1505628047948105";
-    const url = `https://graph.facebook.com/v19.0/${formId}/leads?fields=id,created_time&limit=5&access_token=${encodeURIComponent(token)}`;
-    steps.metaUrl = url.replace(token, "TOKEN_REDACTED");
+    // Step 3: list all lead forms for this page
+    const formsUrl = `https://graph.facebook.com/v19.0/${integ.pageId}/leadgen_forms?fields=id,name,status&access_token=${encodeURIComponent(token)}`;
+    const formsRes = await fetch(formsUrl);
+    const formsBody = await formsRes.text();
+    steps.formsStatus = formsRes.status;
+    steps.formsBody = formsBody.slice(0, 1000);
 
-    const metaRes = await fetch(url);
-    const metaBody = await metaRes.text();
-    steps.metaStatus = metaRes.status;
-    steps.metaBody = metaBody.slice(0, 500);
+    // If forms found, try to pull leads from first active form
+    if (formsRes.ok) {
+      try {
+        const formsData = JSON.parse(formsBody);
+        const forms = formsData.data ?? [];
+        steps.formCount = forms.length;
+        steps.forms = forms.map((f: { id: string; name: string; status: string }) => ({
+          id: f.id,
+          name: f.name,
+          status: f.status,
+        }));
+
+        if (forms.length > 0) {
+          const firstFormId = forms[0].id;
+          const leadsUrl = `https://graph.facebook.com/v19.0/${firstFormId}/leads?fields=id,created_time&limit=3&access_token=${encodeURIComponent(token)}`;
+          const leadsRes = await fetch(leadsUrl);
+          steps.leadsStatus = leadsRes.status;
+          steps.leadsBody = (await leadsRes.text()).slice(0, 500);
+        }
+      } catch {
+        steps.parseError = "Failed to parse forms response";
+      }
+    }
 
     return NextResponse.json({ steps });
   } catch (e) {
