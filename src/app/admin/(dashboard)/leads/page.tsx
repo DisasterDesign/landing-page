@@ -174,7 +174,7 @@ export default function LeadsPage() {
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_CLASS[lead.status]}`}>
                       {STATUS_LABEL[lead.status]}
                     </span>
-                    {lead.source === "facebook_lead_ads" && (
+                    {lead.source === "FACEBOOK" && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-400">
                         📘 Facebook
                       </span>
@@ -316,7 +316,7 @@ function LeadDrawer({
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_CLASS[lead.status]}`}>
                   {STATUS_LABEL[lead.status]}
                 </span>
-                {lead.source === "facebook_lead_ads" && (
+                {lead.source === "FACEBOOK" && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-400">
                     📘 Facebook
                   </span>

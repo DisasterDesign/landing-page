@@ -180,6 +180,7 @@ model ContactSubmission {
   name            String
   email           String
   phone           String?
+  company         String?
   message         String
   service         String?
   isRead          Boolean       @default(false)

@@ -175,15 +175,24 @@ export function verifyWebhookSignature(
 }
 
 /**
- * Map Meta's lead field_data array to standard contact fields.
+ * Map Meta's lead field_data array to our ContactSubmission shape.
+ *
+ * Standard Meta field names (full_name, email, phone_number) are matched
+ * exactly. Custom Hebrew questions on the Fuzion form are matched by
+ * substring so the code is robust to trailing punctuation and RTL
+ * reshuffling of leading symbols ("?" / ":"):
+ *   - "במה את/ה מתעניין"  → interest (stored as `message`)
+ *   - "שם החברה/עסק"       → company
+ * Any remaining custom fields are concatenated into `message`.
  */
 export function mapLeadFieldsToContact(lead: LeadDetail): {
   name: string;
   email: string;
   phone: string | null;
+  company: string | null;
   message: string;
 } {
-  const get = (...candidates: string[]): string | null => {
+  const getExact = (...candidates: string[]): string | null => {
     for (const cand of candidates) {
       const found = lead.field_data.find((f) => f.name === cand);
       if (found && found.values?.[0]) return found.values[0];
@@ -191,17 +200,31 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
     return null;
   };
 
-  const fullName = get("full_name");
-  const firstName = get("first_name");
-  const lastName = get("last_name");
+  const getContains = (...needles: string[]): LeadFieldDatum | null => {
+    for (const needle of needles) {
+      const found = lead.field_data.find((f) => f.name.includes(needle));
+      if (found && found.values?.[0]) return found;
+    }
+    return null;
+  };
+
+  const fullName = getExact("full_name");
+  const firstName = getExact("first_name");
+  const lastName = getExact("last_name");
   const name =
-    fullName ?? [firstName, lastName].filter(Boolean).join(" ") ?? "ליד מפייסבוק";
+    fullName || [firstName, lastName].filter(Boolean).join(" ") || "ליד מפייסבוק";
 
-  const email = get("email") ?? "";
-  const phone = get("phone_number", "phone");
+  const email = getExact("email") ?? "";
+  const phone = getExact("phone_number", "phone");
 
-  // Build a "message" out of any non-standard fields (custom questions)
-  const standardKeys = new Set([
+  const companyField = getContains("שם החברה", "חברה/עסק", "company");
+  const company = companyField?.values?.[0] ?? null;
+
+  const interestField = getContains("מתעניין", "interest");
+  const interest = interestField?.values?.[0] ?? null;
+
+  // Collect any remaining custom fields for the message body.
+  const standardNames = new Set([
     "full_name",
     "first_name",
     "last_name",
@@ -209,15 +232,23 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
     "phone_number",
     "phone",
   ]);
-  const customLines = lead.field_data
-    .filter((f) => !standardKeys.has(f.name) && f.values?.[0])
+  const consumed = new Set<string>();
+  if (companyField) consumed.add(companyField.name);
+  if (interestField) consumed.add(interestField.name);
+
+  const extraLines = lead.field_data
+    .filter((f) => !standardNames.has(f.name) && !consumed.has(f.name) && f.values?.[0])
     .map((f) => `${f.name}: ${f.values.join(", ")}`);
+
+  const parts: string[] = [];
+  if (interest) parts.push(interest);
+  if (extraLines.length) parts.push(...extraLines);
   const message =
-    customLines.length > 0
-      ? customLines.join("\n")
+    parts.length > 0
+      ? parts.join("\n")
       : lead.form_name
       ? `התקבל מטופס: ${lead.form_name}`
       : "ליד מפייסבוק (ללא תוכן נוסף)";
 
-  return { name, email, phone, message };
+  return { name, email, phone, company, message };
 }

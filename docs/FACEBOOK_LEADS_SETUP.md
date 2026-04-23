@@ -55,9 +55,15 @@ META_APP_ID = <מהשלב הקודם>
 META_APP_SECRET = <מהשלב הקודם>
 META_REDIRECT_URI = https://www.fuzionwebz.com/api/integrations/facebook/callback
 META_WEBHOOK_VERIFY_TOKEN = f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9
+
+# סינון — ה-Page שלנו + הטופס הפנימי של Fuzion
+META_PAGE_ID = 482956251578120
+FACEBOOK_LEAD_FORM_ID = 1505628047948105
 ```
 
 (ה-VERIFY_TOKEN שיצרתי — אפשר להשתמש זהה גם בלוקאלי וגם בפרודקשן.)
+
+**על `META_PAGE_ID` ו-`FACEBOOK_LEAD_FORM_ID`** — אלו אופציונליים אבל מומלצים חד-משמעית. כל-זמן שהם מוגדרים, ה-webhook מתעלם אוטומטית מלידים של טפסים/דפים אחרים (החזרת 200 OK בלי שמירה). זה קריטי כשה-Page אחד מארח כמה טפסים (למשל לקוחות שונים). אם משאירים ריק — ה-webhook יקבל כל ליד מכל טופס שחיבור ה-Page קיים עבורו.
 
 לאחר ההוספה: trigger redeploy או דחיפת commit ריק.
 

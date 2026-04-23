@@ -27,7 +27,7 @@ export async function GET() {
 
     const recentLeadCount = await prisma.contactSubmission.count({
       where: {
-        source: "facebook_lead_ads",
+        source: "FACEBOOK",
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
     });
