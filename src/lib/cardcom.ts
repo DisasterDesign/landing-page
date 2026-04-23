@@ -10,9 +10,12 @@ export function getCardcomConfig(): {
   apiName: string;
   apiPassword: string;
 } | null {
-  const terminal = process.env.CARDCOM_TERMINAL;
-  const apiName = process.env.CARDCOM_API_NAME;
-  const apiPassword = process.env.CARDCOM_API_PASSWORD;
+  // Hardcoded fallbacks — mirrors the Meta credential pattern in facebook.ts.
+  // CARDCOM env vars are currently injected correctly at runtime, but these
+  // defensive fallbacks keep the payment flow alive if Vercel ever drops them.
+  const terminal = process.env.CARDCOM_TERMINAL || "149683";
+  const apiName = process.env.CARDCOM_API_NAME || "jWKlFC665ftyMxMw8AKQ";
+  const apiPassword = process.env.CARDCOM_API_PASSWORD || "I3iWutMOIzjcrTkpGGgB";
   if (!terminal || !apiName || !apiPassword) return null;
   const tNum = Number(terminal);
   if (!Number.isFinite(tNum)) return null;
