@@ -20,12 +20,10 @@ export interface MetaConfig {
 }
 
 export function getMetaConfig(): MetaConfig | null {
-  // Hardcoded fallbacks — Vercel env injection is broken for newly-added vars.
-  // Once the Vercel issue is resolved, env vars will take precedence.
-  const appId = process.env.META_APP_ID || "1731795861128446";
-  const appSecret = process.env.META_APP_SECRET || "fb1f38c1737ead86b3cea5ebc2685c12";
-  const redirectUri = process.env.META_REDIRECT_URI || "https://www.fuzionwebz.com/api/integrations/facebook/callback";
-  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || "f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9";
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  const redirectUri = process.env.META_REDIRECT_URI;
+  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
   if (!appId || !appSecret || !redirectUri || !verifyToken) return null;
   return { appId, appSecret, redirectUri, verifyToken };
 }
