@@ -155,6 +155,35 @@ export async function getLead(
 }
 
 /**
+ * Fetch all leads from a specific form, handling Meta's cursor-based pagination.
+ * Returns an array of LeadDetail objects (newest first).
+ */
+interface LeadsPageResponse {
+  data: LeadDetail[];
+  paging?: { next?: string };
+}
+
+export async function getFormLeads(
+  formId: string,
+  pageAccessToken: string,
+  limit = 50
+): Promise<LeadDetail[]> {
+  const fields = "id,created_time,field_data,form_id,form_name,ad_id,campaign_id,campaign_name";
+  let url: string | null =
+    `${GRAPH}/${encodeURIComponent(formId)}/leads?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(pageAccessToken)}`;
+
+  const allLeads: LeadDetail[] = [];
+
+  while (url) {
+    const resp: LeadsPageResponse = await metaFetch<LeadsPageResponse>(url);
+    allLeads.push(...(resp.data ?? []));
+    url = resp.paging?.next ?? null;
+  }
+
+  return allLeads;
+}
+
+/**
  * Verify Meta's X-Hub-Signature-256 header.
  * @param rawBody — the exact bytes Meta sent (must NOT be re-stringified)
  * @param signatureHeader — value of X-Hub-Signature-256 (e.g. "sha256=abc...")

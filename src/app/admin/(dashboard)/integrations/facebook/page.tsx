@@ -32,6 +32,7 @@ export default function FacebookIntegrationPage() {
   const [pickerPages, setPickerPages] = useState<AvailablePage[] | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -122,6 +123,27 @@ export default function FacebookIntegrationPage() {
       toast.error("שגיאה בניתוק");
     } finally {
       setDisconnecting(null);
+    }
+  };
+
+  const syncHistoricalLeads = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/facebook/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "sync failed");
+      toast.success(
+        `סנכרון הושלם: ${json.created} חדשים, ${json.updated} עודכנו, ${json.skipped} דולגו (מתוך ${json.total})`,
+        { duration: 8000 }
+      );
+      await loadStatus();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה בסנכרון");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -238,13 +260,22 @@ export default function FacebookIntegrationPage() {
               </div>
             ))}
           </div>
-          <button
-            onClick={startConnect}
-            disabled={!status.oauthConfigured}
-            className="text-xs text-cyan hover:underline disabled:opacity-50"
-          >
-            + חבר Page נוסף
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={startConnect}
+              disabled={!status.oauthConfigured}
+              className="text-xs text-cyan hover:underline disabled:opacity-50"
+            >
+              + חבר Page נוסף
+            </button>
+            <button
+              onClick={syncHistoricalLeads}
+              disabled={syncing}
+              className="text-xs text-pink hover:underline disabled:opacity-50"
+            >
+              {syncing ? "מסנכרן…" : "🔄 סנכרן לידים ישנים"}
+            </button>
+          </div>
         </div>
       )}
 
