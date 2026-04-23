@@ -12,9 +12,15 @@ export function GET() {
     META_PAGE_ID_value: process.env.META_PAGE_ID ?? null,
     FACEBOOK_LEAD_FORM_ID_value: process.env.FACEBOOK_LEAD_FORM_ID ?? null,
     CARDCOM_TERMINAL_present: !!process.env.CARDCOM_TERMINAL,
-    // Sanity check: list all META_ and FACEBOOK_ keys process.env knows about
-    all_meta_keys: Object.keys(process.env).filter(
-      (k) => k.startsWith("META_") || k.startsWith("FACEBOOK_")
+    TEST_FOOBAR_present: !!process.env.TEST_FOOBAR,
+    TEST_FOOBAR_value: process.env.TEST_FOOBAR ?? null,
+    // Sanity check: list all META_/FACEBOOK_/TEST_ keys process.env knows
+    all_custom_keys: Object.keys(process.env).filter(
+      (k) =>
+        k.startsWith("META_") ||
+        k.startsWith("FACEBOOK_") ||
+        k.startsWith("TEST_") ||
+        k.startsWith("CARDCOM_")
     ),
   });
 }
