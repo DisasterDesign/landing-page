@@ -6,6 +6,7 @@ import {
   createRecurringOrder,
   type CardcomWebhookPayload,
 } from "@/lib/cardcom";
+import { encrypt } from "@/lib/crypto";
 import { notifyAllAdmins } from "@/lib/notifications";
 
 /**
@@ -22,20 +23,38 @@ import { notifyAllAdmins } from "@/lib/notifications";
  *   2. Recurring auto-charge (BillGold) — carries RecurringId.
  */
 export async function POST(request: NextRequest) {
+  // Cardcom posts JSON on some flows and form-encoded on others. The body is
+  // a one-shot stream, so we must pick the right parser by Content-Type —
+  // calling request.json() first and falling back to formData() on error
+  // fails because the stream is already consumed by the failed attempt.
+  const ct = request.headers.get("content-type") ?? "";
   let payload: CardcomWebhookPayload;
   try {
-    payload = (await request.json()) as CardcomWebhookPayload;
-  } catch {
-    // Cardcom sometimes posts as form-encoded
-    try {
+    if (ct.includes("application/json")) {
+      payload = (await request.json()) as CardcomWebhookPayload;
+    } else if (
+      ct.includes("application/x-www-form-urlencoded") ||
+      ct.includes("multipart/form-data")
+    ) {
       const form = await request.formData();
       const obj: Record<string, unknown> = {};
       for (const [k, v] of form.entries()) obj[k] = typeof v === "string" ? v : String(v);
       payload = obj as CardcomWebhookPayload;
-    } catch {
-      console.warn("Cardcom webhook: unparseable body");
-      return NextResponse.json({ ok: true }, { status: 200 });
+    } else {
+      // Unknown/missing Content-Type — read as text and try JSON, then URL-encoded.
+      const text = await request.text();
+      try {
+        payload = JSON.parse(text) as CardcomWebhookPayload;
+      } catch {
+        const params = new URLSearchParams(text);
+        const obj: Record<string, unknown> = {};
+        for (const [k, v] of params.entries()) obj[k] = v;
+        payload = obj as CardcomWebhookPayload;
+      }
     }
+  } catch {
+    console.warn("Cardcom webhook: unparseable body (content-type:", ct, ")");
+    return NextResponse.json({ ok: true }, { status: 200 });
   }
 
   console.log("Cardcom webhook received:", {
@@ -98,6 +117,9 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   const cardcomDealId =
     payload.InternalDealNumber != null ? String(payload.InternalDealNumber) : null;
   const cardcomToken = typeof payload.Token === "string" ? payload.Token : null;
+  // Encrypt before persisting; raw token is kept in memory only for the
+  // immediate createRecurringOrder() call below.
+  const cardcomTokenEncrypted = cardcomToken ? encrypt(cardcomToken) : null;
   const invoiceNumber =
     payload.DocumentNumber != null ? String(payload.DocumentNumber) : null;
 
@@ -111,7 +133,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         paidAt,
         paidAmount: paidAmount ?? agreement.monthlyPrice,
         ...(cardcomDealId ? { cardcomDealId } : {}),
-        ...(cardcomToken ? { cardcomToken } : {}),
+        ...(cardcomTokenEncrypted ? { cardcomToken: cardcomTokenEncrypted } : {}),
         ...(invoiceNumber ? { invoiceNumber } : {}),
       },
     });

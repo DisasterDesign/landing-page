@@ -175,6 +175,11 @@ interface ChargeTokenResponse {
 
 /**
  * Charges a previously-saved Cardcom token (recurring monthly billing).
+ *
+ * Note: `Agreement.cardcomToken` is stored encrypted (AES-256-GCM via
+ * src/lib/crypto.ts). Callers that read the token from the DB MUST call
+ * `decrypt()` on it before passing to this function. Tokens sourced
+ * directly from a webhook payload are already plaintext.
  */
 export async function chargeToken(input: ChargeTokenInput): Promise<{
   dealId: string;
