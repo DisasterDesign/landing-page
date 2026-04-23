@@ -5,15 +5,6 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BUILD_SHA: (process.env.VERCEL_GIT_COMMIT_SHA ?? "dev").slice(0, 7),
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
-    // Explicit passthrough — Turbopack on Next 16 sometimes fails to pick
-    // these up from Vercel's project env at runtime. Values are inlined
-    // at build time into server code only (not client bundle).
-    META_APP_ID: process.env.META_APP_ID ?? "",
-    META_APP_SECRET: process.env.META_APP_SECRET ?? "",
-    META_REDIRECT_URI: process.env.META_REDIRECT_URI ?? "",
-    META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN ?? "",
-    META_PAGE_ID: process.env.META_PAGE_ID ?? "",
-    FACEBOOK_LEAD_FORM_ID: process.env.FACEBOOK_LEAD_FORM_ID ?? "",
   },
   images: {
     formats: ["image/avif", "image/webp"],
