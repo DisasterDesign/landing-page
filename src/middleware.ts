@@ -41,6 +41,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // TEMP: debug env endpoint
+  if (pathname.startsWith("/api/debug")) {
+    return NextResponse.next();
+  }
+
   // Allow public Cardcom payment webhook (server-to-server, no auth header)
   if (pathname === "/api/payments/webhook") {
     return NextResponse.next();
