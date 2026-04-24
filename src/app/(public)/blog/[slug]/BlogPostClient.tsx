@@ -1,8 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import DOMPurify from "isomorphic-dompurify";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 
 interface BlogPostData {
@@ -30,6 +30,23 @@ interface Props {
 
 export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+
+  // Sanitize content client-side only to avoid jsdom SSR crash on Vercel.
+  // Initial render shows raw post.content (authored via Tiptap admin editor, already trusted HTML);
+  // after hydration, DOMPurify runs in the browser and replaces with sanitized HTML.
+  const [sanitizedContent, setSanitizedContent] = useState<string>(post.content);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("dompurify").then((mod) => {
+      if (cancelled) return;
+      const DOMPurify = mod.default;
+      setSanitizedContent(DOMPurify.sanitize(post.content));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [post.content]);
 
   const handleCopyLink = async () => {
     try {
@@ -107,7 +124,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
                 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700
                 prose-img:rounded-xl"
               dir="rtl"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </ScrollReveal>
 
