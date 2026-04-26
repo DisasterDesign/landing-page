@@ -46,6 +46,12 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow Vercel cron endpoints — each route handler enforces its own
+  // vercel-cron UA + CRON_SECRET check.
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   // Allow public POST to /api/contacts
   if (pathname === "/api/contacts" && req.method === "POST") {
     return NextResponse.next();

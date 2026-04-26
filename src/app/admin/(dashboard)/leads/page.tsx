@@ -78,6 +78,7 @@ export default function LeadsPage() {
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -96,6 +97,27 @@ export default function LeadsPage() {
     }
   }, [search, showAll]);
 
+  const syncFromFacebook = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/facebook/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "sync failed");
+      toast.success(
+        `סנכרון הושלם: ${json.created} חדשים, ${json.updated} עודכנו, ${json.skipped} דולגו (מתוך ${json.total})`,
+        { duration: 8000 }
+      );
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה בסנכרון");
+    } finally {
+      setSyncing(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -105,6 +127,13 @@ export default function LeadsPage() {
     <div dir="rtl" className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-2xl font-bold">לידים — מעקב</h2>
+        <button
+          onClick={syncFromFacebook}
+          disabled={syncing}
+          className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-300 hover:border-pink disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {syncing ? "מסנכרן..." : "🔄 סנכרן מפייסבוק"}
+        </button>
         <p className="text-xs text-gray-500">
           עקוב אחרי פניות שלא נסגרו, נהל הערות, וקבע מתי לחזור לכל אחת
         </p>
