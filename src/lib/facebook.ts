@@ -20,10 +20,13 @@ export interface MetaConfig {
 }
 
 export function getMetaConfig(): MetaConfig | null {
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
-  const redirectUri = process.env.META_REDIRECT_URI;
-  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  // Hardcoded fallbacks — Vercel env vars not yet provisioned for META_*.
+  // Once added, env values take precedence. See cardcom.ts for the same
+  // pattern; do NOT mirror this back into cardcom.ts (those env vars are set).
+  const appId = process.env.META_APP_ID || "1731795861128446";
+  const appSecret = process.env.META_APP_SECRET || "fb1f38c1737ead86b3cea5ebc2685c12";
+  const redirectUri = process.env.META_REDIRECT_URI || "https://www.fuzionwebz.com/api/integrations/facebook/callback";
+  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || "f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9";
   if (!appId || !appSecret || !redirectUri || !verifyToken) return null;
   return { appId, appSecret, redirectUri, verifyToken };
 }
