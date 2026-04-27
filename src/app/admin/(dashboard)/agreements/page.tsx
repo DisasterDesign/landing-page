@@ -418,7 +418,116 @@ export default function AgreementsPage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {agreements.length === 0 ? (
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 text-center text-sm text-gray-500">
+            עוד לא יצרת הסכמים
+          </div>
+        ) : (
+          agreements.map((a) => (
+            <div
+              key={a.id}
+              className="bg-gray-900 border border-gray-700 rounded-2xl p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-white truncate">{a.customerName}</div>
+                  {a.businessName && (
+                    <div className="text-xs text-gray-400 truncate">{a.businessName}</div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {a.tier ? (
+                    <Badge variant={TIER_VARIANT[a.tier]}>{TIER_LABEL[a.tier]}</Badge>
+                  ) : (
+                    <Badge variant="gray">מותאם</Badge>
+                  )}
+                  <span className="text-sm font-mono text-white">{a.monthlyPrice} ₪</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                <Badge variant={PAYMENT_VARIANT[a.paymentStatus]}>
+                  {PAYMENT_LABEL[a.paymentStatus]}
+                </Badge>
+                {a.paymentStatus === "COMPLETED" && a.paidAmount != null && (
+                  <span className="text-[11px] text-green-400 font-mono">
+                    {a.paidAmount} ₪{a.invoiceNumber ? ` · #${a.invoiceNumber}` : ""}
+                  </span>
+                )}
+                {a.client && (
+                  <Link
+                    href={`/admin/clients/${a.client.id}`}
+                    className="text-[11px] text-cyan hover:underline truncate max-w-[40%]"
+                    title={`כרטיס לקוח: ${a.client.name}`}
+                  >
+                    🔗 {a.client.name}
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                <span>נוצר: {new Date(a.createdAt).toLocaleDateString("he-IL")}</span>
+                {a.signedAt && (
+                  <span>נחתם: {new Date(a.signedAt).toLocaleDateString("he-IL")}</span>
+                )}
+                {a.oneTimeFee != null && (
+                  <span>הקמה: {a.oneTimeFee} ₪</span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800">
+                <button
+                  onClick={() => copyLink(a.signToken)}
+                  className="text-cyan hover:text-cyan/80 text-xs font-medium"
+                >
+                  קישור חתימה
+                </button>
+                <button
+                  onClick={() => setViewing(a)}
+                  className="text-gray-300 hover:text-white text-xs font-medium"
+                >
+                  צפה
+                </button>
+                <a
+                  href={`/api/agreements/${a.id}/download`}
+                  className="text-pink hover:text-pink/80 text-xs font-medium"
+                >
+                  הורד
+                </a>
+                {a.paymentStatus !== "COMPLETED" && (
+                  <button
+                    onClick={() => copyPaymentLink(a)}
+                    className="text-green-400 hover:text-green-300 text-xs font-medium"
+                  >
+                    {a.paymentUrl ? "לינק תשלום" : "צור לינק תשלום"}
+                  </button>
+                )}
+                {a.paymentStatus === "COMPLETED" && a.cardcomRecurringId == null && (
+                  <button
+                    onClick={() => retryRecurring(a)}
+                    disabled={retryingId === a.id}
+                    className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50 text-xs font-medium"
+                  >
+                    {retryingId === a.id ? "מקים..." : "הקם הו״ק"}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(a)}
+                  className="ml-auto text-red-400 hover:text-red-300 text-xs font-medium"
+                >
+                  מחק
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-700">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-800 border-b border-gray-700">
@@ -583,7 +692,7 @@ export default function AgreementsPage() {
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
           <div>
             <label className="block text-sm text-gray-400 mb-2">סוג ההסכם *</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(["BASIC", "ADVANCED", "PREMIUM", "CUSTOM"] as TierChoice[]).map((t) => (
                 <button
                   key={t}
@@ -622,14 +731,14 @@ export default function AgreementsPage() {
                   }
                 }}
                 placeholder="לדוגמה: אינטגרציה עם מערכת CRM של הלקוח"
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
               <button
                 type="button"
                 onClick={addClause}
-                className="px-3 py-2 bg-cyan/20 hover:bg-cyan/30 text-cyan text-sm font-bold rounded-xl transition-colors"
+                className="shrink-0 px-3 py-2 bg-cyan/20 hover:bg-cyan/30 text-cyan text-sm font-bold rounded-xl transition-colors"
               >
-                + הוסף סעיף
+                + הוסף
               </button>
             </div>
             {additionalServices.length > 0 && (
@@ -654,7 +763,7 @@ export default function AgreementsPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-gray-400 mb-1">תשלום חודשי (₪) *</label>
               <input
@@ -663,7 +772,7 @@ export default function AgreementsPage() {
                 required
                 inputMode="numeric"
                 placeholder="1500"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
             <div>
@@ -673,7 +782,7 @@ export default function AgreementsPage() {
                 onChange={(e) => setOneTimeFee(e.target.value)}
                 inputMode="numeric"
                 placeholder="אופציונלי"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
           </div>
@@ -683,7 +792,7 @@ export default function AgreementsPage() {
             <select
               value={clientId}
               onChange={(e) => onPickClient(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
             >
               <option value="">— ללא קישור (יווצר/יקושר אוטומטית בעת חתימה) —</option>
               {clientsList.map((c) => (
@@ -704,17 +813,17 @@ export default function AgreementsPage() {
               onChange={(e) => setCustomerName(e.target.value)}
               required
               minLength={1}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-gray-400 mb-1">שם העסק</label>
               <input
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
             <div>
@@ -722,12 +831,12 @@ export default function AgreementsPage() {
               <input
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-gray-400 mb-1">טלפון *</label>
               <input
@@ -736,7 +845,7 @@ export default function AgreementsPage() {
                 required
                 minLength={9}
                 inputMode="tel"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
             <div>
@@ -746,23 +855,23 @@ export default function AgreementsPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               />
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-2 sticky bottom-0 -mx-1 px-1 pb-1 bg-gray-900/95 backdrop-blur-sm">
             <button
               type="submit"
               disabled={creating || !customerName.trim() || !phone.trim() || !email.trim() || !monthlyPrice.trim()}
-              className="flex-1 bg-pink hover:bg-pink-light disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
+              className="flex-1 bg-pink hover:bg-pink-light disabled:opacity-50 text-white font-bold py-3 sm:py-2.5 rounded-xl transition-colors text-base sm:text-sm"
             >
               {creating ? "יוצר..." : "צור הסכם"}
             </button>
             <button
               type="button"
               onClick={() => setCreateOpen(false)}
-              className="px-4 border border-gray-700 hover:border-gray-600 text-gray-300 rounded-xl"
+              className="px-5 border border-gray-700 hover:border-gray-600 text-gray-300 rounded-xl text-base sm:text-sm"
             >
               ביטול
             </button>
