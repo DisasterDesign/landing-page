@@ -4,6 +4,7 @@ import AdminSidebar from "@/components/admin/AdminSidebar";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import NotificationBell from "@/components/admin/NotificationBell";
 import { ConfirmSheetHost } from "@/components/ui/ConfirmSheet";
+import AdminToaster from "@/components/admin/AdminToaster";
 
 export default async function DashboardLayout({
   children,
@@ -52,6 +53,7 @@ export default async function DashboardLayout({
       </div>
       <InstallPrompt />
       <ConfirmSheetHost />
+      <AdminToaster />
     </>
   );
 }
