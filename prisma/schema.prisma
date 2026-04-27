@@ -369,6 +369,8 @@ model Agreement {
   cardcomDealId String?       // Cardcom InternalDealNumber after successful charge
   cardcomToken  String?       // Token for future recurring charges
   cardcomRecurringId Int?     // Cardcom's ID for the recurring schedule (BillGoldService)
+  cardcomLowProfileId String? // LowProfile GUID — used to create recurring order via Name-to-Value API
+  cardcomAccountId   Int?     // Cardcom account ID returned after recurring creation
   invoiceNumber String?       // Cardcom invoice number, if generated
   paidAt        DateTime?
   paidAmount    Float?

@@ -377,3 +377,98 @@ export async function createRecurringOrder(
     accountId: accountIdMatch ? Number(accountIdMatch[1]) : 0,
   };
 }
+
+const RECURRING_NTV_URL =
+  "https://secure.cardcom.solutions/interface/RecurringPayment.aspx";
+
+function formatDateDDMMYYYY(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+export interface CreateRecurringOrderNTVInput {
+  lowProfileDealGuid: string;
+  monthlyAmount: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  productDescription: string;
+  agreementId: string;
+}
+
+/**
+ * Registers a monthly recurring charge via Cardcom's Name-to-Value API
+ * (RecurringPayment.aspx). Uses the LowProfile GUID returned in the
+ * first-charge webhook — Cardcom looks up the saved card from that GUID,
+ * so no token/CVV is sent. Password is intentionally NOT included
+ * (the NTV endpoint authenticates with TerminalNumber + UserName only).
+ *
+ * Date format MUST be dd/MM/yyyy (NOT ISO).
+ */
+export async function createRecurringOrderNTV(
+  input: CreateRecurringOrderNTVInput
+): Promise<{ recurringId: number; accountId: number }> {
+  const cfg = getBillGoldConfig();
+  if (!cfg) throw new CardcomError("BillGold credentials not configured");
+
+  const nextBill = new Date();
+  nextBill.setDate(nextBill.getDate() + 30);
+  const nextBillStr = formatDateDDMMYYYY(nextBill);
+
+  const params = new URLSearchParams();
+  params.set("TerminalNumber", String(cfg.terminal));
+  params.set("UserName", cfg.userName);
+  params.set("codepage", "65001");
+  params.set("Operation", "NewAndUpdate");
+  params.set("LowProfileDealGuid", input.lowProfileDealGuid);
+
+  // Account
+  params.set("Account.CompanyName", input.customerName);
+  params.set("Account.Email", input.customerEmail);
+  if (input.customerPhone) params.set("Account.PhMobile", input.customerPhone);
+
+  // Recurring schedule
+  params.set("RecurringPayments.InternalDecription", input.productDescription);
+  params.set("RecurringPayments.NextDateToBill", nextBillStr);
+  params.set("RecurringPayments.TotalNumOfBills", "999999");
+  params.set("RecurringPayments.FinalDebitCoinId", "1");
+  params.set("RecurringPayments.DocTypeToCreate", "3");
+  params.set("RecurringPayments.ReturnValue", input.agreementId);
+  params.set("RecurringPayments.FlexItem.Price", input.monthlyAmount.toFixed(2));
+  params.set("RecurringPayments.FlexItem.IsPriceIncludeVat", "true");
+  params.set(
+    "RecurringPayments.FlexItem.InvoiceDescription",
+    input.productDescription
+  );
+
+  const res = await fetch(RECURRING_NTV_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new CardcomError(`RecurringPayment HTTP ${res.status}`, res.status, text);
+  }
+
+  // Response format: Name=Value&Name2=Value2&...
+  const result = new URLSearchParams(text);
+  const code = result.get("ResponseCode");
+  if (code !== "0") {
+    const desc = result.get("Description") ?? "unknown";
+    throw new CardcomError(
+      `RecurringPayment rejected: ${desc} (code ${code})`,
+      undefined,
+      text
+    );
+  }
+
+  const recurringId = Number(result.get("Recurring0.RecurringId") ?? 0);
+  const accountId = Number(result.get("AccountId") ?? 0);
+
+  return { recurringId, accountId };
+}

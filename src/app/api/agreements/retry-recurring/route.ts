@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
-import { createRecurringOrder } from "@/lib/cardcom";
+import { createRecurringOrder, createRecurringOrderNTV } from "@/lib/cardcom";
 
 export const maxDuration = 120;
 
@@ -11,6 +11,7 @@ interface RetryResult {
   agreementId: string;
   customerName: string;
   ok: boolean;
+  via?: "NTV" | "SOAP";
   recurringId?: number;
   error?: string;
 }
@@ -18,9 +19,14 @@ interface RetryResult {
 /**
  * POST /api/agreements/retry-recurring
  *
- * Re-attempts BillGold recurring-order setup for agreements that paid the
- * first charge but never got a recurring schedule (cardcomRecurringId is
- * null).
+ * Re-attempts recurring-order setup for agreements that paid the first
+ * charge but never got a recurring schedule (cardcomRecurringId is null).
+ *
+ * Strategy:
+ *   - Prefer Name-to-Value API (RecurringPayment.aspx) using the saved
+ *     cardcomLowProfileId. This is what new payments use.
+ *   - Fall back to legacy SOAP (BillGold) using the encrypted cardcomToken
+ *     for older agreements that pre-date the LowProfileId capture.
  *
  * Body:
  *   - { agreementId: string } → retry only that one
@@ -49,9 +55,12 @@ export async function POST(req: NextRequest) {
   const candidates = await prisma.agreement.findMany({
     where: {
       paymentStatus: "COMPLETED",
-      cardcomToken: { not: null },
       cardcomRecurringId: null,
       monthlyPrice: { gt: 0 },
+      OR: [
+        { cardcomLowProfileId: { not: null } },
+        { cardcomToken: { not: null } },
+      ],
       ...(agreementId ? { id: agreementId } : {}),
     },
     select: {
@@ -61,6 +70,7 @@ export async function POST(req: NextRequest) {
       phone: true,
       monthlyPrice: true,
       cardcomToken: true,
+      cardcomLowProfileId: true,
     },
   });
 
@@ -72,7 +82,7 @@ export async function POST(req: NextRequest) {
       failed: 0,
       results: [],
       message: agreementId
-        ? "ההסכם לא עומד בתנאים (כבר יש הוראת קבע, לא שולם, או חסר טוקן)"
+        ? "ההסכם לא עומד בתנאים (כבר יש הוראת קבע, לא שולם, או חסר LowProfile / טוקן)"
         : "אין הסכמים שדורשים retry",
     });
   }
@@ -80,37 +90,60 @@ export async function POST(req: NextRequest) {
   const results: RetryResult[] = [];
 
   for (const a of candidates) {
-    if (!a.cardcomToken) {
-      results.push({
-        agreementId: a.id,
-        customerName: a.customerName,
-        ok: false,
-        error: "missing cardcomToken",
-      });
-      continue;
-    }
     try {
-      const tokenPlain = decrypt(a.cardcomToken);
-      const r = await createRecurringOrder({
-        agreementId: a.id,
-        cardcomToken: tokenPlain,
-        monthlyAmount: a.monthlyPrice,
-        customerName: a.customerName,
-        customerEmail: a.email,
-        customerPhone: a.phone ?? undefined,
-        productDescription: `חבילה חודשית — ${a.customerName}`,
-      });
+      let r: { recurringId: number; accountId: number };
+      let via: "NTV" | "SOAP";
+
+      if (a.cardcomLowProfileId) {
+        via = "NTV";
+        r = await createRecurringOrderNTV({
+          lowProfileDealGuid: a.cardcomLowProfileId,
+          monthlyAmount: a.monthlyPrice,
+          customerName: a.customerName,
+          customerEmail: a.email,
+          customerPhone: a.phone ?? undefined,
+          productDescription: `חבילה חודשית — ${a.customerName}`,
+          agreementId: a.id,
+        });
+      } else if (a.cardcomToken) {
+        via = "SOAP";
+        const tokenPlain = decrypt(a.cardcomToken);
+        r = await createRecurringOrder({
+          agreementId: a.id,
+          cardcomToken: tokenPlain,
+          monthlyAmount: a.monthlyPrice,
+          customerName: a.customerName,
+          customerEmail: a.email,
+          customerPhone: a.phone ?? undefined,
+          productDescription: `חבילה חודשית — ${a.customerName}`,
+        });
+      } else {
+        results.push({
+          agreementId: a.id,
+          customerName: a.customerName,
+          ok: false,
+          error: "missing both cardcomLowProfileId and cardcomToken",
+        });
+        continue;
+      }
+
       await prisma.agreement.update({
         where: { id: a.id },
-        data: { cardcomRecurringId: r.recurringId },
+        data: {
+          cardcomRecurringId: r.recurringId,
+          cardcomAccountId: r.accountId,
+        },
       });
       results.push({
         agreementId: a.id,
         customerName: a.customerName,
         ok: true,
+        via,
         recurringId: r.recurringId,
       });
-      console.log(`retry-recurring: agreement ${a.id} → recurringId ${r.recurringId}`);
+      console.log(
+        `retry-recurring (${via}): agreement ${a.id} → recurringId ${r.recurringId}`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       results.push({

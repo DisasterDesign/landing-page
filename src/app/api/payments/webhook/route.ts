@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma";
 import {
   isWebhookSuccess,
   extractWebhookAmount,
-  createRecurringOrder,
+  createRecurringOrderNTV,
   type CardcomWebhookPayload,
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
+
+export const maxDuration = 60;
 
 /**
  * Cardcom server-to-server callback. Must respond 200 quickly so Cardcom
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
     DealResponse: payload.DealResponse,
     ResponseCode: payload.ResponseCode,
     InternalDealNumber: payload.InternalDealNumber,
+    Token: payload.Token,
     LowProfileId: payload.LowProfileId,
     RecurringId: payload.RecurringId,
   });
@@ -119,9 +122,10 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   const cardcomDealId =
     payload.InternalDealNumber != null ? String(payload.InternalDealNumber) : null;
   const cardcomToken = typeof payload.Token === "string" ? payload.Token : null;
-  // Encrypt before persisting; raw token is kept in memory only for the
-  // immediate createRecurringOrder() call below.
+  // Encrypt before persisting; raw token kept only for legacy SOAP fallback.
   const cardcomTokenEncrypted = cardcomToken ? encrypt(cardcomToken) : null;
+  const lowProfileId =
+    typeof payload.LowProfileId === "string" ? payload.LowProfileId : null;
   const invoiceNumber =
     payload.DocumentNumber != null ? String(payload.DocumentNumber) : null;
 
@@ -136,6 +140,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         paidAmount: paidAmount ?? agreement.monthlyPrice,
         ...(cardcomDealId ? { cardcomDealId } : {}),
         ...(cardcomTokenEncrypted ? { cardcomToken: cardcomTokenEncrypted } : {}),
+        ...(lowProfileId ? { cardcomLowProfileId: lowProfileId } : {}),
         ...(invoiceNumber ? { invoiceNumber } : {}),
       },
     });
@@ -166,28 +171,36 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     agreementTier: agreement.tier,
   }).catch((e) => console.error("email after payment failed:", e));
 
-  // Register the monthly recurring schedule with Cardcom after the response
-  // goes out. after() keeps the work on the same invocation without delaying
-  // the 200 back to Cardcom.
+  // Register the monthly recurring schedule with Cardcom via the
+  // Name-to-Value API (RecurringPayment.aspx) using the LowProfile GUID.
+  // after() runs the call after the 200 response is sent back to Cardcom.
   if (
-    cardcomToken &&
+    lowProfileId &&
     agreement.monthlyPrice > 0 &&
     !agreement.cardcomRecurringId
   ) {
     after(async () => {
       try {
-        const r = await createRecurringOrder({
-          agreementId,
-          cardcomToken,
+        console.log("Creating recurring order (NTV) for:", agreementId, {
+          lowProfileId,
+          monthlyPrice: agreement.monthlyPrice,
+        });
+        const r = await createRecurringOrderNTV({
+          lowProfileDealGuid: lowProfileId,
           monthlyAmount: agreement.monthlyPrice,
           customerName: agreement.customerName,
           customerEmail: agreement.email,
           customerPhone: agreement.phone ?? undefined,
           productDescription: `חבילה חודשית — ${agreement.customerName}`,
+          agreementId,
         });
+        console.log("Recurring order created:", r);
         await prisma.agreement.update({
           where: { id: agreementId },
-          data: { cardcomRecurringId: r.recurringId },
+          data: {
+            cardcomRecurringId: r.recurringId,
+            cardcomAccountId: r.accountId,
+          },
         });
       } catch (err) {
         console.error("Cardcom recurring setup failed:", err);
@@ -197,6 +210,13 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
           body: `החיוב הראשון הצליח. הקמת החיוב החודשי נכשלה — להקים ידנית מול Cardcom.`,
         }).catch(() => {});
       }
+    });
+  } else {
+    console.warn("Skipping recurring order:", {
+      agreementId,
+      hasLowProfileId: !!lowProfileId,
+      monthlyPrice: agreement.monthlyPrice,
+      hasExistingRecurring: !!agreement.cardcomRecurringId,
     });
   }
 }
