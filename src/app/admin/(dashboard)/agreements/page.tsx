@@ -120,6 +120,10 @@ export default function AgreementsPage() {
   const [relinkingId, setRelinkingId] = useState<string | null>(null);
   const [savingLinkFor, setSavingLinkFor] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  // Modal that shows a generated link (signing or payment) so the user can
+  // copy it via a fresh click — `navigator.clipboard.writeText` fails when
+  // called after `await fetch(...)` because the original user gesture is gone.
+  const [linkModal, setLinkModal] = useState<{ url: string; title: string } | null>(null);
 
   const fetchList = useCallback(async () => {
     try {
@@ -294,16 +298,17 @@ export default function AgreementsPage() {
 
   const copyLink = async (token: string) => {
     const url = `${window.location.origin}/agreement/${token}`;
+    // No async work before clipboard — gesture is still alive, try direct copy.
     try {
       await navigator.clipboard.writeText(url);
       toast.success("הקישור הועתק");
     } catch {
-      toast.error("שגיאה בהעתקה");
+      // Fallback: show the link in a modal so the user can copy manually.
+      setLinkModal({ url, title: "קישור לחתימה" });
     }
   };
 
   const copyPaymentLink = async (a: Agreement) => {
-    // Reuse existing URL if there is one, otherwise ask the server to generate.
     try {
       let url = a.paymentUrl;
       if (!url) {
@@ -321,10 +326,23 @@ export default function AgreementsPage() {
         fetchList();
       }
       if (!url) throw new Error("לא נוצר לינק תשלום");
-      await navigator.clipboard.writeText(url);
-      toast.success("לינק תשלום הועתק");
+      // After an await the browser drops the user-gesture flag and
+      // navigator.clipboard.writeText throws NotAllowedError. Show a modal
+      // with a manual copy button (fresh gesture) instead of trying directly.
+      setLinkModal({ url, title: "לינק תשלום" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "שגיאה");
+    }
+  };
+
+  const copyFromModal = async () => {
+    if (!linkModal) return;
+    try {
+      await navigator.clipboard.writeText(linkModal.url);
+      toast.success("הועתק");
+      setLinkModal(null);
+    } catch {
+      toast.error("ההעתקה נחסמה — סמן ידנית והעתק");
     }
   };
 
@@ -766,6 +784,45 @@ export default function AgreementsPage() {
             className="w-full bg-white rounded-xl border border-gray-700"
             style={{ height: "60vh" }}
           />
+        )}
+      </Modal>
+
+      {/* Link share modal — used when clipboard write requires a fresh gesture */}
+      <Modal
+        isOpen={linkModal !== null}
+        onClose={() => setLinkModal(null)}
+        title={linkModal?.title ?? ""}
+      >
+        {linkModal && (
+          <div className="space-y-4" dir="rtl">
+            <p className="text-sm text-gray-400">
+              לחץ על &quot;העתק&quot; או סמן ידנית והעתק.
+            </p>
+            <input
+              type="text"
+              value={linkModal.url}
+              readOnly
+              dir="ltr"
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white font-mono outline-none focus:border-pink"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={copyFromModal}
+                className="flex-1 bg-pink hover:bg-pink-light text-white font-bold py-2.5 rounded-xl transition-colors"
+              >
+                העתק
+              </button>
+              <button
+                type="button"
+                onClick={() => setLinkModal(null)}
+                className="px-4 border border-gray-700 hover:border-gray-600 text-gray-300 rounded-xl"
+              >
+                סגור
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>
