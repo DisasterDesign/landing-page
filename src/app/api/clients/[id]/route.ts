@@ -95,6 +95,10 @@ export async function PATCH(
     if ("paymentDate" in body)
       updateData.paymentDate =
         body.paymentDate ? new Date(body.paymentDate).toISOString() : null;
+    if ("partner" in body) {
+      const v = String(body.partner ?? "").trim();
+      updateData.partner = v || "fuzion";
+    }
 
     const client = await prisma.client.update({
       where: { id },

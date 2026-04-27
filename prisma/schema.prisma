@@ -309,6 +309,7 @@ model Client {
   businessName String?
   idNumber     String?
   source       String?   // "agreement_signed" | "manual" | "lead_converted" | "import"
+  partner      String    @default("fuzion") // "fuzion" = part of fuzion-webz partnership; other = legacy/private client
   archivedAt   DateTime?
   startDate    DateTime?
   paymentDate  DateTime?
