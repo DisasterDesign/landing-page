@@ -8,6 +8,7 @@ import {
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
 import { notifyAllAdmins } from "@/lib/notifications";
+import { sendPaymentReceivedEmail } from "@/lib/email";
 
 /**
  * Cardcom server-to-server callback. Must respond 200 quickly so Cardcom
@@ -88,6 +89,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     where: { id: agreementId },
     select: {
       id: true,
+      tier: true,
       paymentStatus: true,
       customerName: true,
       monthlyPrice: true,
@@ -157,6 +159,13 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     body: `סכום: ${paidAmount ?? "?"} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after payment failed:", e));
 
+  sendPaymentReceivedEmail({
+    customerName: agreement.customerName,
+    amount: paidAmount ?? agreement.monthlyPrice,
+    invoiceNumber: invoiceNumber ?? undefined,
+    agreementTier: agreement.tier,
+  }).catch((e) => console.error("email after payment failed:", e));
+
   // Register the monthly recurring schedule with Cardcom after the response
   // goes out. after() keeps the work on the same invocation without delaying
   // the 200 back to Cardcom.
@@ -200,6 +209,7 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
     where: { cardcomRecurringId: recurringId },
     select: {
       id: true,
+      tier: true,
       clientId: true,
       customerName: true,
       monthlyPrice: true,
@@ -253,4 +263,14 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
       : `⚠️ חיוב חודשי נכשל — ${agreement.customerName}`,
     body: `₪${amount}${invoice ? ` · חשבונית #${invoice}` : ""}`,
   }).catch((e) => console.error("notify admins after recurring charge failed:", e));
+
+  if (success) {
+    sendPaymentReceivedEmail({
+      customerName: agreement.customerName,
+      amount,
+      invoiceNumber: invoice ?? undefined,
+      agreementTier: agreement.tier,
+      isRecurring: true,
+    }).catch((e) => console.error("email after recurring charge failed:", e));
+  }
 }

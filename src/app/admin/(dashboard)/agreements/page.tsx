@@ -33,6 +33,7 @@ interface Agreement {
   paidAmount: number | null;
   paidAt: string | null;
   invoiceNumber: string | null;
+  cardcomRecurringId: number | null;
 }
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -118,6 +119,7 @@ export default function AgreementsPage() {
   const [clientsList, setClientsList] = useState<ClientLite[]>([]);
   const [relinkingId, setRelinkingId] = useState<string | null>(null);
   const [savingLinkFor, setSavingLinkFor] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     try {
@@ -304,6 +306,30 @@ export default function AgreementsPage() {
     }
   };
 
+  const retryRecurring = async (a: Agreement) => {
+    setRetryingId(a.id);
+    try {
+      const res = await fetch("/api/agreements/retry-recurring", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agreementId: a.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "שגיאה");
+      const result = json.results?.[0];
+      if (result?.ok) {
+        toast.success("הוראת קבע הוקמה בהצלחה");
+        fetchList();
+      } else {
+        throw new Error(result?.error || json.message || "לא ניתן להקים הוראת קבע");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה בהקמת הוראת קבע");
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   const handleDelete = async (a: Agreement) => {
     const isSigned = a.status === "SIGNED";
     const ok = await confirmDanger({
@@ -485,6 +511,16 @@ export default function AgreementsPage() {
                           title={a.paymentUrl ? "העתק לינק תשלום קיים" : "צור לינק תשלום"}
                         >
                           {a.paymentUrl ? "העתק לינק תשלום" : "צור לינק תשלום"}
+                        </button>
+                      )}
+                      {a.paymentStatus === "COMPLETED" && a.cardcomRecurringId == null && (
+                        <button
+                          onClick={() => retryRecurring(a)}
+                          disabled={retryingId === a.id}
+                          className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50 text-xs underline-offset-2 hover:underline"
+                          title="הסכם שולם אך לא נוצרה הוראת קבע — נסה שוב"
+                        >
+                          {retryingId === a.id ? "מקים..." : "הקם הו״ק"}
                         </button>
                       )}
                       <button
