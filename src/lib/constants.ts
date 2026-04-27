@@ -152,7 +152,7 @@ export const PRICING_TIERS: PricingTier[] = [
         ],
       },
     ],
-    suitableFor: "עורכי דין, מסעדות, ספרים, קוסמטיקאיות, בעלי מקצוע",
+    suitableFor: "עורכי דין, מסעדות, מספרות, קוסמטיקאיות, בעלי מקצוע",
   },
   {
     id: "advanced",

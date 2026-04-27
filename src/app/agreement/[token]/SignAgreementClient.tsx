@@ -259,7 +259,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 space-y-5">
           <div>
             <h2 className="text-xl font-bold">פרטי החותם</h2>
-            <p className="text-sm text-gray-400 mt-1">אנא וודא שכל הפרטים נכונים. הם יופיעו על ההסכם החתום.</p>
+            <p className="text-sm text-gray-400 mt-1">אנא ודא שכל הפרטים נכונים. הם יופיעו על ההסכם החתום.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -362,9 +362,9 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
           </button>
 
           <p className="text-[11px] text-center text-gray-500">
-            על ידי לחיצה על &quot;אישור וחתימה&quot; אתה מאשר שהקראת את ההסכם והבנת את תוכנו.
+            על ידי לחיצה על &quot;אישור וחתימה&quot; אתה מאשר שקראת את ההסכם והבנת את תוכנו.
             <br />
-            ייאסף ויירשם פרט מועד החתימה, כתובת ה-IP שלך וזיהוי הדפדפן לצורך תיעוד משפטי.
+            ייאספו וייתועדו: מועד החתימה, כתובת ה-IP שלך וזיהוי הדפדפן, לצורך תיעוד משפטי.
           </p>
         </form>
 

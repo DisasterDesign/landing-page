@@ -145,7 +145,7 @@ export default function SettingsPage() {
             try {
               localStorage.removeItem("fw-install-dismissed-at");
               localStorage.removeItem("fw-install-dismissed");
-              toast.success("אופס. רענן את העמוד כדי לראות את הבאנר שוב.");
+              toast.success("רענן את העמוד כדי לראות את הבאנר שוב.");
             } catch {
               toast.error("שגיאה");
             }
