@@ -257,6 +257,28 @@ export default function AgreementsPage() {
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
+        const fieldErrors = json?.details?.fieldErrors as
+          | Record<string, string[] | undefined>
+          | undefined;
+        if (fieldErrors) {
+          const FIELD_LABEL: Record<string, string> = {
+            customerName: "שם מלא",
+            phone: "טלפון",
+            email: "אימייל",
+            monthlyPrice: "תשלום חודשי",
+            oneTimeFee: "סכום הקמה",
+            businessName: "שם עסק",
+            idNumber: "ח.פ. / ע.מ.",
+            tier: "מסלול",
+            additionalServices: "סעיפים נוספים",
+            clientId: "קישור ללקוח",
+          };
+          const messages = Object.entries(fieldErrors)
+            .flatMap(([field, msgs]) =>
+              (msgs ?? []).map((m) => `${FIELD_LABEL[field] ?? field}: ${m}`)
+            );
+          if (messages.length > 0) throw new Error(messages.join(" • "));
+        }
         throw new Error(json.error || "שגיאה");
       }
       toast.success("ההסכם נוצר");
