@@ -20,45 +20,29 @@ interface PartnerRow {
 }
 
 /**
- * GET /api/partner-report?month=YYYY-MM
+ * GET /api/partner-report
  *
- * Returns the per-row monthly partner-share breakdown for clients with
- * status="בוצע" and partner="fuzion" whose paymentDate falls within
- * the requested month.
+ * Snapshot of every client currently active in the fuzion partnership:
+ *   status = "בוצע"  AND  partner = "fuzion"
  *
- * Net per row: amount/(1+VAT) - cardcomFee - expense
- * Partner share per row: net / 2
+ * No date filter. Each row's `amount` is treated as the monthly recurring
+ * contribution; the report is a current-state snapshot the user saves at
+ * end of month for the partner transfer.
  *
- * Defaults to the current month (server-local) if no `month` param.
+ * Per row:
+ *   net = amount - VAT(18% inclusive) - cardcomFee(2%) - expense
+ *   partnerShare = net / 2
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(req.url);
-  const monthParam = url.searchParams.get("month"); // expected YYYY-MM
-  let year: number;
-  let month: number; // 1-12
-  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-    const [y, m] = monthParam.split("-").map(Number);
-    year = y;
-    month = m;
-  } else {
-    const now = new Date();
-    year = now.getFullYear();
-    month = now.getMonth() + 1;
-  }
-
-  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-
   const clients = await prisma.client.findMany({
     where: {
       status: "בוצע",
       partner: "fuzion",
-      paymentDate: { gte: start, lt: end },
     },
     select: {
       id: true,
@@ -68,7 +52,7 @@ export async function GET(req: NextRequest) {
       expense: true,
       paymentDate: true,
     },
-    orderBy: { paymentDate: "asc" },
+    orderBy: { name: "asc" },
   });
 
   const rows: PartnerRow[] = clients.map((c) => {
@@ -105,7 +89,7 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({
-    month: `${year}-${String(month).padStart(2, "0")}`,
+    snapshotAt: new Date().toISOString(),
     rows,
     totals,
     count: rows.length,
