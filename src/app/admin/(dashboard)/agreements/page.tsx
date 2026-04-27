@@ -765,7 +765,7 @@ export default function AgreementsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">תשלום חודשי (₪) *</label>
+              <label className="block text-sm text-gray-400 mb-1">תשלום חודשי לפני מע״מ (₪) *</label>
               <input
                 value={monthlyPrice}
                 onChange={(e) => setMonthlyPrice(e.target.value)}
@@ -776,7 +776,7 @@ export default function AgreementsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">סכום הקמה חד-פעמי (₪)</label>
+              <label className="block text-sm text-gray-400 mb-1">סכום הקמה חד-פעמי לפני מע״מ (₪)</label>
               <input
                 value={oneTimeFee}
                 onChange={(e) => setOneTimeFee(e.target.value)}
@@ -786,6 +786,9 @@ export default function AgreementsPage() {
               />
             </div>
           </div>
+          <p className="text-[11px] text-gray-500 -mt-1">
+            המחירים נרשמים לפני מע״מ. החוזה והחיוב ב-Cardcom יוסיפו מע״מ אוטומטית.
+          </p>
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">קישור ללקוח קיים (אופציונלי)</label>

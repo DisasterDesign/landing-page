@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { createRecurringOrder, createRecurringOrderNTV } from "@/lib/cardcom";
+import { withVat } from "@/lib/vat";
 
 export const maxDuration = 120;
 
@@ -94,11 +95,13 @@ export async function POST(req: NextRequest) {
       let r: { recurringId: number; accountId: number };
       let via: "NTV" | "SOAP";
 
+      // monthlyPrice is NET in our DB; Cardcom is charged GROSS.
+      const grossMonthly = withVat(a.monthlyPrice);
       if (a.cardcomLowProfileId) {
         via = "NTV";
         r = await createRecurringOrderNTV({
           lowProfileDealGuid: a.cardcomLowProfileId,
-          monthlyAmount: a.monthlyPrice,
+          monthlyAmount: grossMonthly,
           customerName: a.customerName,
           customerEmail: a.email,
           customerPhone: a.phone ?? undefined,
@@ -111,7 +114,7 @@ export async function POST(req: NextRequest) {
         r = await createRecurringOrder({
           agreementId: a.id,
           cardcomToken: tokenPlain,
-          monthlyAmount: a.monthlyPrice,
+          monthlyAmount: grossMonthly,
           customerName: a.customerName,
           customerEmail: a.email,
           customerPhone: a.phone ?? undefined,

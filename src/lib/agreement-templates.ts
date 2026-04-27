@@ -1,9 +1,10 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { withVat } from "@/lib/vat";
 
 export type AgreementTier = "BASIC" | "ADVANCED" | "PREMIUM";
 
-export const AGREEMENT_DOCUMENT_VERSION = 4;
+export const AGREEMENT_DOCUMENT_VERSION = 5;
 
 let cachedLogoDataUrl: string | null = null;
 function getLogoDataUrl(): string {
@@ -200,8 +201,8 @@ ${extras.length > 0 ? `
 
 <h2>3. תמורה ותנאי תשלום</h2>
 <div class="price-box">
-  <p><strong>תשלום חודשי:</strong> ${fmtMoney(monthly)} ₪ + מע״מ כחוק</p>
-  ${setup ? `<p><strong>סכום הקמה חד-פעמי:</strong> ${fmtMoney(setup)} ₪ + מע״מ. ישולם עם חתימת ההסכם.</p>` : ""}
+  <p><strong>תשלום חודשי:</strong> ${fmtMoney(monthly)} ₪ + מע״מ כחוק (סה״כ ${fmtMoney(withVat(monthly))} ₪ לחיוב)</p>
+  ${setup ? `<p><strong>סכום הקמה חד-פעמי:</strong> ${fmtMoney(setup)} ₪ + מע״מ (סה״כ ${fmtMoney(withVat(setup))} ₪ לחיוב). ישולם עם חתימת ההסכם.</p>` : ""}
 </div>
 <div class="clause">
   <p>התשלום החודשי ייגבה בהוראת קבע מכרטיס אשראי בלבד, באמצעות סולק מאובטח. עיכוב בתשלום של מעל 30 ימים יוביל להשבתת השירות עד להסדר חוב.</p>

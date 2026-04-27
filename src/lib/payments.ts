@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createPaymentPage, getCardcomConfig, type CreatePaymentResult } from "@/lib/cardcom";
+import { withVat } from "@/lib/vat";
 
 /**
  * Builds a Cardcom checkout URL for a given Agreement and persists the
@@ -60,15 +61,18 @@ export async function ensurePaymentUrlForAgreement(agreementId: string): Promise
   // Already paid → don't regenerate
   if (agreement.paymentStatus === "COMPLETED") return null;
 
-  // First charge = setup fee + first month (if both exist), or whichever exists
+  // First charge = setup fee + first month (if both exist), or whichever exists.
+  // The figures stored on the agreement are NET (what the contract declares as
+  // "X ₪ + מע״מ"); Cardcom is charged the GROSS amount.
   const setup = agreement.oneTimeFee ?? 0;
-  const firstAmount = setup + agreement.monthlyPrice;
-  if (firstAmount <= 0) return null;
+  const netAmount = setup + agreement.monthlyPrice;
+  if (netAmount <= 0) return null;
+  const grossAmount = withVat(netAmount);
 
   const base = siteUrl();
   const result: CreatePaymentResult = await createPaymentPage({
     agreementId: agreement.id,
-    amount: firstAmount,
+    amount: grossAmount,
     productName: describeAgreement({
       tier: agreement.tier,
       customerName: agreement.customerName,

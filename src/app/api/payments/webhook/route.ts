@@ -7,6 +7,7 @@ import {
   type CardcomWebhookPayload,
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
+import { withVat } from "@/lib/vat";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
 
@@ -187,7 +188,8 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         });
         const r = await createRecurringOrderNTV({
           lowProfileDealGuid: lowProfileId,
-          monthlyAmount: agreement.monthlyPrice,
+          // Cardcom expects the gross amount; agreement.monthlyPrice is NET.
+          monthlyAmount: withVat(agreement.monthlyPrice),
           customerName: agreement.customerName,
           customerEmail: agreement.email,
           customerPhone: agreement.phone ?? undefined,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { withVat } from "@/lib/vat";
 
 interface PriceInfo {
   tier: string | null;
@@ -219,14 +220,22 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
                 <span className="text-base text-gray-400 mr-1">₪</span>
                 <span className="text-sm text-gray-500"> + מע״מ</span>
               </div>
+              <div className="text-[11px] text-gray-500 mt-1">
+                סה״כ לחיוב: <span className="font-mono text-gray-300">{fmtNum(withVat(priceInfo.monthlyPrice))} ₪</span>
+              </div>
             </div>
           </div>
           {priceInfo.oneTimeFee ? (
             <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-sm">
               <span className="text-gray-400">סכום הקמה חד-פעמי</span>
-              <span className="font-mono">
-                {fmtNum(priceInfo.oneTimeFee)} ₪ <span className="text-xs text-gray-500">+ מע״מ</span>
-              </span>
+              <div className="text-left">
+                <div className="font-mono">
+                  {fmtNum(priceInfo.oneTimeFee)} ₪ <span className="text-xs text-gray-500">+ מע״מ</span>
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  סה״כ לחיוב: <span className="font-mono">{fmtNum(withVat(priceInfo.oneTimeFee))} ₪</span>
+                </div>
+              </div>
             </div>
           ) : null}
         </section>
