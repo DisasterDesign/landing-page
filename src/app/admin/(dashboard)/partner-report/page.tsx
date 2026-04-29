@@ -10,8 +10,7 @@ interface PartnerRow {
   amount: number;
   vat: number;
   cardcomFee: number;
-  expense: number;
-  netProfit: number;
+  profit: number;
   partnerShare: number;
   paymentDate: string | null;
 }
@@ -20,8 +19,7 @@ interface Totals {
   amount: number;
   vat: number;
   cardcomFee: number;
-  expense: number;
-  netProfit: number;
+  profit: number;
   partnerShare: number;
 }
 
@@ -79,10 +77,10 @@ export default function PartnerReportPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">דוח שותף — תמונת מצב</h1>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-xl">
-            סיכום הכנסות חודשי על לקוחות פעילים בהוראת קבע (סטטוס &quot;בוצע&quot;)
-            ושיוך &quot;fuzion&quot;. נטו = סכום פחות מע&quot;מ פחות עמלת
-            CardCom 2% פחות הוצאות. חלק שותף = הנטו ÷ 2. ל-snapshot חודשי —
-            שמור / צלם בסוף החודש.
+            סיכום הכנסות חודשי על לקוחות פעילים בהוראת קבע (סטטוס &quot;בוצע&quot;).
+            רווח = סכום פחות מע&quot;מ פחות עמלת CardCom 2%. כל אחד מהשותפים
+            (אלעד ורועי) מקבל מחצית מהרווח. ל-snapshot חודשי — שמור / צלם
+            בסוף החודש.
           </p>
         </div>
         {snapshotLabel && (
@@ -100,12 +98,18 @@ export default function PartnerReportPage() {
           format="int"
         />
         <SummaryCard
-          label="הכנסה ברוטו / חודש (כולל מע״מ)"
-          value={totals?.amount ?? 0}
+          label="רווח אחרי עמלות / חודש"
+          value={totals?.profit ?? 0}
+          accent
         />
-        <SummaryCard label="רווח נקי / חודש" value={totals?.netProfit ?? 0} accent />
         <SummaryCard
-          label="חלק שותף (×0.5)"
+          label="חלק אלעד"
+          value={totals?.partnerShare ?? 0}
+          accent
+          highlight
+        />
+        <SummaryCard
+          label="חלק רועי"
           value={totals?.partnerShare ?? 0}
           accent
           highlight
@@ -118,7 +122,7 @@ export default function PartnerReportPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-12 text-center text-sm text-gray-500">
-          אין לקוחות פעילים בקטגוריית fuzion
+          אין לקוחות פעילים עם סטטוס &quot;בוצע&quot;
         </div>
       ) : (
         <>
@@ -133,9 +137,9 @@ export default function PartnerReportPage() {
                   <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">חודשי (₪)</th>
                   <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24 bg-gray-700/40">מע״מ (₪)</th>
                   <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24 bg-gray-700/40">CardCom (₪)</th>
-                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-24">הוצאה (₪)</th>
-                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">נטו (₪)</th>
-                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-pink/10">חלק שותף (₪)</th>
+                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">רווח (₪)</th>
+                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-pink/10">חלק אלעד (₪)</th>
+                  <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-pink/10">חלק רועי (₪)</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,10 +153,14 @@ export default function PartnerReportPage() {
                     <td className="px-3 py-2 font-mono">{fmtNum(r.amount)}</td>
                     <td className="px-3 py-2 font-mono text-gray-300 bg-gray-700/20">{fmtNum(r.vat)}</td>
                     <td className="px-3 py-2 font-mono text-gray-300 bg-gray-700/20">{fmtNum(r.cardcomFee)}</td>
-                    <td className="px-3 py-2 font-mono">{fmtNum(r.expense)}</td>
                     <td className="px-3 py-2 font-mono bg-gray-700/20">
-                      <span className={r.netProfit >= 0 ? "text-green-400" : "text-red-400"}>
-                        {fmtNum(r.netProfit)}
+                      <span className={r.profit >= 0 ? "text-green-400" : "text-red-400"}>
+                        {fmtNum(r.profit)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-mono bg-pink/10">
+                      <span className={r.partnerShare >= 0 ? "text-pink" : "text-red-400"}>
+                        {fmtNum(r.partnerShare)}
                       </span>
                     </td>
                     <td className="px-3 py-2 font-mono bg-pink/10">
@@ -171,15 +179,13 @@ export default function PartnerReportPage() {
                   <td className="px-3 py-2.5 font-mono text-white">{fmtNum(totals?.amount)}</td>
                   <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">{fmtNum(totals?.vat)}</td>
                   <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">{fmtNum(totals?.cardcomFee)}</td>
-                  <td className="px-3 py-2.5 font-mono text-white">{fmtNum(totals?.expense)}</td>
                   <td className="px-3 py-2.5 font-mono bg-gray-700/20">
-                    <span
-                      className={
-                        (totals?.netProfit ?? 0) >= 0 ? "text-green-400" : "text-red-400"
-                      }
-                    >
-                      {fmtNum(totals?.netProfit)}
+                    <span className={(totals?.profit ?? 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                      {fmtNum(totals?.profit)}
                     </span>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink font-bold">
+                    {fmtNum(totals?.partnerShare)}
                   </td>
                   <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink font-bold">
                     {fmtNum(totals?.partnerShare)}
@@ -203,20 +209,27 @@ export default function PartnerReportPage() {
                         : ""}
                     </div>
                   </div>
-                  <div className="text-pink font-mono font-bold text-lg shrink-0">
-                    {fmtNum(r.partnerShare)} ₪
-                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-400 pt-2 border-t border-gray-800">
                   <span>חודשי: <span className="font-mono text-gray-300">{fmtNum(r.amount)}</span></span>
                   <span>מע״מ: <span className="font-mono text-gray-300">{fmtNum(r.vat)}</span></span>
                   <span>CardCom: <span className="font-mono text-gray-300">{fmtNum(r.cardcomFee)}</span></span>
-                  <span>הוצאה: <span className="font-mono text-gray-300">{fmtNum(r.expense)}</span></span>
-                  <span className="col-span-2">
-                    נטו: <span className={`font-mono font-bold ${r.netProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {fmtNum(r.netProfit)}
+                  <span>
+                    רווח:{" "}
+                    <span className={`font-mono font-bold ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {fmtNum(r.profit)}
                     </span>
                   </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 pt-2 border-t border-gray-800">
+                  <div className="bg-pink/10 rounded-lg px-2 py-1.5 text-center">
+                    <div className="text-[10px] text-gray-400">חלק אלעד</div>
+                    <div className="font-mono font-bold text-pink text-base">{fmtNum(r.partnerShare)} ₪</div>
+                  </div>
+                  <div className="bg-pink/10 rounded-lg px-2 py-1.5 text-center">
+                    <div className="text-[10px] text-gray-400">חלק רועי</div>
+                    <div className="font-mono font-bold text-pink text-base">{fmtNum(r.partnerShare)} ₪</div>
+                  </div>
                 </div>
               </div>
             ))}

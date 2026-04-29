@@ -32,9 +32,7 @@ const SOURCE_LABEL: Record<string, string> = {
   import: "ייבוא",
 };
 
-type EditableField = "name" | "status" | "notes" | "partner" | "amount" | "expense" | "websiteUrl" | "startDate" | "paymentDate";
-
-const PARTNER_OPTIONS = ["fuzion", "אחר"] as const;
+type EditableField = "name" | "status" | "notes" | "amount" | "websiteUrl" | "startDate" | "paymentDate";
 
 // Israeli VAT rate as of January 2025 (raised from 17%); still 18% in 2026.
 const VAT_RATE = 18;
@@ -43,8 +41,10 @@ const CARDCOM_FEE_RATE = 0.02;
 
 const computeVat = (amount: number | null) => ((amount ?? 0) * VAT_RATE) / (100 + VAT_RATE);
 const computeCardcomFee = (amount: number | null) => (amount ?? 0) * CARDCOM_FEE_RATE;
-const computeNetProfit = (c: Pick<Client, "amount" | "expense">) =>
-  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - (c.expense ?? 0) - computeCardcomFee(c.amount);
+// Profit after VAT and CardCom merchant fee. Other expenses are tracked
+// separately on the per-client detail page and intentionally excluded here.
+const computeProfit = (c: Pick<Client, "amount">) =>
+  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - computeCardcomFee(c.amount);
 
 interface EditingCell {
   id: string;
@@ -121,12 +121,10 @@ export default function ClientsPage() {
 
   const startEditing = (client: Client, field: EditableField) => {
     let value: string;
-    if (field === "amount" || field === "expense") {
-      value = client[field] != null ? String(client[field]) : "";
+    if (field === "amount") {
+      value = client.amount != null ? String(client.amount) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       value = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
-    } else if (field === "partner") {
-      value = client.partner || "fuzion";
     } else {
       value = (client[field] as string) ?? "";
     }
@@ -142,12 +140,10 @@ export default function ClientsPage() {
 
     // Check if value actually changed
     let oldValue: string;
-    if (field === "amount" || field === "expense") {
-      oldValue = client[field] != null ? String(client[field]) : "";
+    if (field === "amount") {
+      oldValue = client.amount != null ? String(client.amount) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       oldValue = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
-    } else if (field === "partner") {
-      oldValue = client.partner || "fuzion";
     } else {
       oldValue = (client[field] as string) ?? "";
     }
@@ -158,7 +154,7 @@ export default function ClientsPage() {
     }
 
     let patchValue: unknown = editValue;
-    if (field === "amount" || field === "expense") {
+    if (field === "amount") {
       patchValue = editValue === "" ? null : parseFloat(editValue);
       if (editValue !== "" && isNaN(patchValue as number)) {
         toast.error("ערך לא תקין");
@@ -174,14 +170,11 @@ export default function ClientsPage() {
     setClients((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        if (field === "amount" || field === "expense") {
-          return { ...c, [field]: patchValue as number | null };
+        if (field === "amount") {
+          return { ...c, amount: patchValue as number | null };
         }
         if (field === "startDate" || field === "paymentDate") {
           return { ...c, [field]: patchValue ? new Date(patchValue as string).toISOString() : null };
-        }
-        if (field === "partner") {
-          return { ...c, partner: editValue || "fuzion" };
         }
         return { ...c, [field]: editValue };
       })
@@ -317,8 +310,7 @@ export default function ClientsPage() {
   const totalAmount = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
   const totalVat = clients.reduce((sum, c) => sum + computeVat(c.amount), 0);
   const totalCardcom = clients.reduce((sum, c) => sum + computeCardcomFee(c.amount), 0);
-  const totalExpense = clients.reduce((sum, c) => sum + (c.expense ?? 0), 0);
-  const totalNetProfit = clients.reduce((sum, c) => sum + computeNetProfit(c), 0);
+  const totalProfit = clients.reduce((sum, c) => sum + computeProfit(c), 0);
 
   const formatNum = (n: number | null) =>
     n != null ? n.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) : "";
@@ -380,50 +372,6 @@ export default function ClientsPage() {
       );
     }
 
-    if (isEditing && field === "partner") {
-      return (
-        <select
-          ref={selectRef}
-          value={editValue}
-          onChange={(e) => {
-            const val = e.target.value;
-            setEditValue(val);
-            setClients((prev) =>
-              prev.map((c) => (c.id === client.id ? { ...c, partner: val } : c))
-            );
-            setEditingCell(null);
-            setSavingIds((prev) => new Set(prev).add(client.id));
-            fetch(`/api/clients/${client.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ partner: val }),
-            })
-              .then((res) => {
-                if (!res.ok) throw new Error();
-                toast.success("נשמר", { duration: 1500, style: { fontSize: "13px" } });
-              })
-              .catch(() => {
-                toast.error("שגיאה בשמירה");
-                fetchClients();
-              })
-              .finally(() => {
-                setSavingIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(client.id);
-                  return next;
-                });
-              });
-          }}
-          onBlur={() => setEditingCell(null)}
-          className="w-full bg-gray-700 text-white text-sm px-2 py-1 rounded border border-pink/50 outline-none"
-        >
-          {PARTNER_OPTIONS.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-      );
-    }
-
     if (isEditing && (field === "startDate" || field === "paymentDate")) {
       return (
         <input
@@ -444,7 +392,7 @@ export default function ClientsPage() {
       return (
         <input
           ref={inputRef}
-          type={field === "amount" || field === "expense" ? "number" : "text"}
+          type={field === "amount" ? "number" : "text"}
           step="any"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -486,32 +434,11 @@ export default function ClientsPage() {
       );
     }
 
-    if (field === "partner") {
-      const p = client.partner || "fuzion";
-      const isFuzion = p === "fuzion";
-      return (
-        <div
-          onClick={() => startEditing(client, field)}
-          className="cursor-pointer px-2 py-1.5 min-h-[32px] hover:bg-gray-700/50 rounded transition-colors"
-        >
-          <span
-            className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${
-              isFuzion
-                ? "bg-pink/15 text-pink"
-                : "bg-gray-700/40 text-gray-400"
-            }`}
-          >
-            {p}
-          </span>
-        </div>
-      );
-    }
-
     let display: string;
     if (field === "status") {
       display = statusDisplay(client.status);
-    } else if (field === "amount" || field === "expense") {
-      display = formatNum(client[field]);
+    } else if (field === "amount") {
+      display = formatNum(client.amount);
     } else if (field === "startDate" || field === "paymentDate") {
       display = client[field] ? new Date(client[field]!).toLocaleDateString("he-IL") : "";
     } else {
@@ -571,12 +498,10 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">אתר</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">שותפים</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סכום (כולל מע״מ ₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 18% (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">עמלת CardCom 2% (₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">הוצאה נוספת (₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">רווח נקי (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32 bg-gray-700/40">רווח אחרי מע״מ ו-CardCom (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך תשלום</th>
               <th className="w-12 sticky left-0 bg-gray-800 z-10 border-l border-gray-700 md:static md:border-l-0"></th>
@@ -586,7 +511,7 @@ export default function ClientsPage() {
             {clients.map((client) => {
               const vat = client.amount != null ? computeVat(client.amount) : null;
               const cardcomFee = client.amount != null ? computeCardcomFee(client.amount) : null;
-              const netProfit = client.amount != null ? computeNetProfit(client) : null;
+              const profit = client.amount != null ? computeProfit(client) : null;
               const isSaving = savingIds.has(client.id);
 
               return (
@@ -629,7 +554,6 @@ export default function ClientsPage() {
                   </td>
                   <td className="px-1 py-0.5">{renderCell(client, "websiteUrl")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
-                  <td className="px-1 py-0.5">{renderCell(client, "partner")}</td>
                   <td className="px-1 py-0.5 font-mono">{renderCell(client, "amount")}</td>
                   <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
                     {vat != null ? formatNum(vat) : <span className="text-gray-600">-</span>}
@@ -637,15 +561,14 @@ export default function ClientsPage() {
                   <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
                     {cardcomFee != null ? formatNum(cardcomFee) : <span className="text-gray-600">-</span>}
                   </td>
-                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "expense")}</td>
                   <td className="px-3 py-1.5 font-mono bg-gray-700/20">
-                    {netProfit != null ? (
+                    {profit != null ? (
                       <span
                         className={
-                          netProfit >= 0 ? "text-green-400" : "text-red-400"
+                          profit >= 0 ? "text-green-400" : "text-red-400"
                         }
                       >
-                        {formatNum(netProfit)}
+                        {formatNum(profit)}
                       </span>
                     ) : (
                       <span className="text-gray-600">-</span>
@@ -671,7 +594,7 @@ export default function ClientsPage() {
           </tbody>
           <tfoot>
             <tr className="bg-gray-800/80 border-t border-gray-600 font-medium">
-              <td className="px-3 py-2.5" colSpan={5}>
+              <td className="px-3 py-2.5" colSpan={4}>
                 <span className="text-gray-400">סה&quot;כ ({clients.length} לקוחות)</span>
               </td>
               <td className="px-3 py-2.5 font-mono text-white">
@@ -683,16 +606,13 @@ export default function ClientsPage() {
               <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
                 {formatNum(totalCardcom)}
               </td>
-              <td className="px-3 py-2.5 font-mono text-white">
-                {formatNum(totalExpense)}
-              </td>
               <td className="px-3 py-2.5 font-mono bg-gray-700/20">
                 <span
                   className={
-                    totalNetProfit >= 0 ? "text-green-400" : "text-red-400"
+                    totalProfit >= 0 ? "text-green-400" : "text-red-400"
                   }
                 >
-                  {formatNum(totalNetProfit)}
+                  {formatNum(totalProfit)}
                 </span>
               </td>
               <td colSpan={3}></td>
