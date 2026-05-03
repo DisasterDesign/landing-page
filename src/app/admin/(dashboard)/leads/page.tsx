@@ -269,60 +269,66 @@ export default function LeadsPage() {
                   </div>
                 </div>
 
-                {/* Quick actions — clicks here don't open the drawer */}
-                <div className="flex items-center gap-2 px-4 pb-3 -mt-1">
-                  {isEditingFollowUp ? (
-                    <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
-                      <input
-                        type="date"
-                        autoFocus
-                        defaultValue={
-                          lead.nextFollowUpAt ? lead.nextFollowUpAt.slice(0, 10) : ""
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => setQuickFollowUp(lead.id, e.target.value || null)}
-                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-pink"
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFollowUpEditingId(null);
-                        }}
-                        className="text-[11px] text-gray-400 hover:text-white px-2"
-                      >
-                        ביטול
-                      </button>
-                      {lead.nextFollowUpAt && (
+                {/* Quick actions — only relevant once the lead is being
+                    actively worked. New / Closed / Spam don't need
+                    reminders surfaced from the list. Clicks here don't
+                    open the drawer. */}
+                {lead.status === "IN_PROGRESS" && (
+                  <div className="flex items-center gap-2 px-4 pb-3 -mt-1">
+                    {isEditingFollowUp ? (
+                      <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
+                        <input
+                          type="date"
+                          defaultValue={
+                            lead.nextFollowUpAt ? lead.nextFollowUpAt.slice(0, 10) : ""
+                          }
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            setQuickFollowUp(lead.id, e.target.value || null)
+                          }
+                          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-pink"
+                        />
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setQuickFollowUp(lead.id, null);
+                            setFollowUpEditingId(null);
                           }}
-                          className="text-[11px] text-red-400 hover:text-red-300 px-2"
+                          className="text-[11px] text-gray-400 hover:text-white px-2"
                         >
-                          נקה
+                          ביטול
                         </button>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFollowUpEditingId(lead.id);
-                      }}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
-                        lead.nextFollowUpAt
-                          ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20"
-                          : "bg-gray-800 border-gray-700 text-gray-300 hover:border-pink"
-                      }`}
-                    >
-                      📅{" "}
-                      {lead.nextFollowUpAt
-                        ? `מעקב: ${fmtDate(lead.nextFollowUpAt)}`
-                        : "פולו אפ"}
-                    </button>
-                  )}
-                </div>
+                        {lead.nextFollowUpAt && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuickFollowUp(lead.id, null);
+                            }}
+                            className="text-[11px] text-red-400 hover:text-red-300 px-2"
+                          >
+                            נקה
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFollowUpEditingId(lead.id);
+                        }}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
+                          lead.nextFollowUpAt
+                            ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20"
+                            : "bg-gray-800 border-gray-700 text-gray-300 hover:border-pink"
+                        }`}
+                      >
+                        📅{" "}
+                        {lead.nextFollowUpAt
+                          ? `מעקב: ${fmtDate(lead.nextFollowUpAt)}`
+                          : "פולו אפ"}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
