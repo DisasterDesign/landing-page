@@ -310,7 +310,12 @@ export default function AgreementsPage() {
 
   const copyPaymentLink = async (a: Agreement) => {
     try {
-      let url = a.paymentUrl;
+      // Reuse the cached URL ONLY when paymentStatus is SENT (URL fresh,
+      // not yet attempted). For FAILED, the previous Cardcom session is
+      // locked and reusing the URL just lands the customer in the same
+      // failure — so we always regenerate. For PENDING with no URL we
+      // generate too.
+      let url = a.paymentStatus === "SENT" ? a.paymentUrl : null;
       if (!url) {
         const res = await fetch("/api/payments/create", {
           method: "POST",
@@ -329,7 +334,10 @@ export default function AgreementsPage() {
       // After an await the browser drops the user-gesture flag and
       // navigator.clipboard.writeText throws NotAllowedError. Show a modal
       // with a manual copy button (fresh gesture) instead of trying directly.
-      setLinkModal({ url, title: "לינק תשלום" });
+      setLinkModal({
+        url,
+        title: a.paymentStatus === "FAILED" ? "לינק תשלום חדש" : "לינק תשלום",
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "שגיאה");
     }
@@ -500,9 +508,17 @@ export default function AgreementsPage() {
                 {a.paymentStatus !== "COMPLETED" && (
                   <button
                     onClick={() => copyPaymentLink(a)}
-                    className="text-green-400 hover:text-green-300 text-xs font-medium"
+                    className={`text-xs font-medium ${
+                      a.paymentStatus === "FAILED"
+                        ? "text-yellow-400 hover:text-yellow-300"
+                        : "text-green-400 hover:text-green-300"
+                    }`}
                   >
-                    {a.paymentUrl ? "לינק תשלום" : "צור לינק תשלום"}
+                    {a.paymentStatus === "FAILED"
+                      ? "🔄 צור לינק חדש"
+                      : a.paymentUrl
+                      ? "לינק תשלום"
+                      : "צור לינק תשלום"}
                   </button>
                 )}
                 {a.paymentStatus === "COMPLETED" && a.cardcomRecurringId == null && (
@@ -656,10 +672,24 @@ export default function AgreementsPage() {
                       {a.paymentStatus !== "COMPLETED" && (
                         <button
                           onClick={() => copyPaymentLink(a)}
-                          className="text-green-400 hover:text-green-300 text-xs underline-offset-2 hover:underline"
-                          title={a.paymentUrl ? "העתק לינק תשלום קיים" : "צור לינק תשלום"}
+                          className={`text-xs underline-offset-2 hover:underline ${
+                            a.paymentStatus === "FAILED"
+                              ? "text-yellow-400 hover:text-yellow-300"
+                              : "text-green-400 hover:text-green-300"
+                          }`}
+                          title={
+                            a.paymentStatus === "FAILED"
+                              ? "התשלום הקודם נכשל — צור לינק חדש לשליחה ללקוח"
+                              : a.paymentUrl
+                              ? "העתק לינק תשלום קיים"
+                              : "צור לינק תשלום"
+                          }
                         >
-                          {a.paymentUrl ? "העתק לינק תשלום" : "צור לינק תשלום"}
+                          {a.paymentStatus === "FAILED"
+                            ? "🔄 צור לינק חדש"
+                            : a.paymentUrl
+                            ? "העתק לינק תשלום"
+                            : "צור לינק תשלום"}
                         </button>
                       )}
                       {a.paymentStatus === "COMPLETED" && a.cardcomRecurringId == null && (
