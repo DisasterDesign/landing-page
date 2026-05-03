@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { withVat } from "@/lib/vat";
 
 interface PriceInfo {
@@ -40,7 +40,12 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  // Post-sign state machine. "form" until the user signs.
+  const [postSignState, setPostSignState] = useState<
+    "form" | "preparing-payment" | "payment-failed" | "no-payment-needed"
+  >("form");
+  const [paymentRetrying, setPaymentRetrying] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -116,6 +121,55 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
     setHasSignature(false);
   };
 
+  // Try to fetch the Cardcom payment URL via the dedicated endpoint and
+  // redirect on success. Returns true on success (and triggers redirect),
+  // false on failure (caller decides retry / surface error).
+  const fetchAndRedirectToPayment = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/agreements/sign/${token}/payment`, {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        setPaymentError(typeof json.error === "string" ? json.error : "שגיאה ביצירת לינק תשלום");
+        return false;
+      }
+      window.location.href = json.url;
+      return true;
+    } catch {
+      setPaymentError("שגיאה ביצירת לינק תשלום");
+      return false;
+    }
+  }, [token]);
+
+  // Auto-retry on entering "preparing-payment". Up to 3 attempts at
+  // 0s / 2s / 6s. If all fail we surface the manual retry button.
+  useEffect(() => {
+    if (postSignState !== "preparing-payment") return;
+    let cancelled = false;
+    const delays = [0, 2000, 6000];
+    (async () => {
+      for (let i = 0; i < delays.length; i++) {
+        if (cancelled) return;
+        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+        if (cancelled) return;
+        const ok = await fetchAndRedirectToPayment();
+        if (ok || cancelled) return; // redirect happened, leave state alone
+      }
+      if (!cancelled) setPostSignState("payment-failed");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [postSignState, fetchAndRedirectToPayment]);
+
+  const manualRetryPayment = useCallback(async () => {
+    setPaymentRetrying(true);
+    setPaymentError(null);
+    const ok = await fetchAndRedirectToPayment();
+    if (!ok) setPaymentRetrying(false);
+  }, [fetchAndRedirectToPayment]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -150,13 +204,21 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
       }
       const json = (await res.json().catch(() => ({}))) as { paymentUrl?: string };
 
-      // If the server prepared a payment page, send the customer there.
-      // Otherwise show the in-page thank-you.
+      // Fast path: server already has a Cardcom URL. Redirect immediately.
       if (json.paymentUrl) {
         window.location.href = json.paymentUrl;
         return;
       }
-      setDone(true);
+      // No URL came back — agreement is signed, but Cardcom call didn't
+      // complete in the sign request. Show "preparing payment" view; the
+      // useEffect retries against the dedicated endpoint with backoff.
+      const hasMonthly = priceInfo.monthlyPrice > 0;
+      const hasSetup = (priceInfo.oneTimeFee ?? 0) > 0;
+      if (!hasMonthly && !hasSetup) {
+        setPostSignState("no-payment-needed");
+      } else {
+        setPostSignState("preparing-payment");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בחתימה");
     } finally {
@@ -164,24 +226,86 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
     }
   };
 
-  if (done) {
+  const pdfDownload = (
+    <a
+      href={`/agreement/${token}/pdf`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 text-cyan hover:text-cyan/80 text-sm hover:underline"
+    >
+      הורד PDF של ההסכם החתום ↓
+    </a>
+  );
+
+  if (postSignState === "preparing-payment") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
-        <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
+        <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10 space-y-5">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
             ✓
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם נחתם בהצלחה</h1>
-          <p className="text-gray-400 mb-6">תודה! עותק חתום נשמר במערכת והקישור להורדה תקף לכל אורך הזמן.</p>
-          <a
-            href={`/agreement/${token}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-6 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow"
+          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
+          <div className="flex items-center justify-center gap-3 text-gray-300">
+            <div className="w-5 h-5 border-2 border-pink border-t-transparent rounded-full animate-spin" />
+            <span>מכין דף תשלום…</span>
+          </div>
+          <p className="text-xs text-gray-500">
+            מיד תועבר/י לתשלום מאובטח דרך CardCom.
+          </p>
+          <div className="pt-2">{pdfDownload}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (postSignState === "payment-failed") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10 space-y-5">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
+            ✓
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
+          <p className="text-sm text-gray-300">
+            כעת נותר רק להשלים את התשלום הראשון. הלינק לתשלום מוכן.
+          </p>
+          {paymentError && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl px-3 py-2">
+              {paymentError}
+            </div>
+          )}
+          <button
+            onClick={manualRetryPayment}
+            disabled={paymentRetrying}
+            className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-8 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            הורד PDF
-            <span>↓</span>
-          </a>
+            {paymentRetrying ? "מנסה שוב…" : "מעבר לתשלום"}
+            <span>←</span>
+          </button>
+          <div className="text-xs text-gray-500 space-y-2 pt-2">
+            <div>{pdfDownload}</div>
+            <div>
+              נתקלת בבעיה?{" "}
+              <a href="https://www.fuzionwebz.com/contact" className="text-cyan hover:underline">
+                צור קשר
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (postSignState === "no-payment-needed") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10 space-y-5">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
+            ✓
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
+          <p className="text-sm text-gray-300">תודה! אין צורך בתשלום במסלול זה.</p>
+          <div className="pt-2">{pdfDownload}</div>
         </div>
       </div>
     );

@@ -5,6 +5,8 @@ import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-tem
 import { notifyAllAdmins } from "@/lib/notifications";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
 
+export const maxDuration = 30;
+
 function getClientIp(request: NextRequest): string | null {
   const xff = request.headers.get("x-forwarded-for");
   if (xff) {
