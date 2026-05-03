@@ -79,6 +79,7 @@ export default function LeadsPage() {
   const [showAll, setShowAll] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [followUpEditingId, setFollowUpEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -96,6 +97,38 @@ export default function LeadsPage() {
       setLoading(false);
     }
   }, [search, showAll]);
+
+  const setQuickFollowUp = useCallback(
+    async (leadId: string, date: string | null) => {
+      // Optimistic: update local list immediately so the chip flips state
+      // without waiting for the server roundtrip.
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId
+            ? { ...l, nextFollowUpAt: date ? new Date(date).toISOString() : null }
+            : l
+        )
+      );
+      try {
+        const res = await fetch(`/api/leads/${leadId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nextFollowUpAt: date }),
+        });
+        if (!res.ok) throw new Error();
+        toast.success(date ? "תזכורת נקבעה" : "תזכורת בוטלה", {
+          duration: 1800,
+          style: { fontSize: "13px" },
+        });
+      } catch {
+        toast.error("שמירת התזכורת נכשלה");
+        load(); // revert by re-fetching
+      } finally {
+        setFollowUpEditingId(null);
+      }
+    },
+    [load]
+  );
 
   const syncFromFacebook = useCallback(async () => {
     setSyncing(true);
@@ -190,39 +223,107 @@ export default function LeadsPage() {
                 : due.tone === "today"
                 ? "text-yellow-400"
                 : "text-gray-500";
+            const isEditingFollowUp = followUpEditingId === lead.id;
             return (
-              <button
+              <div
                 key={lead.id}
-                onClick={() => setSelectedId(lead.id)}
-                className="w-full bg-gray-900 border border-gray-700 hover:border-gray-600 rounded-xl p-4 text-right transition-colors"
+                className="bg-gray-900 border border-gray-700 hover:border-gray-600 rounded-xl transition-colors"
               >
-                <div className="flex items-start justify-between gap-3 mb-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {!lead.isRead && <span className="w-2 h-2 rounded-full bg-pink shrink-0" />}
-                    <span className="font-bold text-white truncate">{lead.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_CLASS[lead.status]}`}>
-                      {STATUS_LABEL[lead.status]}
-                    </span>
-                    {lead.source === "FACEBOOK" && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-400">
-                        📘 Facebook
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedId(lead.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedId(lead.id);
+                    }
+                  }}
+                  className="w-full p-4 text-right cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-pink/40 rounded-xl"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {!lead.isRead && <span className="w-2 h-2 rounded-full bg-pink shrink-0" />}
+                      <span className="font-bold text-white truncate">{lead.name}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_CLASS[lead.status]}`}>
+                        {STATUS_LABEL[lead.status]}
                       </span>
-                    )}
+                      {lead.source === "FACEBOOK" && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-400">
+                          📘 Facebook
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-xs shrink-0 ${dueClass}`}>{due.text}</span>
                   </div>
-                  <span className={`text-xs shrink-0 ${dueClass}`}>{due.text}</span>
+                  <p className="text-xs text-gray-500 truncate">
+                    {lead.email}
+                    {lead.phone && ` · ${lead.phone}`}
+                    {lead.service && ` · ${lead.service}`}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-1">{lead.message}</p>
+                  <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-2">
+                    <span>נכנס: {fmtDate(lead.createdAt)}</span>
+                    {lead.lastContactedAt && <span>· נגעת לאחרונה: {fmtDate(lead.lastContactedAt)}</span>}
+                    <span>· {lead._count.notes} הערות</span>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 truncate">
-                  {lead.email}
-                  {lead.phone && ` · ${lead.phone}`}
-                  {lead.service && ` · ${lead.service}`}
-                </p>
-                <p className="text-xs text-gray-400 mt-1 line-clamp-1">{lead.message}</p>
-                <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-2">
-                  <span>נכנס: {fmtDate(lead.createdAt)}</span>
-                  {lead.lastContactedAt && <span>· נגעת לאחרונה: {fmtDate(lead.lastContactedAt)}</span>}
-                  <span>· {lead._count.notes} הערות</span>
+
+                {/* Quick actions — clicks here don't open the drawer */}
+                <div className="flex items-center gap-2 px-4 pb-3 -mt-1">
+                  {isEditingFollowUp ? (
+                    <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
+                      <input
+                        type="date"
+                        autoFocus
+                        defaultValue={
+                          lead.nextFollowUpAt ? lead.nextFollowUpAt.slice(0, 10) : ""
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setQuickFollowUp(lead.id, e.target.value || null)}
+                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-pink"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFollowUpEditingId(null);
+                        }}
+                        className="text-[11px] text-gray-400 hover:text-white px-2"
+                      >
+                        ביטול
+                      </button>
+                      {lead.nextFollowUpAt && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuickFollowUp(lead.id, null);
+                          }}
+                          className="text-[11px] text-red-400 hover:text-red-300 px-2"
+                        >
+                          נקה
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFollowUpEditingId(lead.id);
+                      }}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
+                        lead.nextFollowUpAt
+                          ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20"
+                          : "bg-gray-800 border-gray-700 text-gray-300 hover:border-pink"
+                      }`}
+                    >
+                      📅{" "}
+                      {lead.nextFollowUpAt
+                        ? `מעקב: ${fmtDate(lead.nextFollowUpAt)}`
+                        : "פולו אפ"}
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
