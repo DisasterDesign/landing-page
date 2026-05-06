@@ -389,7 +389,13 @@ function formatDateDDMMYYYY(d: Date): string {
 }
 
 export interface CreateRecurringOrderNTVInput {
-  lowProfileDealGuid: string;
+  /**
+   * Card identification — provide exactly one. Either the LowProfile GUID
+   * captured from the first-charge webhook, OR the Cardcom Token saved on
+   * the agreement (must be decrypted before passing in here).
+   */
+  lowProfileDealGuid?: string;
+  cardcomToken?: string;
   monthlyAmount: number;
   customerName: string;
   customerEmail: string;
@@ -400,10 +406,11 @@ export interface CreateRecurringOrderNTVInput {
 
 /**
  * Registers a monthly recurring charge via Cardcom's Name-to-Value API
- * (RecurringPayment.aspx). Uses the LowProfile GUID returned in the
- * first-charge webhook — Cardcom looks up the saved card from that GUID,
- * so no token/CVV is sent. Password is intentionally NOT included
- * (the NTV endpoint authenticates with TerminalNumber + UserName only).
+ * (RecurringPayment.aspx). The card is identified either by the LowProfile
+ * GUID returned in the first-charge webhook (preferred for new payments) or
+ * by a saved Cardcom Token (used to recover legacy agreements that pre-date
+ * the LowProfileId capture). Password is intentionally NOT included — NTV
+ * authenticates with TerminalNumber + UserName only.
  *
  * Date format MUST be dd/MM/yyyy (NOT ISO).
  */
@@ -412,6 +419,12 @@ export async function createRecurringOrderNTV(
 ): Promise<{ recurringId: number; accountId: number }> {
   const cfg = getBillGoldConfig();
   if (!cfg) throw new CardcomError("BillGold credentials not configured");
+
+  if (!input.lowProfileDealGuid && !input.cardcomToken) {
+    throw new CardcomError(
+      "createRecurringOrderNTV: must provide lowProfileDealGuid or cardcomToken"
+    );
+  }
 
   const nextBill = new Date();
   nextBill.setDate(nextBill.getDate() + 30);
@@ -422,7 +435,11 @@ export async function createRecurringOrderNTV(
   params.set("UserName", cfg.userName);
   params.set("codepage", "65001");
   params.set("Operation", "NewAndUpdate");
-  params.set("LowProfileDealGuid", input.lowProfileDealGuid);
+  if (input.lowProfileDealGuid) {
+    params.set("LowProfileDealGuid", input.lowProfileDealGuid);
+  } else if (input.cardcomToken) {
+    params.set("CreditCard.Token", input.cardcomToken);
+  }
 
   // Account
   params.set("Account.CompanyName", input.customerName);

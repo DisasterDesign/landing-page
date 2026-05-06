@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
-import { createRecurringOrder, createRecurringOrderNTV } from "@/lib/cardcom";
+import { createRecurringOrderNTV } from "@/lib/cardcom";
 import { withVat } from "@/lib/vat";
 
 export const maxDuration = 120;
@@ -12,7 +12,7 @@ interface RetryResult {
   agreementId: string;
   customerName: string;
   ok: boolean;
-  via?: "NTV" | "SOAP";
+  via?: "NTV-LowProfile" | "NTV-Token";
   recurringId?: number;
   error?: string;
 }
@@ -23,11 +23,12 @@ interface RetryResult {
  * Re-attempts recurring-order setup for agreements that paid the first
  * charge but never got a recurring schedule (cardcomRecurringId is null).
  *
- * Strategy:
- *   - Prefer Name-to-Value API (RecurringPayment.aspx) using the saved
- *     cardcomLowProfileId. This is what new payments use.
- *   - Fall back to legacy SOAP (BillGold) using the encrypted cardcomToken
- *     for older agreements that pre-date the LowProfileId capture.
+ * Both branches use Cardcom's Name-to-Value API (RecurringPayment.aspx).
+ * Difference is only the card-identification field:
+ *   - Prefer cardcomLowProfileId (LowProfileDealGuid) — used for any
+ *     payment where we captured the LowProfile webhook field.
+ *   - Otherwise use the saved Cardcom token (CreditCard.Token) — recovers
+ *     legacy agreements that paid before LowProfileId was captured.
  *
  * Body:
  *   - { agreementId: string } → retry only that one
@@ -93,32 +94,30 @@ export async function POST(req: NextRequest) {
   for (const a of candidates) {
     try {
       let r: { recurringId: number; accountId: number };
-      let via: "NTV" | "SOAP";
+      let via: "NTV-LowProfile" | "NTV-Token";
 
       // monthlyPrice is NET in our DB; Cardcom is charged GROSS.
       const grossMonthly = withVat(a.monthlyPrice);
+      const baseInput = {
+        monthlyAmount: grossMonthly,
+        customerName: a.customerName,
+        customerEmail: a.email,
+        customerPhone: a.phone ?? undefined,
+        productDescription: `חבילה חודשית — ${a.customerName}`,
+        agreementId: a.id,
+      };
       if (a.cardcomLowProfileId) {
-        via = "NTV";
+        via = "NTV-LowProfile";
         r = await createRecurringOrderNTV({
+          ...baseInput,
           lowProfileDealGuid: a.cardcomLowProfileId,
-          monthlyAmount: grossMonthly,
-          customerName: a.customerName,
-          customerEmail: a.email,
-          customerPhone: a.phone ?? undefined,
-          productDescription: `חבילה חודשית — ${a.customerName}`,
-          agreementId: a.id,
         });
       } else if (a.cardcomToken) {
-        via = "SOAP";
+        via = "NTV-Token";
         const tokenPlain = decrypt(a.cardcomToken);
-        r = await createRecurringOrder({
-          agreementId: a.id,
+        r = await createRecurringOrderNTV({
+          ...baseInput,
           cardcomToken: tokenPlain,
-          monthlyAmount: grossMonthly,
-          customerName: a.customerName,
-          customerEmail: a.email,
-          customerPhone: a.phone ?? undefined,
-          productDescription: `חבילה חודשית — ${a.customerName}`,
         });
       } else {
         results.push({
