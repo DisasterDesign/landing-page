@@ -1,240 +1,260 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 
 interface Project {
   id: string;
   name: string;
+  description: string;
+  gradient: string;
   url: string;
-  video: string;
-  poster: string;
+  video?: string;
+  poster?: string;
 }
 
 const projects: Project[] = [
-  { id: "innercosmos", name: "Inner Cosmos", url: "https://innercosmos.ai/", video: "/c-video/compressed/INNERCOSMOS.mp4", poster: "/c-video/posters/INNERCOSMOS.webp" },
-  { id: "aquatis", name: "Aquatis", url: "https://aquatis.ai/", video: "/c-video/compressed/Aquatis.mp4", poster: "/c-video/posters/Aquatis.webp" },
-  { id: "titans", name: "Titans", url: "https://titans.global/", video: "/c-video/compressed/Titans.mp4", poster: "/c-video/posters/Titans.webp" },
-  { id: "thirdeye", name: "Third Eye", url: "https://3i.titans.global/", video: "/c-video/compressed/3i.mp4", poster: "/c-video/posters/3i.webp" },
-  { id: "dentalcare", name: "Dental Care", url: "https://dental-care-d5g.pages.dev/", video: "/c-video/compressed/dental-care.mp4", poster: "/c-video/posters/dental-care.webp" },
-  { id: "ams-law", name: "AMS Law", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
+  // Video projects first — Titans is the default selected
+  { id: "titans", name: "Titans Global", description: "Global investment platform", gradient: "linear-gradient(135deg, #F37021, #ff6b6b)", url: "https://titans.global/", video: "/c-video/compressed/Titans.mp4", poster: "/c-video/posters/Titans.webp" },
+  { id: "aquatis", name: "Aquatis", description: "Water management platform", gradient: "linear-gradient(135deg, #11998e, #38ef7d)", url: "https://aquatis.ai/", video: "/c-video/compressed/Aquatis.mp4", poster: "/c-video/posters/Aquatis.webp" },
+  { id: "innercosmos", name: "Inner Cosmos", description: "AI-powered meditation", gradient: "linear-gradient(135deg, #667eea, #764ba2)", url: "https://innercosmos.ai/", video: "/c-video/compressed/INNERCOSMOS.mp4", poster: "/c-video/posters/INNERCOSMOS.webp" },
+  { id: "thirdeye", name: "Third Eye", description: "Analytics dashboard", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://3i.titans.global/", video: "/c-video/compressed/3i.mp4", poster: "/c-video/posters/3i.webp" },
+  { id: "dentalcare", name: "Dental Care", description: "Dental clinic website", gradient: "linear-gradient(135deg, #74ebd5, #ACB6E5)", url: "https://dental-care-d5g.pages.dev/", video: "/c-video/compressed/dental-care.mp4", poster: "/c-video/posters/dental-care.webp" },
+  { id: "ams-law", name: "AMS Law", description: "משרד עורכי דין", gradient: "linear-gradient(135deg, #1a1a2e, #16213e)", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
+  // No-video projects
+  { id: "olamhamamtakim", name: "עולם הממתקים", description: "חנות ממתקים אונליין", gradient: "linear-gradient(135deg, #ff9a9e, #fecfef)", url: "https://olamhamamtakim.co.il/" },
+  { id: "fixtickets", name: "פיקס טיקטס", description: "שירותי תיקון ושירות", gradient: "linear-gradient(135deg, #a18cd1, #fbc2eb)", url: "https://fixtickets.co.il/" },
+  { id: "natansart", name: "נתן ארט", description: "אמנות ועיצוב", gradient: "linear-gradient(135deg, #ffecd2, #fcb69f)", url: "https://natansart.com/" },
+  { id: "roza", name: "רוזה", description: "מסעדה ברחובות", gradient: "linear-gradient(135deg, #f093fb, #f5576c)", url: "https://roza-rehovot-website.pages.dev/" },
+  { id: "jumarie", name: "Jumarie", description: "מותג אופנה", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://jumarie.co/en" },
+  { id: "bingo", name: "Bingo", description: "פלטפורמה דיגיטלית", gradient: "linear-gradient(135deg, #43e97b, #38f9d7)", url: "https://bingo-nu-kohl.vercel.app/" },
+  { id: "yoni-burger", name: "יוני המבורגר", description: "מסעדת המבורגרים", gradient: "linear-gradient(135deg, #f6d365, #fda085)", url: "https://burger-yoni-71.pages.dev/" },
+  { id: "yoni-shawarma", name: "יוני שווארמה", description: "מסעדת שווארמה", gradient: "linear-gradient(135deg, #ff8a00, #e52e71)", url: "https://yoni71.davidalelad.workers.dev/" },
+  { id: "ariela-beauty", name: "אריאלה ביוטי", description: "חנות יופי וטיפוח", gradient: "linear-gradient(135deg, #fbc2eb, #a6c1ee)", url: "https://ariela-storefront.davidalelad.workers.dev/" },
+  { id: "baguette", name: "בגט התרנגול", description: "מסעדה", gradient: "linear-gradient(135deg, #e0c3fc, #8ec5fc)", url: "https://baguette-hatarnegol.pages.dev/" },
+  { id: "juju", name: "ג׳וג׳ו", description: "מטבח אסייתי", gradient: "linear-gradient(135deg, #fa709a, #fee140)", url: "https://juju-asian-kitchen.pages.dev/" },
+  { id: "helena", name: "הלנה לפיד סידלר", description: "דף נחיתה", gradient: "linear-gradient(135deg, #a1c4fd, #c2e9fb)", url: "https://maalen-landing.pages.dev/" },
+  { id: "emek-ayalon", name: "עמק איילון", description: "ניהול תשתיות ופרויקטים", gradient: "linear-gradient(135deg, #667eea, #764ba2)", url: "https://www.emek-ayalon.com/" },
 ];
 
-function VideoCard({ project }: { project: Project }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [hovered, setHovered] = useState(false);
-
-  const handleEnter = useCallback(() => {
-    setHovered(true);
-    videoRef.current?.play();
-  }, []);
-
-  const handleLeave = useCallback(() => {
-    setHovered(false);
-    if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; }
-  }, []);
-
-  return (
-    <a
-      href={project.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block group"
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      aria-label={`צפייה בפרויקט ${project.name}`}
-      data-cursor="view"
-    >
-      <div className="relative">
-        {/* Chromatic layers */}
-        <motion.div
-          className="absolute inset-0 rounded-[18px] bg-[#00D0CE]"
-          animate={{ x: hovered ? 0 : 4, y: hovered ? 0 : -4, opacity: hovered ? 0 : 1 }}
-          transition={{ duration: 0.4 }}
-        />
-        <motion.div
-          className="absolute inset-0 rounded-[18px] bg-[#C80084]"
-          animate={{ x: hovered ? 0 : -4, y: hovered ? 0 : 4, opacity: hovered ? 0 : 1 }}
-          transition={{ duration: 0.4 }}
-        />
-
-        {/* Main card */}
-        <motion.div
-          className="relative rounded-[18px] overflow-hidden"
-          animate={{ borderColor: hovered ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0)" }}
-          style={{ borderWidth: "1px", borderStyle: "solid" }}
-        >
-          <div className="aspect-video relative bg-gray-100">
-            <video
-              ref={videoRef}
-              src={project.video}
-              poster={project.poster}
-              muted
-              loop
-              playsInline
-              preload="none"
-              className="w-full h-full object-cover"
-            />
-
-            {/* Overlay gradient — keep dark gradient over the video so the white text on top reads */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-
-            {/* Project name */}
-            <div className="absolute bottom-0 left-0 right-0 p-5">
-              <h3 className="text-white text-lg font-bold">{project.name}</h3>
-              <motion.span
-                className="text-gray-200 text-sm block"
-                animate={{ opacity: hovered ? 1 : 0, y: hovered ? 0 : 5 }}
-                transition={{ duration: 0.3 }}
-              >
-                לצפייה בפרויקט →
-              </motion.span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </a>
-  );
-}
+const HOVER_DELAY = 380; // ms before lift triggers
+const LIFT_MS = 200;     // duration tile floats before swapping into selected slot
 
 export default function Portfolio() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [dragStart, setDragStart] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [selectedId, setSelectedId] = useState(projects[0].id);
+  const [liftId, setLiftId] = useState<string | null>(null);
+  const [isTouch, setIsTouch] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const prev = () => setActiveIndex((i) => (i === 0 ? projects.length - 1 : i - 1));
-  const next = () => setActiveIndex((i) => (i + 1) % projects.length);
-
-  // Auto-rotate (pauses on hover)
   useEffect(() => {
-    if (isPaused) return;
-    const timer = setInterval(next, 5000);
-    return () => clearInterval(timer);
-  }, [activeIndex, isPaused]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const section = document.getElementById("portfolio");
-      if (!section?.contains(document.activeElement)) return;
-
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        next();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        prev();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
-  const getCardTransform = (index: number) => {
-    const total = projects.length;
-    let diff = index - activeIndex;
-    if (diff > total / 2) diff -= total;
-    if (diff < -total / 2) diff += total;
-    const absD = Math.abs(diff);
+  const cancelHover = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
 
-    if (absD === 0) return { x: 0, scale: 1, opacity: 1, zIndex: 10 };
-    if (absD === 1) return { x: diff * 420, scale: 0.75, opacity: 0.7, zIndex: 5 };
-    return { x: diff * 300, scale: 0.6, opacity: 0, zIndex: 0 };
+  const promoteTo = (id: string) => {
+    if (id === selectedId) return;
+    cancelHover();
+    if (liftTimerRef.current) clearTimeout(liftTimerRef.current);
+    setLiftId(id);
+    liftTimerRef.current = setTimeout(() => {
+      setSelectedId(id);
+      setLiftId(null);
+    }, LIFT_MS);
+  };
+
+  const handleEnter = (id: string) => {
+    if (isTouch || id === selectedId) return;
+    cancelHover();
+    hoverTimerRef.current = setTimeout(() => promoteTo(id), HOVER_DELAY);
+  };
+
+  const handleLeave = () => cancelHover();
+
+  const handleClick = (id: string, url: string) => {
+    if (id === selectedId) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      promoteTo(id);
+    }
   };
 
   return (
-    <section id="portfolio" className="relative bg-white py-24 md:py-32" aria-roledescription="carousel" aria-label="תיק עבודות">
-      <div className="max-w-6xl mx-auto px-6">
+    <section id="portfolio" className="relative bg-white py-24 md:py-32 px-6">
+      <div className="max-w-[1400px] mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="העבודות שלנו">
-            העבודות שלנו
-          </h2>
+          <div className="flex items-baseline justify-between mb-10 px-1">
+            <h2
+              className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-black"
+              data-text="העבודות שלנו"
+            >
+              העבודות שלנו
+            </h2>
+            <span dir="ltr" className="text-xs uppercase tracking-[0.25em] text-gray-500">
+              {projects.length} projects
+            </span>
+          </div>
         </ScrollReveal>
-      </div>
 
-      {/* Desktop Carousel */}
-      <div
-        className="hidden md:block relative h-[520px] overflow-hidden"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-      >
-        <div className="relative h-full flex items-center justify-center">
-          {projects.map((project, index) => {
-            const t = getCardTransform(index);
+        <div
+          className="portfolio-grid"
+          style={{
+            display: "grid",
+            gap: "6px",
+            perspective: "1200px",
+            transformStyle: "preserve-3d",
+          }}
+        >
+          {projects.map((p) => {
+            const isSelected = p.id === selectedId;
+            const isLifting = p.id === liftId;
+            const isDimmed = liftId !== null && !isSelected && !isLifting;
             return (
-              <motion.div
-                key={project.id}
-                className="absolute w-[620px]"
-                animate={{ x: t.x, scale: t.scale, opacity: t.opacity, zIndex: t.zIndex }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                aria-hidden={index !== activeIndex}
+              <motion.button
+                key={p.id}
+                layout
+                onMouseEnter={() => handleEnter(p.id)}
+                onMouseLeave={handleLeave}
+                onClick={() => handleClick(p.id, p.url)}
+                animate={{
+                  scale: isLifting ? 1.15 : isDimmed ? 0.97 : 1,
+                  z: isLifting ? 30 : 0,
+                  opacity: isDimmed ? 0.7 : 1,
+                }}
+                transition={{
+                  layout: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+                  scale: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+                  z: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+                  opacity: { duration: 0.2 },
+                }}
+                style={{
+                  gridColumn: isSelected ? "span 2" : "span 1",
+                  gridRow: isSelected ? "span 2" : "span 1",
+                  borderRadius: isSelected ? 12 : 8,
+                  position: "relative",
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  background: p.gradient,
+                  zIndex: isLifting ? 30 : isSelected ? 5 : 1,
+                  willChange: "transform, opacity",
+                  aspectRatio: "1 / 1",
+                  border: "none",
+                  padding: 0,
+                  boxShadow: isLifting
+                    ? "0 24px 60px rgba(0,0,0,0.32)"
+                    : isSelected
+                      ? "0 10px 28px rgba(0,0,0,0.14)"
+                      : "0 2px 8px rgba(0,0,0,0.08)",
+                }}
+                aria-label={
+                  isSelected
+                    ? `${p.name} — open project`
+                    : `${p.name} — expand`
+                }
+                data-cursor="pointer"
               >
-                <VideoCard project={project} />
-              </motion.div>
+                {isSelected ? <SelectedTile project={p} /> : <SmallTile project={p} />}
+              </motion.button>
             );
           })}
         </div>
-
       </div>
 
-      {/* Mobile */}
-      <div
-        className="md:hidden px-6"
-        onTouchStart={(e) => setDragStart(e.touches[0].clientX)}
-        onTouchEnd={(e) => {
-          const diff = e.changedTouches[0].clientX - dragStart;
-          if (diff > 50) prev();
-          else if (diff < -50) next();
-        }}
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeIndex}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.3 }}
-          >
-            <VideoCard project={projects[activeIndex]} />
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Dots + Arrows — forced LTR so left arrow is visually left */}
-      <div dir="ltr" className="flex items-center justify-center gap-4 mt-10">
-        <button
-          onClick={prev}
-          className="w-11 h-11 border border-black/20 rounded-full flex items-center justify-center hover:border-black/60 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
-          aria-label="פרויקט קודם"
-          data-cursor="pointer"
-        >
-          <span className="text-black text-sm">←</span>
-        </button>
-        <div className="flex gap-3" role="tablist" aria-label="בחירת פרויקט">
-          {projects.map((p, i) => (
-            <button
-              key={i}
-              onClick={() => setActiveIndex(i)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === activeIndex ? "bg-black w-8" : "bg-black/20 w-2 hover:bg-black/40"
-              }`}
-              role="tab"
-              aria-selected={i === activeIndex}
-              aria-label={`${p.name} (${i + 1} מתוך ${projects.length})`}
-              data-cursor="pointer"
-            />
-          ))}
-        </div>
-        <button
-          onClick={next}
-          className="w-11 h-11 border border-black/20 rounded-full flex items-center justify-center hover:border-black/60 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
-          aria-label="פרויקט הבא"
-          data-cursor="pointer"
-        >
-          <span className="text-black text-sm">→</span>
-        </button>
-      </div>
+      <style jsx>{`
+        .portfolio-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        @media (min-width: 768px) {
+          .portfolio-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+        }
+        @media (min-width: 1024px) {
+          .portfolio-grid {
+            grid-template-columns: repeat(5, 1fr);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .portfolio-grid :global(button) {
+            transition: none !important;
+          }
+        }
+      `}</style>
     </section>
+  );
+}
+
+function SelectedTile({ project }: { project: Project }) {
+  return (
+    <div className="absolute inset-0 group/sel">
+      {project.video ? (
+        <video
+          src={project.video}
+          poster={project.poster}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0" style={{ background: project.gradient }} />
+      )}
+
+      {/* Bottom gradient for text legibility */}
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+
+      {/* Content */}
+      <div className="absolute inset-0 flex flex-col justify-end p-5 md:p-7 text-white text-right pointer-events-none">
+        <h3 className="text-lg md:text-2xl font-extrabold mb-1">{project.name}</h3>
+        <p className="text-xs md:text-sm text-white/85 mb-3">{project.description}</p>
+        <span
+          dir="ltr"
+          className="text-[11px] md:text-xs font-bold tracking-[0.2em] uppercase inline-flex items-center gap-2 group-hover/sel:gap-3 transition-all w-fit"
+        >
+          VISIT SITE <span aria-hidden="true">→</span>
+        </span>
+      </div>
+
+      {/* Play button for video */}
+      {project.video && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center group-hover/sel:bg-white/25 transition-colors">
+            <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5 md:w-6 md:h-6" style={{ marginLeft: 4 }}>
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SmallTile({ project }: { project: Project }) {
+  return (
+    <div
+      className="absolute inset-0 group/sm"
+      style={{ background: project.gradient }}
+    >
+      {project.video && (
+        <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/30 backdrop-blur-sm border border-white/40 flex items-center justify-center pointer-events-none">
+          <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3" style={{ marginLeft: 1 }}>
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      )}
+      {/* Name on hover (RTL bottom strip) */}
+      <div className="absolute inset-x-0 bottom-0 p-2 text-white text-[10px] md:text-[11px] font-bold opacity-0 group-hover/sm:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/55 to-transparent text-right pointer-events-none">
+        {project.name}
+      </div>
+    </div>
   );
 }
