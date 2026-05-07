@@ -145,7 +145,9 @@ export async function POST(
       },
     });
 
-    const tierLabel = existing.tier === "BASIC"
+    const tierLabel = existing.tier === "LANDING"
+      ? "דף נחיתה"
+      : existing.tier === "BASIC"
       ? "בסיס"
       : existing.tier === "ADVANCED"
       ? "מתקדם"

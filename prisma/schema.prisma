@@ -46,6 +46,7 @@ enum LicenseType {
 }
 
 enum AgreementTier {
+  LANDING
   BASIC
   ADVANCED
   PREMIUM

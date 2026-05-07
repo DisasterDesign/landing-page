@@ -63,7 +63,7 @@ export const createCommentSchema = z.object({
 // AGREEMENTS
 // ==================
 
-export const agreementTierEnum = z.enum(["BASIC", "ADVANCED", "PREMIUM"]);
+export const agreementTierEnum = z.enum(["LANDING", "BASIC", "ADVANCED", "PREMIUM"]);
 export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
 
 export const createAgreementSchema = z.object({

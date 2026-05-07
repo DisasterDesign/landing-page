@@ -7,7 +7,7 @@ import Badge from "@/components/ui/Badge";
 import { confirmDanger } from "@/lib/confirm";
 
 type AgreementStatus = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
-type Tier = "BASIC" | "ADVANCED" | "PREMIUM";
+type Tier = "LANDING" | "BASIC" | "ADVANCED" | "PREMIUM";
 
 interface AgreementSummary {
   id: string;
@@ -59,6 +59,7 @@ interface ClientDetail {
 }
 
 const TIER_LABEL: Record<Tier, string> = {
+  LANDING: "דף נחיתה",
   BASIC: "בסיס",
   ADVANCED: "מתקדם",
   PREMIUM: "פרימיום",

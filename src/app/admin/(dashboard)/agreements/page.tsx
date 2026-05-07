@@ -8,7 +8,7 @@ import Badge from "@/components/ui/Badge";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { confirmDanger } from "@/lib/confirm";
 
-type Tier = "BASIC" | "ADVANCED" | "PREMIUM";
+type Tier = "LANDING" | "BASIC" | "ADVANCED" | "PREMIUM";
 type Status = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
 type PaymentStatus = "PENDING" | "SENT" | "COMPLETED" | "FAILED" | "CANCELLED";
 
@@ -37,12 +37,14 @@ interface Agreement {
 }
 
 const TIER_LABEL: Record<Tier, string> = {
+  LANDING: "דף נחיתה",
   BASIC: "בסיס",
   ADVANCED: "מתקדם",
   PREMIUM: "פרימיום",
 };
 
-const TIER_VARIANT: Record<Tier, "cyan" | "pink" | "yellow"> = {
+const TIER_VARIANT: Record<Tier, "cyan" | "pink" | "yellow" | "green"> = {
+  LANDING: "green",
   BASIC: "cyan",
   ADVANCED: "pink",
   PREMIUM: "yellow",
@@ -79,9 +81,10 @@ const PAYMENT_VARIANT: Record<PaymentStatus, "gray" | "cyan" | "green" | "red" |
 };
 
 const TIER_PRICE: Record<Tier, number> = {
+  LANDING: 59,
   BASIC: 99,
   ADVANCED: 199,
-  PREMIUM: 299,
+  PREMIUM: 599,
 };
 
 type TierChoice = Tier | "CUSTOM";
@@ -722,8 +725,8 @@ export default function AgreementsPage() {
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
           <div>
             <label className="block text-sm text-gray-400 mb-2">סוג ההסכם *</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(["BASIC", "ADVANCED", "PREMIUM", "CUSTOM"] as TierChoice[]).map((t) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+              {(["LANDING", "BASIC", "ADVANCED", "PREMIUM", "CUSTOM"] as TierChoice[]).map((t) => (
                 <button
                   key={t}
                   type="button"
