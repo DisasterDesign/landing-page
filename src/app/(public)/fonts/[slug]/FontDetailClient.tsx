@@ -171,7 +171,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
   /*  JSX                                                             */
   /* ================================================================ */
   return (
-    <div className="min-h-screen bg-black" dir="rtl">
+    <div className="min-h-screen bg-white" dir="rtl">
       {/* ======================================================== */}
       {/*  1. HERO                                                  */}
       {/* ======================================================== */}
@@ -201,7 +201,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
                 >
                   {font.name}
                 </span>
-                <span className="relative text-white">{font.name}</span>
+                <span className="relative text-black">{font.name}</span>
               </span>
             </h1>
 
@@ -213,7 +213,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             </div>
 
             {font.designer && (
-              <p className="text-gray-400 text-lg mt-4">
+              <p className="text-gray-700 text-lg mt-4">
                 מעצב: {font.designer}
               </p>
             )}
@@ -224,7 +224,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/* ======================================================== */}
       {/*  2. TYPE SPECIMEN                                         */}
       {/* ======================================================== */}
-      <section className="py-16 md:py-24 border-t border-gray-800/50">
+      <section className="py-16 md:py-24 border-t border-gray-200/50">
         <div className="max-w-6xl mx-auto px-6">
           <ScrollReveal>
             <ChromaticText
@@ -238,13 +238,13 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
           <div className="space-y-0">
             {specimens.map((spec, i) => (
               <ScrollReveal key={i} delay={i * 0.05}>
-                <div className="py-6 border-b border-gray-800/50 last:border-b-0">
+                <div className="py-6 border-b border-gray-200/50 last:border-b-0">
                   <div className="flex items-start gap-6">
-                    <span className="text-xs text-gray-500 font-mono pt-2 shrink-0 w-12 text-left">
+                    <span className="text-xs text-gray-600 font-mono pt-2 shrink-0 w-12 text-left">
                       {spec.size}px
                     </span>
                     <p
-                      className="text-white leading-tight flex-1"
+                      className="text-black leading-tight flex-1"
                       style={{
                         fontFamily: heroFontFamily,
                         fontSize: `${spec.size}px`,
@@ -265,7 +265,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/* ======================================================== */}
       {/*  3. INTERACTIVE TESTER                                    */}
       {/* ======================================================== */}
-      <section className="py-16 md:py-24 border-t border-gray-800/50">
+      <section className="py-16 md:py-24 border-t border-gray-200/50">
         <div className="max-w-6xl mx-auto px-6">
           <ScrollReveal>
             <ChromaticText
@@ -277,7 +277,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
           </ScrollReveal>
 
           <ScrollReveal delay={0.1}>
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
               {/* Weight tabs */}
               {font.styles.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
@@ -288,7 +288,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         selectedWeight === style.id
                           ? "bg-pink text-white"
-                          : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                          : "bg-gray-100 text-gray-700 hover:text-gray-200"
                       }`}
                     >
                       {style.name}
@@ -304,10 +304,10 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
                   value={previewText}
                   onChange={(e) => setPreviewText(e.target.value)}
                   placeholder="הקלד טקסט לתצוגה..."
-                  className="flex-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-pink/50 transition-colors"
+                  className="flex-1 w-full bg-gray-100 border border-gray-300 rounded-lg px-4 py-2.5 text-black text-sm focus:outline-none focus:border-pink/50 transition-colors"
                 />
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-gray-400 font-mono w-10 text-left">
+                  <span className="text-xs text-gray-700 font-mono w-10 text-left">
                     {fontSize}px
                   </span>
                   <input
@@ -324,7 +324,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
               {/* Preview */}
               <div className="bg-gray-950 rounded-xl p-8 min-h-[120px] flex items-center">
                 <p
-                  className="text-white leading-relaxed transition-all duration-200 w-full"
+                  className="text-black leading-relaxed transition-all duration-200 w-full"
                   style={{
                     fontFamily:
                       loadedFonts[selectedWeight] || heroFontFamily,
@@ -345,7 +345,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/*  4. ALL WEIGHTS DISPLAY                                   */}
       {/* ======================================================== */}
       {font.styles.length > 0 && (
-        <section className="py-16 md:py-24 border-t border-gray-800/50">
+        <section className="py-16 md:py-24 border-t border-gray-200/50">
           <div className="max-w-6xl mx-auto px-6">
             <ScrollReveal>
               <ChromaticText
@@ -359,17 +359,17 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             <div className="space-y-0">
               {font.styles.map((style, i) => (
                 <ScrollReveal key={style.id} delay={i * 0.05}>
-                  <div className="py-8 border-b border-gray-800/50 last:border-b-0">
+                  <div className="py-8 border-b border-gray-200/50 last:border-b-0">
                     <div className="flex items-center gap-3 mb-4">
                       <FontWeightBadge weight={style.weight} />
-                      <span className="text-gray-300 font-medium">
+                      <span className="text-gray-700 font-medium">
                         {style.name}
                       </span>
                     </div>
 
                     {/* Hebrew alphabet */}
                     <p
-                      className="text-white leading-relaxed mb-3"
+                      className="text-black leading-relaxed mb-3"
                       style={{
                         fontFamily: loadedFonts[style.id] || "inherit",
                         fontSize: "32px",
@@ -382,7 +382,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
 
                     {/* Numbers */}
                     <p
-                      className="text-gray-300 leading-relaxed mb-3"
+                      className="text-gray-700 leading-relaxed mb-3"
                       style={{
                         fontFamily: loadedFonts[style.id] || "inherit",
                         fontSize: "32px",
@@ -395,7 +395,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
 
                     {/* Symbols */}
                     <p
-                      className="text-gray-400 leading-relaxed"
+                      className="text-gray-700 leading-relaxed"
                       style={{
                         fontFamily: loadedFonts[style.id] || "inherit",
                         fontSize: "32px",
@@ -416,7 +416,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/* ======================================================== */}
       {/*  5. CHARACTER MAP                                         */}
       {/* ======================================================== */}
-      <section className="py-16 md:py-24 border-t border-gray-800/50">
+      <section className="py-16 md:py-24 border-t border-gray-200/50">
         <div className="max-w-6xl mx-auto px-6">
           <ScrollReveal>
             <ChromaticText
@@ -437,7 +437,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     charCategory === key
                       ? "bg-pink text-white"
-                      : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                      : "bg-gray-100 text-gray-700 hover:text-gray-200"
                   }`}
                 >
                   {label}
@@ -450,13 +450,13 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
               {CHAR_SETS[charCategory]?.chars.map((char, i) => (
                 <div
                   key={`${charCategory}-${i}`}
-                  className="bg-gray-900 border border-gray-800 rounded-lg aspect-square flex items-center justify-center text-3xl hover:border-pink/50 transition-colors"
+                  className="bg-gray-50 border border-gray-200 rounded-lg aspect-square flex items-center justify-center text-3xl hover:border-pink/50 transition-colors"
                   style={{
                     fontFamily: heroFontFamily,
                     opacity: heroLoaded ? 1 : 0.4,
                   }}
                 >
-                  <span className="text-white">{char}</span>
+                  <span className="text-black">{char}</span>
                 </div>
               ))}
             </div>
@@ -468,7 +468,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/*  6. ABOUT                                                 */}
       {/* ======================================================== */}
       {(font.description || font.designer) && (
-        <section className="py-16 md:py-24 border-t border-gray-800/50">
+        <section className="py-16 md:py-24 border-t border-gray-200/50">
           <div className="max-w-6xl mx-auto px-6">
             <ScrollReveal>
               <ChromaticText
@@ -480,16 +480,16 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             </ScrollReveal>
 
             <ScrollReveal delay={0.1}>
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8">
                 {font.description && (
-                  <p className="text-gray-300 text-lg leading-relaxed mb-6">
+                  <p className="text-gray-700 text-lg leading-relaxed mb-6">
                     {font.description}
                   </p>
                 )}
 
                 {font.designer && (
-                  <p className="text-gray-400 mb-6">
-                    <span className="text-gray-500">מעצב:</span>{" "}
+                  <p className="text-gray-700 mb-6">
+                    <span className="text-gray-600">מעצב:</span>{" "}
                     {font.designer}
                   </p>
                 )}
@@ -512,7 +512,7 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
       {/*  7. DOWNLOAD / PURCHASE                                   */}
       {/* ======================================================== */}
       {font.styles.length > 0 && (
-        <section className="py-16 md:py-24 border-t border-gray-800/50">
+        <section className="py-16 md:py-24 border-t border-gray-200/50">
           <div className="max-w-6xl mx-auto px-6">
             <ScrollReveal>
               <ChromaticText
@@ -524,11 +524,11 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
             </ScrollReveal>
 
             <ScrollReveal delay={0.1}>
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-8">
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-8">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-800">
+                      <tr className="text-gray-700 border-b border-gray-200">
                         <th className="text-right py-3 px-2 font-medium">
                           סגנון
                         </th>
@@ -547,20 +547,20 @@ export default function FontDetailClient({ font }: { font: FontFamily }) {
                       {font.styles.map((style) => (
                         <tr
                           key={style.id}
-                          className="border-b border-gray-800/50"
+                          className="border-b border-gray-200/50"
                         >
-                          <td className="py-3 px-2 text-white font-medium">
+                          <td className="py-3 px-2 text-black font-medium">
                             {style.name}
                           </td>
                           <td className="py-3 px-2">
                             <FontWeightBadge weight={style.weight} />
                           </td>
-                          <td className="py-3 px-2 text-white">
+                          <td className="py-3 px-2 text-black">
                             {style.pricePersonal === 0
                               ? "חינם"
                               : `${style.pricePersonal}₪`}
                           </td>
-                          <td className="py-3 px-2 text-white">
+                          <td className="py-3 px-2 text-black">
                             {style.priceCommercial === 0
                               ? "חינם"
                               : `${style.priceCommercial}₪`}

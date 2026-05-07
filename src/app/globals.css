@@ -117,8 +117,8 @@ html {
 
 
 body {
-  background-color: white;
-  color: #FFFFFF;
+  background-color: #FFFFFF;
+  color: #000000;
   font-family: "Birzia", "Meruba", "Anomalia", system-ui, sans-serif;
   overflow-x: hidden;
 }
@@ -433,7 +433,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: #FFFFFF;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -448,7 +448,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Firefox scrollbar */
 html, body, div, span, p, a, button, input, select, textarea, li, ul, nav, header, footer, section, h1, h2, h3, h4, h5, h6 {
   scrollbar-width: thin;
-  scrollbar-color: #E503A2 #000000;
+  scrollbar-color: #E503A2 #FFFFFF;
 }
 
 /* Loader — hide navbar logo during animation */
@@ -528,7 +528,7 @@ html.loader-active #smooth-content {
   }
   100% {
     stroke-dashoffset: 0;
-    fill: var(--path-fill, white);
+    fill: var(--path-fill, black);
     stroke-width: 0;
   }
 }
@@ -553,7 +553,7 @@ html.loader-active #smooth-content {
 
   .loader-path {
     animation: none !important;
-    fill: var(--path-fill, white) !important;
+    fill: var(--path-fill, black) !important;
     stroke-width: 0 !important;
   }
 }

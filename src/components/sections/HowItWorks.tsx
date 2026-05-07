@@ -289,7 +289,7 @@ export default function HowItWorks() {
     <section
       ref={sectionRef}
       id="how-it-works"
-      className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20 bg-black"
+      className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20 bg-white"
     >
       {/* Icon — right side, large, subtle */}
       <div className="absolute top-1/2 right-[15%] z-0 pointer-events-none hidden lg:block" style={{ transform: "translateY(calc(-50% + 30px)) translateX(10px)" }}>
@@ -315,7 +315,7 @@ export default function HowItWorks() {
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
-        <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full" data-text="איך זה עובד?">
+        <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full" data-text="איך זה עובד?">
           איך זה עובד?
         </h2>
       </div>
@@ -409,7 +409,6 @@ export default function HowItWorks() {
                   style={{
                     width: el.width,
                     height: el.height,
-                    filter: el.invertColors ? "brightness(0) invert(1)" : undefined,
                   }}
                 />
               </div>
@@ -442,7 +441,7 @@ export default function HowItWorks() {
           transition: "transform 0.1s ease-out, opacity 0.2s ease-out",
         }}
       >
-        <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full" data-text="שיחה אחת. אתר שלם!">
+        <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-black w-full" data-text="שיחה אחת. אתר שלם!">
           שיחה אחת. אתר שלם!
         </h3>
       </div>

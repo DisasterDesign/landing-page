@@ -29,14 +29,14 @@ export default function CookieConsent() {
     <AnimatePresence>
       {show && (
         <motion.div
-          className="fixed bottom-0 left-0 right-0 z-[90] bg-gray-900 border-t border-gray-800 p-6"
+          className="fixed bottom-0 left-0 right-0 z-[90] bg-white border-t border-gray-200 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] p-6"
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-300 text-sm text-center md:text-right">
+            <p className="text-gray-700 text-sm text-center md:text-right">
               אנחנו משתמשים בעוגיות כדי לשפר את חוויית הגלישה שלך. ניתן לבחור אילו עוגיות לאשר.
             </p>
             <div className="flex gap-3 shrink-0">

@@ -46,7 +46,7 @@ export default async function ProjectPage({ params }: Props) {
     PORTFOLIO_PROJECTS[(currentIndex + 1) % PORTFOLIO_PROJECTS.length];
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       {/* Hero */}
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-5xl mx-auto">
@@ -59,7 +59,7 @@ export default async function ProjectPage({ params }: Props) {
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl max-w-2xl">
+            <p className="text-gray-700 text-lg md:text-xl max-w-2xl">
               {project.description}
             </p>
           </ScrollReveal>
@@ -70,7 +70,7 @@ export default async function ProjectPage({ params }: Props) {
       <section className="px-6 pb-16">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <div className="aspect-video w-full rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-800 flex items-center justify-center">
+            <div className="aspect-video w-full rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-200 flex items-center justify-center">
               <span className="text-4xl font-bold text-gray-700">
                 {project.title}
               </span>
@@ -84,10 +84,10 @@ export default async function ProjectPage({ params }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             <ScrollReveal className="md:col-span-2">
-              <h2 className="text-3xl font-bold text-white mb-6">
+              <h2 className="text-3xl font-bold text-black mb-6">
                 על <span className="text-pink">הפרויקט</span>
               </h2>
-              <div className="space-y-4 text-gray-400 leading-relaxed">
+              <div className="space-y-4 text-gray-700 leading-relaxed">
                 <p>
                   פרויקט {project.title} הוא {project.description}. העבודה כללה
                   תהליך מעמיק של אפיון, עיצוב ופיתוח כדי ליצור חוויית משתמש
@@ -104,22 +104,22 @@ export default async function ProjectPage({ params }: Props) {
             <ScrollReveal delay={0.2}>
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">
+                  <h3 className="text-sm text-gray-600 font-bold uppercase tracking-wider mb-1">
                     לקוח
                   </h3>
-                  <p className="text-white font-bold">{project.client}</p>
+                  <p className="text-black font-bold">{project.client}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">
+                  <h3 className="text-sm text-gray-600 font-bold uppercase tracking-wider mb-1">
                     קטגוריה
                   </h3>
-                  <p className="text-white font-bold">{project.category}</p>
+                  <p className="text-black font-bold">{project.category}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">
+                  <h3 className="text-sm text-gray-600 font-bold uppercase tracking-wider mb-1">
                     שירותים
                   </h3>
-                  <p className="text-white font-bold">
+                  <p className="text-black font-bold">
                     עיצוב, פיתוח, SEO
                   </p>
                 </div>
@@ -130,14 +130,14 @@ export default async function ProjectPage({ params }: Props) {
       </section>
 
       {/* Next Project */}
-      <section className="py-20 px-6 border-t border-gray-800">
+      <section className="py-20 px-6 border-t border-gray-200">
         <div className="max-w-5xl mx-auto text-center">
           <ScrollReveal>
-            <p className="text-gray-500 text-sm uppercase tracking-wider mb-4">
+            <p className="text-gray-600 text-sm uppercase tracking-wider mb-4">
               הפרויקט הבא
             </p>
             <Link href={`/portfolio/${nextProject.slug}`}>
-              <h2 className="text-4xl md:text-6xl font-extrabold text-white hover:text-pink transition-colors mb-8">
+              <h2 className="text-4xl md:text-6xl font-extrabold text-black hover:text-pink transition-colors mb-8">
                 {nextProject.title}
               </h2>
             </Link>

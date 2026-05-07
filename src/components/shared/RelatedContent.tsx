@@ -20,22 +20,22 @@ export default function RelatedContent({
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-16 pt-8 border-t border-gray-800">
-      <h2 className="text-2xl font-bold text-white mb-6">{title}</h2>
+    <section className="mt-16 pt-8 border-t border-gray-200">
+      <h2 className="text-2xl font-bold text-black mb-6">{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((item) => (
           <Link key={item.href} href={item.href} className="block group">
-            <Card className="h-full transition-all group-hover:border-gray-600">
+            <Card className="h-full transition-all group-hover:border-gray-400">
               {item.category && (
-                <span className="text-cyan text-xs font-medium mb-2 block">
+                <span className="text-cyan-dark text-xs font-medium mb-2 block">
                   {item.category}
                 </span>
               )}
-              <h3 className="text-white font-bold group-hover:text-pink transition-colors">
+              <h3 className="text-black font-bold group-hover:text-pink transition-colors">
                 {item.title}
               </h3>
               {item.description && (
-                <p className="text-gray-400 text-sm mt-2 line-clamp-2">
+                <p className="text-gray-700 text-sm mt-2 line-clamp-2">
                   {item.description}
                 </p>
               )}

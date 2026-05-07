@@ -22,7 +22,7 @@ export default function TermsPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "תנאי שימוש", url: `${SITE_URL}/terms` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
           <ScrollReveal>
@@ -32,9 +32,9 @@ export default function TermsPage() {
           </ScrollReveal>
 
           <ScrollReveal delay={0.2}>
-            <div className="prose-invert space-y-8 text-gray-400 leading-relaxed">
+            <div className="prose space-y-8 text-gray-700 leading-relaxed">
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">1. כללי</h2>
+                <h2 className="text-xl font-bold text-black mb-3">1. כללי</h2>
                 <p>
                   ברוכים הבאים לאתר של Fuzion Webz (להלן: &quot;האתר&quot;).
                   השימוש באתר ובשירותים המוצעים בו כפוף לתנאי שימוש אלה. עצם
@@ -44,7 +44,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   2. השירותים
                 </h2>
                 <p>
@@ -56,7 +56,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   3. קניין רוחני
                 </h2>
                 <p>
@@ -68,7 +68,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   4. הגבלת אחריות
                 </h2>
                 <p>
@@ -80,7 +80,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   5. תשלומים וביטולים
                 </h2>
                 <p>
@@ -91,7 +91,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   6. פרטיות
                 </h2>
                 <p>
@@ -102,7 +102,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   7. שינויים בתנאים
                 </h2>
                 <p>
@@ -113,7 +113,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   8. דין חל וסמכות שיפוט
                 </h2>
                 <p>
@@ -123,7 +123,7 @@ export default function TermsPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   9. יצירת קשר
                 </h2>
                 <p>
@@ -138,7 +138,7 @@ export default function TermsPage() {
                 </p>
               </div>
 
-              <p className="text-gray-500 text-sm mt-12">
+              <p className="text-gray-600 text-sm mt-12">
                 עדכון אחרון: מרץ 2026
               </p>
             </div>

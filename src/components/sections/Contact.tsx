@@ -52,20 +52,20 @@ export default function Contact() {
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 
   return (
-    <section id="contact" className="relative bg-black py-24 md:py-32 px-6">
+    <section id="contact" className="relative bg-white py-24 md:py-32 px-6">
       <Toaster
         position="top-center"
         toastOptions={{
-          style: { background: "#1A1A1A", color: "#fff", border: "1px solid #2A2A2A" },
+          style: { background: "#FFFFFF", color: "#111", border: "1px solid #E5E7EB" },
         }}
       />
 
       <div className="max-w-4xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-4" data-text="בואו נדבר">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-4" data-text="בואו נדבר">
             בואו נדבר
           </h2>
-          <p className="text-gray-400 text-center text-lg mb-16">
+          <p className="text-gray-700 text-center text-lg mb-16">
             ספרו לנו על הפרויקט שלכם ונחזור אליכם בהקדם
           </p>
         </ScrollReveal>
@@ -113,11 +113,11 @@ export default function Contact() {
                 <select
                   value={formData.service}
                   onChange={(e) => setFormData({ ...formData, service: e.target.value })}
-                  className="w-full bg-transparent border-b-2 border-gray-700 px-0 py-3 text-white font-meruba outline-none focus:border-cyan transition-all duration-300 appearance-none cursor-pointer"
+                  className="w-full bg-transparent border-b-2 border-gray-300 px-0 py-3 text-black font-meruba outline-none focus:border-pink transition-all duration-300 appearance-none cursor-pointer"
                 >
-                  <option value="" className="bg-gray-900">בחרו שירות</option>
+                  <option value="" className="bg-white">בחרו שירות</option>
                   {SERVICES.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-gray-900">
+                    <option key={s.id} value={s.id} className="bg-white">
                       {s.title}
                     </option>
                   ))}
@@ -142,7 +142,7 @@ export default function Contact() {
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="chromatic-hover flex items-center gap-2 text-white transition-colors font-bold"
+                className="chromatic-hover flex items-center gap-2 text-black transition-colors font-bold"
                 data-text="דברו איתנו בוואטסאפ"
                 data-cursor="pointer"
               >

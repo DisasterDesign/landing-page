@@ -67,16 +67,16 @@ export default function BlogPageClient() {
   }, [page, category]);
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
-            <h1 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-6" data-text="הבלוג">
+            <h1 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-6" data-text="הבלוג">
               הבלוג
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl text-center max-w-2xl mx-auto mb-12">
+            <p className="text-gray-700 text-lg md:text-xl text-center max-w-2xl mx-auto mb-12">
               תוכן מקצועי בנושאי עיצוב, פיתוח ושיווק דיגיטלי
             </p>
           </ScrollReveal>
@@ -93,7 +93,7 @@ export default function BlogPageClient() {
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     !category
                       ? "bg-pink text-white border-pink"
-                      : "bg-transparent text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white"
+                      : "bg-transparent text-gray-700 border-gray-300 hover:border-gray-400 hover:text-black"
                   }`}
                 >
                   הכל
@@ -108,7 +108,7 @@ export default function BlogPageClient() {
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                       category === cat
                         ? "bg-pink text-white border-pink"
-                        : "bg-transparent text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white"
+                        : "bg-transparent text-gray-700 border-gray-300 hover:border-gray-400 hover:text-black"
                     }`}
                   >
                     {cat}
@@ -123,18 +123,18 @@ export default function BlogPageClient() {
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div
                   key={i}
-                  className="bg-gray-900 border border-gray-800 rounded-2xl p-6 animate-pulse"
+                  className="bg-gray-50 border border-gray-200 rounded-2xl p-6 animate-pulse"
                 >
-                  <div className="aspect-video bg-gray-800 rounded-xl mb-4" />
-                  <div className="h-4 bg-gray-800 rounded w-20 mb-3" />
-                  <div className="h-6 bg-gray-800 rounded w-3/4 mb-2" />
-                  <div className="h-4 bg-gray-800 rounded w-full" />
+                  <div className="aspect-video bg-gray-100 rounded-xl mb-4" />
+                  <div className="h-4 bg-gray-100 rounded w-20 mb-3" />
+                  <div className="h-6 bg-gray-100 rounded w-3/4 mb-2" />
+                  <div className="h-4 bg-gray-100 rounded w-full" />
                 </div>
               ))}
             </div>
           ) : posts.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-gray-500 text-lg">
+              <p className="text-gray-600 text-lg">
                 {category ? "אין מאמרים בקטגוריה זו" : "אין מאמרים עדיין. בקרוב!"}
               </p>
             </div>
@@ -149,7 +149,7 @@ export default function BlogPageClient() {
                       <div className="absolute inset-0 -translate-x-1.5 -translate-y-1.5 bg-pink/20 rounded-2xl transition-transform duration-300 group-hover:-translate-x-2.5 group-hover:-translate-y-2.5 pointer-events-none" />
 
                       {/* Main card */}
-                      <div className="relative bg-gray-900 border border-gray-800 rounded-2xl p-6 transition-all duration-300 group-hover:border-gray-600 group-hover:-translate-y-1">
+                      <div className="relative bg-gray-50 border border-gray-200 rounded-2xl p-6 transition-all duration-300 group-hover:border-gray-400 group-hover:-translate-y-1">
                         {/* Cover image — falls back to generated OG card when coverImage is null */}
                         <div className="aspect-video rounded-xl mb-4 overflow-hidden">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -169,19 +169,19 @@ export default function BlogPageClient() {
                         )}
 
                         {/* Title */}
-                        <h2 className="text-lg font-bold text-white mt-2 mb-2 transition-colors group-hover:text-pink">
+                        <h2 className="text-lg font-bold text-black mt-2 mb-2 transition-colors group-hover:text-pink">
                           {post.title}
                         </h2>
 
                         {/* Excerpt */}
                         {post.excerpt && (
-                          <p className="text-gray-400 text-sm line-clamp-2 mb-4">
+                          <p className="text-gray-700 text-sm line-clamp-2 mb-4">
                             {post.excerpt}
                           </p>
                         )}
 
                         {/* Date + Author */}
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
                           {post.publishedAt && (
                             <span>
                               {new Date(post.publishedAt).toLocaleDateString("he-IL", {
@@ -213,7 +213,7 @@ export default function BlogPageClient() {
                     className={`w-11 h-11 rounded-full text-sm font-medium transition-colors ${
                       page === p
                         ? "bg-pink text-white"
-                        : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-black"
                     }`}
                   >
                     {p}

@@ -107,7 +107,7 @@ export default function Loader() {
     <AnimatePresence>
       {show && (
         <motion.div
-          className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
+          className="fixed inset-0 z-[9999] bg-white flex items-center justify-center"
           animate={{ opacity: isFading ? 0 : 1 }}
           transition={{ duration: FADE_DURATION }}
           onAnimationComplete={handleAnimationComplete}
@@ -165,24 +165,27 @@ export default function Loader() {
               className="absolute inset-0 w-full h-full"
             >
               <g>
-                {PATHS.map((p, i) => (
-                  <path
-                    key={i}
-                    d={p.d}
-                    className="loader-path"
-                    style={{
-                      ["--path-fill" as string]: p.fill,
-                      fill: drawComplete ? p.fill : "transparent",
-                      stroke: drawComplete ? "none" : "white",
-                      strokeWidth: drawComplete ? 0 : 2,
-                      strokeDasharray: drawComplete ? "none" : 3000,
-                      strokeDashoffset: drawComplete ? 0 : 3000,
-                      animation: drawComplete
-                        ? "none"
-                        : `drawPath ${DRAW_DURATION}s ease ${i * STAGGER}s forwards`,
-                    }}
-                  />
-                ))}
+                {PATHS.map((p, i) => {
+                  const fill = p.fill === "white" ? "#000000" : p.fill;
+                  return (
+                    <path
+                      key={i}
+                      d={p.d}
+                      className="loader-path"
+                      style={{
+                        ["--path-fill" as string]: fill,
+                        fill: drawComplete ? fill : "transparent",
+                        stroke: drawComplete ? "none" : "black",
+                        strokeWidth: drawComplete ? 0 : 2,
+                        strokeDasharray: drawComplete ? "none" : 3000,
+                        strokeDashoffset: drawComplete ? 0 : 3000,
+                        animation: drawComplete
+                          ? "none"
+                          : `drawPath ${DRAW_DURATION}s ease ${i * STAGGER}s forwards`,
+                      }}
+                    />
+                  );
+                })}
               </g>
             </svg>
           </motion.div>

@@ -84,7 +84,7 @@ export default function CustomCursor() {
       transition={{ type: "spring", damping: 20, stiffness: 300 }}
     >
       <div
-        className="rounded-full bg-white shadow-[0_0_0_1.5px_rgba(0,0,0,0.85),0_2px_10px_rgba(0,0,0,0.35)]"
+        className="rounded-full bg-black shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_2px_10px_rgba(0,0,0,0.25)]"
         style={{
           width: cursorVariant === "default" ? 14 : "100%",
           height: cursorVariant === "default" ? 14 : "100%",
@@ -92,10 +92,10 @@ export default function CustomCursor() {
         }}
       />
       {cursorVariant === "view" && (
-        <span className="absolute text-black text-xs font-bold">View</span>
+        <span className="absolute text-white text-xs font-bold">View</span>
       )}
       {cursorVariant === "drag" && (
-        <span className="absolute text-black text-xs font-bold">⟷</span>
+        <span className="absolute text-white text-xs font-bold">⟷</span>
       )}
     </motion.div>
   );

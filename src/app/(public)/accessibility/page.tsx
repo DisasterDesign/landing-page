@@ -22,7 +22,7 @@ export default function AccessibilityPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "נגישות", url: `${SITE_URL}/accessibility` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
           <ScrollReveal>
@@ -32,9 +32,9 @@ export default function AccessibilityPage() {
           </ScrollReveal>
 
           <ScrollReveal delay={0.2}>
-            <div className="prose-invert space-y-8 text-gray-400 leading-relaxed">
+            <div className="prose space-y-8 text-gray-700 leading-relaxed">
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">כללי</h2>
+                <h2 className="text-xl font-bold text-black mb-3">כללי</h2>
                 <p>
                   Fuzion Webz מחויבת להנגשת האתר לאנשים עם מוגבלויות, בהתאם
                   לחוק שוויון זכויות לאנשים עם מוגבלות, תשנ&quot;ח-1998
@@ -45,7 +45,7 @@ export default function AccessibilityPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   התאמות הנגישות שבוצעו באתר
                 </h2>
                 <ul className="list-disc list-inside space-y-2">
@@ -67,7 +67,7 @@ export default function AccessibilityPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   דפדפנים וטכנולוגיות מסייעות
                 </h2>
                 <p>
@@ -78,7 +78,7 @@ export default function AccessibilityPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   פרטי רכז/ת נגישות
                 </h2>
                 <p>
@@ -87,10 +87,10 @@ export default function AccessibilityPage() {
                 </p>
                 <ul className="mt-3 space-y-1">
                   <li>
-                    <strong className="text-white">שם:</strong> צוות Fuzion Webz
+                    <strong className="text-black">שם:</strong> צוות Fuzion Webz
                   </li>
                   <li>
-                    <strong className="text-white">דוא&quot;ל:</strong>{" "}
+                    <strong className="text-black">דוא&quot;ל:</strong>{" "}
                     <a
                       href="mailto:accessibility@fuzionwebz.com"
                       className="text-pink hover:text-cyan transition-colors"
@@ -99,7 +99,7 @@ export default function AccessibilityPage() {
                     </a>
                   </li>
                   <li>
-                    <strong className="text-white">טלפון:</strong>{" "}
+                    <strong className="text-black">טלפון:</strong>{" "}
                     <a
                       href="tel:+972500000000"
                       className="text-pink hover:text-cyan transition-colors"
@@ -111,7 +111,7 @@ export default function AccessibilityPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   תאריך עדכון ההצהרה
                 </h2>
                 <p>הצהרת נגישות זו עודכנה לאחרונה בתאריך: מרץ 2026.</p>

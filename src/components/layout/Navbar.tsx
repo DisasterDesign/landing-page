@@ -120,15 +120,15 @@ export default function Navbar() {
                 >
                   {section.label}
                 </motion.span>
-                {/* White layer — on top */}
-                <span className={`relative text-white ${isActive ? "font-extrabold" : "font-normal"}`}>
+                {/* Black layer — on top */}
+                <span className={`relative text-black ${isActive ? "font-extrabold" : "font-normal"}`}>
                   {section.label}
                 </span>
               </motion.span>
               {/* Dot — right side (outer, near edge), fixed position */}
               <div className="w-4 flex items-center justify-center shrink-0">
                 <motion.span
-                  className="block rounded-full bg-white"
+                  className="block rounded-full bg-black"
                   animate={{ width: isActive ? 14 : 5, height: isActive ? 14 : 5 }}
                   whileHover={{ width: 14, height: 14 }}
                   transition={{ duration: 0.25 }}
@@ -147,15 +147,15 @@ export default function Navbar() {
         data-cursor="pointer"
       >
         <motion.span
-          className="block w-6 h-[1px] bg-white"
+          className="block w-6 h-[1px] bg-black"
           animate={menuOpen ? { rotate: 45, y: 3.5 } : { rotate: 0, y: 0 }}
         />
         <motion.span
-          className="block w-4 h-[1px] bg-white ml-auto"
+          className="block w-4 h-[1px] bg-black ml-auto"
           animate={menuOpen ? { opacity: 0 } : { opacity: 1 }}
         />
         <motion.span
-          className="block w-6 h-[1px] bg-white"
+          className="block w-6 h-[1px] bg-black"
           animate={menuOpen ? { rotate: -45, y: -3.5 } : { rotate: 0, y: 0 }}
         />
       </button>
@@ -164,7 +164,7 @@ export default function Navbar() {
       <AnimatePresence>
         {menuOpen && (
           <motion.div
-            className="lg:hidden absolute inset-0 z-[25] bg-black flex flex-col items-center justify-center"
+            className="lg:hidden absolute inset-0 z-[25] bg-white flex flex-col items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -173,7 +173,7 @@ export default function Navbar() {
             {/* Close button */}
             <button
               onClick={() => setMenuOpen(false)}
-              className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center text-white text-2xl"
+              className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center text-black text-2xl"
               aria-label="סגור תפריט"
             >
               ✕
@@ -193,7 +193,7 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.05 }}
-                  className="text-2xl font-extrabold text-white hover:opacity-60 transition-opacity"
+                  className="text-2xl font-extrabold text-black hover:opacity-60 transition-opacity"
                 >
                   {link.label}
                 </motion.a>

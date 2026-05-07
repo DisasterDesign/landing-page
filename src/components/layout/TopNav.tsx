@@ -21,7 +21,7 @@ export default function TopNav() {
             key={link.href}
             href={link.href}
             className={`text-[13px] font-bold transition-colors duration-200 relative pb-1 ${
-              isActive ? "text-white" : "text-gray-400 hover:text-white"
+              isActive ? "text-black" : "text-gray-500 hover:text-black"
             }`}
             data-cursor="pointer"
           >

@@ -59,7 +59,7 @@ export default function ContactPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "צור קשר", url: `${SITE_URL}/contact` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       {/* Hero */}
       <section className="pt-24 md:pt-32 px-6">
         <div className="max-w-5xl mx-auto text-center">
@@ -69,7 +69,7 @@ export default function ContactPage() {
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto">
+            <p className="text-gray-700 text-lg md:text-xl max-w-2xl mx-auto">
               רוצים לשמוע עוד? יש לכם רעיון לפרויקט? נשמח לשמוע מכם ולעזור
               להפוך את החזון שלכם למציאות.
             </p>
@@ -88,10 +88,10 @@ export default function ContactPage() {
                     <div className="text-cyan mb-4 flex justify-center">
                       {info.icon}
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-2">
+                    <h3 className="text-lg font-bold text-black mb-2">
                       {info.title}
                     </h3>
-                    <p className="text-gray-400">{info.value}</p>
+                    <p className="text-gray-700">{info.value}</p>
                   </Card>
                 </a>
               </ScrollReveal>
@@ -107,8 +107,8 @@ export default function ContactPage() {
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <div className="w-full h-80 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center">
-              <p className="text-gray-500 text-lg">מפה תתווסף בקרוב</p>
+            <div className="w-full h-80 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
+              <p className="text-gray-600 text-lg">מפה תתווסף בקרוב</p>
             </div>
           </ScrollReveal>
         </div>

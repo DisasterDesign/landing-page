@@ -45,19 +45,19 @@ export default function DownloadPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-gray-400">טוען...</p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <p className="text-gray-700">טוען...</p>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center" dir="rtl">
+      <div className="min-h-screen bg-white flex items-center justify-center" dir="rtl">
         <div className="text-center">
           <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-white mb-2">קישור לא תקין</h1>
-          <p className="text-gray-400 mb-6">
+          <h1 className="text-2xl font-bold text-black mb-2">קישור לא תקין</h1>
+          <p className="text-gray-700 mb-6">
             הקישור פג תוקף או שאינו קיים
           </p>
           <Link
@@ -72,33 +72,33 @@ export default function DownloadPage({
   }
 
   return (
-    <div className="min-h-screen bg-black" dir="rtl">
+    <div className="min-h-screen bg-white" dir="rtl">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-lg mx-auto">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8 text-center">
             <div className="text-5xl mb-4">✓</div>
-            <h1 className="text-2xl font-bold text-white mb-2">
+            <h1 className="text-2xl font-bold text-black mb-2">
               הפונט שלך מוכן!
             </h1>
-            <p className="text-gray-400 mb-6">{data.fontFamily}</p>
+            <p className="text-gray-700 mb-6">{data.fontFamily}</p>
 
             {/* Order Info */}
-            <div className="bg-gray-800 rounded-xl p-4 mb-6 text-right space-y-2 text-sm">
+            <div className="bg-gray-100 rounded-xl p-4 mb-6 text-right space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">רישיון:</span>
-                <span className="text-white">
+                <span className="text-gray-700">רישיון:</span>
+                <span className="text-black">
                   {licenseLabels[data.licenseType] || data.licenseType}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">תאריך:</span>
-                <span className="text-white">
+                <span className="text-gray-700">תאריך:</span>
+                <span className="text-black">
                   {new Date(data.createdAt).toLocaleDateString("he-IL")}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">הורדות:</span>
-                <span className="text-white">{data.downloadCount}</span>
+                <span className="text-gray-700">הורדות:</span>
+                <span className="text-black">{data.downloadCount}</span>
               </div>
             </div>
 
@@ -118,7 +118,7 @@ export default function DownloadPage({
 
             <Link
               href="/fonts"
-              className="inline-block text-gray-500 hover:text-gray-300 text-sm mt-6 transition-colors"
+              className="inline-block text-gray-600 hover:text-gray-700 text-sm mt-6 transition-colors"
             >
               ← חזרה לחנות הפונטים
             </Link>

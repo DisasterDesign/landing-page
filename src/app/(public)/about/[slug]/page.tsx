@@ -77,7 +77,7 @@ export default async function AuthorPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
       />
 
-      <div className="min-h-screen bg-black">
+      <div className="min-h-screen bg-white">
         <section className="py-24 md:py-32 px-6">
           <div className="max-w-3xl mx-auto">
             <ScrollReveal>
@@ -94,7 +94,7 @@ export default async function AuthorPage({
 
             <ScrollReveal delay={0.2}>
               <Card glowColor="cyan" className="text-center">
-                <p className="text-gray-300 leading-relaxed text-lg">
+                <p className="text-gray-700 leading-relaxed text-lg">
                   {member.bio}
                 </p>
                 <div className="mt-6">

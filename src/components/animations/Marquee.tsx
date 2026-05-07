@@ -53,7 +53,7 @@ export default function Marquee({
           font-family: "Meruba", "Anomalia", system-ui, sans-serif;
           font-size: clamp(2.5rem, 6vw, 5rem);
           font-weight: 700;
-          color: white;
+          color: black;
           padding: 0 1rem;
           text-shadow: -2px 1px 0 rgba(229,3,162,0.5), 2px -1px 0 rgba(1,255,255,0.5);
         }

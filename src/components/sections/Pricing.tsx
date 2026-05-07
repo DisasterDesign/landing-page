@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils";
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="relative bg-black py-24 md:py-32 px-6">
+    <section id="pricing" className="relative bg-white py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="מסלולי שירות">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="מסלולי שירות">
             מסלולי שירות
           </h2>
         </ScrollReveal>
@@ -20,10 +20,10 @@ export default function Pricing() {
             <ScrollReveal key={tier.id} delay={i * 0.1}>
               <div
                 className={cn(
-                  "relative bg-gray-900 border rounded-2xl p-5 md:p-8 transition-all duration-300 h-full flex flex-col",
+                  "relative bg-white border rounded-2xl p-5 md:p-8 transition-all duration-300 h-full flex flex-col",
                   tier.recommended
-                    ? "border-pink shadow-[0_0_40px_rgba(229,3,162,0.2)] md:-translate-y-4"
-                    : "border-gray-800 hover:border-gray-700"
+                    ? "border-pink shadow-[0_0_40px_rgba(229,3,162,0.18)] md:-translate-y-4"
+                    : "border-gray-200 hover:border-gray-400 shadow-sm"
                 )}
               >
                 {tier.recommended && (
@@ -32,14 +32,14 @@ export default function Pricing() {
                   </div>
                 )}
 
-                <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
+                <h3 className="text-2xl font-bold mb-2 text-black">{tier.name}</h3>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-pink">
                     {tier.price}
                   </span>
-                  <span className="text-gray-400">{tier.currency} / {tier.period}</span>
+                  <span className="text-gray-600">{tier.currency} / {tier.period}</span>
                 </div>
-                <p className="text-sm text-gray-400 mb-6 leading-relaxed">{tier.tagline}</p>
+                <p className="text-sm text-gray-600 mb-6 leading-relaxed">{tier.tagline}</p>
 
                 <div className="space-y-6 mb-8 flex-1">
                   {tier.sections.map((section, s) => (
@@ -50,19 +50,19 @@ export default function Pricing() {
                       <ul className="space-y-2.5">
                         {section.items.map((item, j) => (
                           <li key={j} className="flex items-start gap-3">
-                            <span className="shrink-0 mt-0.5 text-cyan">✓</span>
-                            <span className="text-sm text-gray-300">{item}</span>
+                            <span className="shrink-0 mt-0.5 text-cyan-dark">✓</span>
+                            <span className="text-sm text-gray-700">{item}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   ))}
 
-                  <div className="pt-4 border-t border-gray-800">
+                  <div className="pt-4 border-t border-gray-200">
                     <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">
                       מתאים ל
                     </h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">{tier.suitableFor}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed">{tier.suitableFor}</p>
                   </div>
                 </div>
 
@@ -72,7 +72,7 @@ export default function Pricing() {
                     "block text-center py-3 rounded-full font-bold transition-all duration-300",
                     tier.recommended
                       ? "bg-pink text-white hover:bg-pink-light hover:shadow-[0_0_30px_rgba(229,3,162,0.4)]"
-                      : "border-2 border-white text-white hover:border-cyan hover:text-cyan hover:shadow-[0_0_20px_rgba(229,3,162,0.3)]"
+                      : "border-2 border-black text-black hover:border-pink hover:text-pink hover:shadow-[0_0_20px_rgba(229,3,162,0.25)]"
                   )}
                   data-cursor="pointer"
                 >
@@ -86,14 +86,14 @@ export default function Pricing() {
         {/* Add-ons */}
         <ScrollReveal>
           <div className="text-center">
-            <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full mb-6" data-text="בתשלום נוסף">
+            <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-black w-full mb-6" data-text="בתשלום נוסף">
               בתשלום נוסף
             </h3>
             <div className="flex flex-wrap justify-center gap-3">
               {PRICING_ADDONS.map((addon) => (
                 <span
                   key={addon}
-                  className="chromatic-hover px-4 py-2 bg-gray-900 border border-gray-800 rounded-full text-sm text-gray-300 hover:border-gray-600 transition-all duration-300"
+                  className="chromatic-hover px-4 py-2 bg-white border border-gray-200 rounded-full text-sm text-gray-700 hover:border-gray-500 transition-all duration-300"
                   data-text={addon}
                 >
                   {addon}

@@ -62,10 +62,10 @@ function VideoCard({ project }: { project: Project }) {
         {/* Main card */}
         <motion.div
           className="relative rounded-[18px] overflow-hidden"
-          animate={{ borderColor: hovered ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0)" }}
+          animate={{ borderColor: hovered ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0)" }}
           style={{ borderWidth: "1px", borderStyle: "solid" }}
         >
-          <div className="aspect-video relative bg-gray-900">
+          <div className="aspect-video relative bg-gray-100">
             <video
               ref={videoRef}
               src={project.video}
@@ -77,14 +77,14 @@ function VideoCard({ project }: { project: Project }) {
               className="w-full h-full object-cover"
             />
 
-            {/* Overlay gradient */}
+            {/* Overlay gradient — keep dark gradient over the video so the white text on top reads */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
             {/* Project name */}
             <div className="absolute bottom-0 left-0 right-0 p-5">
               <h3 className="text-white text-lg font-bold">{project.name}</h3>
               <motion.span
-                className="text-gray-400 text-sm block"
+                className="text-gray-200 text-sm block"
                 animate={{ opacity: hovered ? 1 : 0, y: hovered ? 0 : 5 }}
                 transition={{ duration: 0.3 }}
               >
@@ -144,10 +144,10 @@ export default function Portfolio() {
   };
 
   return (
-    <section id="portfolio" className="relative bg-black py-24 md:py-32" aria-roledescription="carousel" aria-label="תיק עבודות">
+    <section id="portfolio" className="relative bg-white py-24 md:py-32" aria-roledescription="carousel" aria-label="תיק עבודות">
       <div className="max-w-6xl mx-auto px-6">
         <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="העבודות שלנו">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="העבודות שלנו">
             העבודות שלנו
           </h2>
         </ScrollReveal>
@@ -205,11 +205,11 @@ export default function Portfolio() {
       <div dir="ltr" className="flex items-center justify-center gap-4 mt-10">
         <button
           onClick={prev}
-          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
+          className="w-11 h-11 border border-black/20 rounded-full flex items-center justify-center hover:border-black/60 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
           aria-label="פרויקט קודם"
           data-cursor="pointer"
         >
-          <span className="text-white text-sm">←</span>
+          <span className="text-black text-sm">←</span>
         </button>
         <div className="flex gap-3" role="tablist" aria-label="בחירת פרויקט">
           {projects.map((p, i) => (
@@ -217,7 +217,7 @@ export default function Portfolio() {
               key={i}
               onClick={() => setActiveIndex(i)}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === activeIndex ? "bg-white w-8" : "bg-white/20 w-2 hover:bg-white/40"
+                i === activeIndex ? "bg-black w-8" : "bg-black/20 w-2 hover:bg-black/40"
               }`}
               role="tab"
               aria-selected={i === activeIndex}
@@ -228,11 +228,11 @@ export default function Portfolio() {
         </div>
         <button
           onClick={next}
-          className="w-11 h-11 border border-white/20 rounded-full flex items-center justify-center hover:border-white/50 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
+          className="w-11 h-11 border border-black/20 rounded-full flex items-center justify-center hover:border-black/60 hover:shadow-[0_0_20px_rgba(229,3,162,0.3)] transition-all"
           aria-label="פרויקט הבא"
           data-cursor="pointer"
         >
-          <span className="text-white text-sm">→</span>
+          <span className="text-black text-sm">→</span>
         </button>
       </div>
     </section>

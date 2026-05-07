@@ -29,9 +29,9 @@ export default function Button({
         variant === "primary" &&
           "bg-pink text-white rounded-full hover:bg-pink-light hover:shadow-[0_0_40px_rgba(229,3,162,0.5)] active:scale-95",
         variant === "secondary" &&
-          "border-2 border-white text-white rounded-full hover:border-cyan hover:text-cyan hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] active:scale-95",
+          "border-2 border-black text-black rounded-full hover:border-pink hover:text-pink hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] active:scale-95",
         variant === "ghost" &&
-          "text-white hover:opacity-80 hover:shadow-[0_0_20px_rgba(229,3,162,0.2)] active:scale-95",
+          "text-black hover:opacity-70 hover:shadow-[0_0_20px_rgba(229,3,162,0.2)] active:scale-95",
         className
       )}
       data-cursor="pointer"

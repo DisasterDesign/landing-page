@@ -27,8 +27,8 @@ function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; inde
           className="absolute inset-0 rounded-[18px] bg-[#C80084] transition-transform duration-500 group-hover:-translate-x-[5px] group-hover:translate-y-[5px]"
           style={{ transform: "translate(-3px, 3px)" }}
         />
-        <div className="relative bg-black rounded-[18px] border border-gray-800/50 p-8 md:p-10 overflow-hidden transition-all duration-500 group-hover:border-gray-700/50">
-          <div className="relative w-[calc(100%+4rem)] md:w-[calc(100%+5rem)] aspect-[4/3] overflow-hidden -mt-8 md:-mt-10 -mx-8 md:-mx-10 mb-8 bg-gray-900">
+        <div className="relative bg-white rounded-[18px] border border-gray-200/80 p-8 md:p-10 overflow-hidden transition-all duration-500 group-hover:border-gray-300">
+          <div className="relative w-[calc(100%+4rem)] md:w-[calc(100%+5rem)] aspect-[4/3] overflow-hidden -mt-8 md:-mt-10 -mx-8 md:-mx-10 mb-8 bg-gray-100">
             <Image
               src={member.image}
               alt={member.nameHe}
@@ -38,15 +38,15 @@ function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; inde
               priority={index === 0}
             />
             <div className="absolute inset-0 bg-gradient-to-br from-[#C80084]/10 via-transparent to-[#00D0CE]/10 mix-blend-overlay pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           </div>
           <div className="relative mb-1">
             <span className="absolute text-[#C80084] text-2xl md:text-3xl font-extrabold" style={{ transform: "translate(-1px, 1px)" }} aria-hidden="true">{member.nameHe}</span>
             <span className="absolute text-[#00D0CE] text-2xl md:text-3xl font-extrabold" style={{ transform: "translate(1px, -1px)" }} aria-hidden="true">{member.nameHe}</span>
-            <h3 className="relative text-2xl md:text-3xl font-extrabold text-white">{member.nameHe}</h3>
+            <h3 className="relative text-2xl md:text-3xl font-extrabold text-black">{member.nameHe}</h3>
           </div>
           <p className="text-gray-500 text-sm font-bold mb-5 mt-2">{member.roleHe}</p>
-          <p className="text-gray-400 leading-relaxed text-[15px]">{member.bio}</p>
+          <p className="text-gray-700 leading-relaxed text-[15px]">{member.bio}</p>
         </div>
       </div>
     </motion.div>
@@ -93,7 +93,7 @@ function ValuesStepper() {
     <div ref={outerRef} style={{ minHeight: "250vh" }}>
     {/* Sticky inner — pins while scrolling through outer */}
     <div className="sticky top-0 h-screen flex flex-col items-center justify-center">
-    <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-white w-full mb-12" data-text="הערכים שלנו">
+    <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-black w-full mb-12" data-text="הערכים שלנו">
       הערכים שלנו
     </h3>
     <div className="max-w-6xl mx-auto w-full px-6">
@@ -106,7 +106,7 @@ function ValuesStepper() {
               animate={{
                 width: activeIndex === i ? 14 : 6,
                 height: activeIndex === i ? 14 : 6,
-                backgroundColor: activeIndex === i ? "#fff" : "rgba(255,255,255,0.15)",
+                backgroundColor: activeIndex === i ? "#000" : "rgba(0,0,0,0.15)",
                 boxShadow: activeIndex === i ? "0 0 15px rgba(229,3,162,0.3), 0 0 30px rgba(1,255,255,0.15)" : "none",
               }}
               transition={{ duration: 0.4 }}
@@ -117,7 +117,7 @@ function ValuesStepper() {
                 animate={{
                   background: i < activeIndex
                     ? "linear-gradient(to right, #C80084, #00D0CE)"
-                    : "rgba(255,255,255,0.08)",
+                    : "rgba(0,0,0,0.1)",
                 }}
                 transition={{ duration: 0.4 }}
               />
@@ -149,15 +149,15 @@ function ValuesStepper() {
                     <span className="absolute text-4xl sm:text-5xl md:text-6xl font-extrabold text-[#00D0CE] opacity-50" style={{ transform: "translate(2px, -1px)" }} aria-hidden="true">{value.number}</span>
                   </>
                 )}
-                <span className={`relative text-4xl sm:text-5xl md:text-6xl font-extrabold ${isActive ? "text-white" : "text-white/10"} transition-colors duration-500`}>
+                <span className={`relative text-4xl sm:text-5xl md:text-6xl font-extrabold ${isActive ? "text-black" : "text-black/10"} transition-colors duration-500`}>
                   {value.number}
                 </span>
               </div>
 
-              <h4 className={`text-lg md:text-xl font-bold mt-3 mb-2 transition-colors duration-500 ${isActive ? "text-white" : "text-white/30"}`}>
+              <h4 className={`text-lg md:text-xl font-bold mt-3 mb-2 transition-colors duration-500 ${isActive ? "text-black" : "text-black/30"}`}>
                 {value.title}
               </h4>
-              <p className={`text-[14px] leading-relaxed transition-opacity duration-500 ${isActive ? "text-gray-400" : "text-gray-600"}`}>
+              <p className={`text-[14px] leading-relaxed transition-opacity duration-500 ${isActive ? "text-gray-700" : "text-gray-400"}`}>
                 {value.description}
               </p>
 
@@ -181,10 +181,10 @@ function ValuesStepper() {
 
 export default function AboutUs() {
   return (
-    <section id="about" className="relative bg-black py-24 md:py-32 px-6">
+    <section id="about" className="relative bg-white py-24 md:py-32 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-20" data-text="מי אנחנו?">
+          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="מי אנחנו?">
             מי אנחנו?
           </h2>
         </ScrollReveal>

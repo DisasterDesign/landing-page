@@ -59,7 +59,7 @@ export default function AboutPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "אודות", url: `${SITE_URL}/about` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       {/* Hero */}
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-5xl mx-auto text-center">
@@ -69,7 +69,7 @@ export default function AboutPage() {
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl leading-relaxed max-w-3xl mx-auto">
+            <p className="text-gray-700 text-lg md:text-xl leading-relaxed max-w-3xl mx-auto">
               Fuzion Webz הוא סטודיו בוטיק לעיצוב ופיתוח אתרים, שנוסד מתוך
               אמונה שכל עסק ראוי לנוכחות דיגיטלית מרשימה ואפקטיבית. אנחנו
               משלבים עיצוב חדשני עם טכנולוגיה מתקדמת כדי ליצור חוויות דיגיטליות
@@ -95,11 +95,11 @@ export default function AboutPage() {
                   <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl font-bold">
                     {member.nameHe.charAt(0)}
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-1">
+                  <h3 className="text-2xl font-bold text-black mb-1">
                     {member.nameHe}
                   </h3>
                   <p className="text-pink font-bold mb-4">{member.roleHe}</p>
-                  <p className="text-gray-400 leading-relaxed text-sm">
+                  <p className="text-gray-700 leading-relaxed text-sm">
                     {member.bio}
                   </p>
                 </Card>
@@ -133,10 +133,10 @@ export default function AboutPage() {
                       <span className="text-cyan font-bold text-lg">
                         {milestone.year}
                       </span>
-                      <h3 className="text-xl font-bold text-white mt-1">
+                      <h3 className="text-xl font-bold text-black mt-1">
                         {milestone.title}
                       </h3>
-                      <p className="text-gray-400 mt-2">
+                      <p className="text-gray-700 mt-2">
                         {milestone.description}
                       </p>
                     </div>
@@ -162,10 +162,10 @@ export default function AboutPage() {
               <ScrollReveal key={value.title} delay={i * 0.1}>
                 <Card glowColor={i % 2 === 0 ? "cyan" : "pink"}>
                   <div className="text-4xl mb-4">{value.icon}</div>
-                  <h3 className="text-xl font-bold text-white mb-2">
+                  <h3 className="text-xl font-bold text-black mb-2">
                     {value.title}
                   </h3>
-                  <p className="text-gray-400">{value.description}</p>
+                  <p className="text-gray-700">{value.description}</p>
                 </Card>
               </ScrollReveal>
             ))}

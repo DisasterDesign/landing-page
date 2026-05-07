@@ -28,10 +28,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       </a>
 
       {/* Frame background */}
-      <div className="fixed inset-0 z-0 bg-white" />
+      <div className="fixed inset-0 z-0 bg-black" />
 
       {/* Content container */}
-      <div className="fixed inset-[5px] md:inset-[10px] z-[1] rounded-[12px] md:rounded-[20px] overflow-hidden bg-black">
+      <div className="fixed inset-[5px] md:inset-[10px] z-[1] rounded-[12px] md:rounded-[20px] overflow-hidden bg-white">
         <GridBackground />
 
         {/* Fixed logo — top left, always visible */}
@@ -48,6 +48,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             height={65}
             priority
             className="h-12 w-auto"
+            style={{ filter: "invert(1)" }}
           />
         </Link>
 
@@ -57,7 +58,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         {/* Fixed CTA — top right, always visible */}
         <Link
           href="/#contact"
-          className="absolute top-5 right-6 md:right-10 z-[20] hidden lg:inline-flex items-center gap-2 border border-white/30 text-white text-xs tracking-wide px-5 py-2.5 rounded-full hover:border-white hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
+          className="absolute top-5 right-6 md:right-10 z-[20] hidden lg:inline-flex items-center gap-2 border border-black/30 text-black text-xs tracking-wide px-5 py-2.5 rounded-full hover:border-black hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
           data-cursor="pointer"
         >
           דברו איתנו

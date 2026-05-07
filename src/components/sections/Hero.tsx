@@ -71,7 +71,7 @@ export default function Hero() {
               &nbsp;
             </motion.span>
             {"WEBZ".split("").map((char, i) => (
-              <motion.span key={`w${i}`} className="inline-block text-gray-300" custom={i + 7} variants={letterVariants}>
+              <motion.span key={`w${i}`} className="inline-block text-gray-500" custom={i + 7} variants={letterVariants}>
                 {char}
               </motion.span>
             ))}
@@ -110,7 +110,7 @@ export default function Hero() {
             />
 
             <motion.p
-              className="text-lg md:text-xl lg:text-2xl text-gray-400 max-w-md leading-relaxed lg:mr-0 lg:ml-auto mx-auto"
+              className="text-lg md:text-xl lg:text-2xl text-gray-700 max-w-md leading-relaxed lg:mr-0 lg:ml-auto mx-auto"
               initial={{ opacity: 0, y: 10 }}
               animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
               transition={{ delay: 1.1, duration: 0.5 }}
@@ -127,7 +127,7 @@ export default function Hero() {
               <MagneticButton>
                 <a
                   href="#contact"
-                  className="group inline-flex items-center gap-3 border border-white/20 text-white/80 px-8 py-3.5 rounded-full text-base hover:border-white/50 hover:text-white hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
+                  className="group inline-flex items-center gap-3 border border-black/30 text-black/80 px-8 py-3.5 rounded-full text-base hover:border-black hover:text-black hover:shadow-[0_0_30px_rgba(229,3,162,0.3)] transition-all duration-300"
                 >
                   בואו נדבר
                   <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1 text-pink">←</span>
@@ -150,9 +150,9 @@ export default function Hero() {
         animate={ready ? { opacity: 1 } : { opacity: 0 }}
         transition={{ delay: 1.8, duration: 0.6 }}
       >
-        <span className="text-[9px] tracking-[0.2em] uppercase text-gray-600">Scroll</span>
+        <span className="text-[9px] tracking-[0.2em] uppercase text-gray-500">Scroll</span>
         <motion.div
-          className="w-[1px] h-6 bg-gradient-to-b from-gray-500 to-transparent"
+          className="w-[1px] h-6 bg-gradient-to-b from-gray-700 to-transparent"
           animate={{ scaleY: [1, 0.4, 1] }}
           transition={{ duration: 1.5, repeat: Infinity }}
           style={{ originY: 0 }}

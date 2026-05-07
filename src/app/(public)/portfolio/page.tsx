@@ -25,7 +25,7 @@ export default function PortfolioPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "תיק עבודות", url: `${SITE_URL}/portfolio` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
@@ -34,7 +34,7 @@ export default function PortfolioPage() {
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl text-center max-w-2xl mx-auto mb-16">
+            <p className="text-gray-700 text-lg md:text-xl text-center max-w-2xl mx-auto mb-16">
               מבחר מהפרויקטים האחרונים שלנו. כל פרויקט מייצג שילוב של עיצוב
               חדשני, טכנולוגיה מתקדמת ותוצאות עסקיות.
             </p>
@@ -60,10 +60,10 @@ export default function PortfolioPage() {
                     <span className="text-xs text-cyan font-bold uppercase tracking-wider">
                       {project.category}
                     </span>
-                    <h2 className="text-xl font-bold text-white mt-2 group-hover:text-pink transition-colors">
+                    <h2 className="text-xl font-bold text-black mt-2 group-hover:text-pink transition-colors">
                       {project.title}
                     </h2>
-                    <p className="text-gray-400 mt-2 text-sm">
+                    <p className="text-gray-700 mt-2 text-sm">
                       {project.description}
                     </p>
                   </Card>

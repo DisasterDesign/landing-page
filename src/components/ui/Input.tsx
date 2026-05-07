@@ -26,9 +26,9 @@ export default function Input(props: Props) {
   const isActive = focused || hasValue;
 
   const baseClasses = cn(
-    "w-full bg-transparent border-b-2 border-gray-700 px-0 py-3 text-white font-meruba",
+    "w-full bg-transparent border-b-2 border-gray-300 px-0 py-3 text-black font-meruba",
     "transition-all duration-300 outline-none",
-    "focus:border-cyan",
+    "focus:border-pink",
     error && "border-red-500",
     className
   );
@@ -40,8 +40,8 @@ export default function Input(props: Props) {
         className={cn(
           "absolute right-0 transition-all duration-300 pointer-events-none font-meruba",
           isActive
-            ? "top-0 text-xs text-cyan -translate-y-full"
-            : "top-3 text-base text-gray-400"
+            ? "top-0 text-xs text-pink -translate-y-full"
+            : "top-3 text-base text-gray-500"
         )}
       >
         {label}

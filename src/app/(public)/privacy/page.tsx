@@ -22,7 +22,7 @@ export default function PrivacyPage() {
       { name: "דף הבית", url: SITE_URL },
       { name: "מדיניות פרטיות", url: `${SITE_URL}/privacy` },
     ]} />
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
           <ScrollReveal>
@@ -32,9 +32,9 @@ export default function PrivacyPage() {
           </ScrollReveal>
 
           <ScrollReveal delay={0.2}>
-            <div className="prose-invert space-y-8 text-gray-400 leading-relaxed">
+            <div className="prose space-y-8 text-gray-700 leading-relaxed">
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">1. כללי</h2>
+                <h2 className="text-xl font-bold text-black mb-3">1. כללי</h2>
                 <p>
                   Fuzion Webz (להלן: &quot;החברה&quot;) מכבדת את פרטיותם של
                   המשתמשים באתר. מדיניות פרטיות זו מסבירה כיצד אנו אוספים,
@@ -44,18 +44,18 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   2. איסוף מידע
                 </h2>
                 <p>אנו אוספים מידע בשני אופנים:</p>
                 <ul className="list-disc list-inside space-y-2 mt-2">
                   <li>
-                    <strong className="text-white">מידע שנמסר באופן פעיל:</strong>{" "}
+                    <strong className="text-black">מידע שנמסר באופן פעיל:</strong>{" "}
                     שם, כתובת דוא&quot;ל, מספר טלפון ותוכן הפנייה בעת מילוי טופס
                     יצירת קשר.
                   </li>
                   <li>
-                    <strong className="text-white">מידע שנאסף באופן אוטומטי:</strong>{" "}
+                    <strong className="text-black">מידע שנאסף באופן אוטומטי:</strong>{" "}
                     כתובת IP, סוג דפדפן, מערכת הפעלה, עמודים שנצפו, זמן שהייה
                     ומקור ההפניה, באמצעות כלים כגון Google Analytics ועוגיות.
                   </li>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   3. שימוש במידע
                 </h2>
                 <p>המידע שנאסף משמש למטרות הבאות:</p>
@@ -77,7 +77,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   4. עוגיות (Cookies)
                 </h2>
                 <p>
@@ -88,7 +88,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   5. שיתוף מידע עם צדדים שלישיים
                 </h2>
                 <p>
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   6. אבטחת מידע
                 </h2>
                 <p>
@@ -111,7 +111,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   7. זכויות המשתמש
                 </h2>
                 <p>
@@ -122,7 +122,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   8. שינויים במדיניות
                 </h2>
                 <p>
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white mb-3">
+                <h2 className="text-xl font-bold text-black mb-3">
                   9. יצירת קשר
                 </h2>
                 <p>
@@ -148,7 +148,7 @@ export default function PrivacyPage() {
                 </p>
               </div>
 
-              <p className="text-gray-500 text-sm mt-12">
+              <p className="text-gray-600 text-sm mt-12">
                 עדכון אחרון: מרץ 2026
               </p>
             </div>

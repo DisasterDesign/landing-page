@@ -20,13 +20,13 @@ function FAQAccordionItem({
 }) {
   return (
     <ScrollReveal delay={index * 0.08}>
-      <div className="border-b border-gray-800">
+      <div className="border-b border-gray-200">
         <button
           onClick={onClick}
           className="w-full flex items-center justify-between py-6 text-right focus-visible:outline-2 focus-visible:outline-cyan focus-visible:outline-offset-2 rounded"
           aria-expanded={isOpen}
         >
-          <span className="text-lg md:text-xl font-bold text-white pr-0 pl-4">
+          <span className="text-lg md:text-xl font-bold text-black pr-0 pl-4">
             {question}
           </span>
           <motion.span
@@ -47,7 +47,7 @@ function FAQAccordionItem({
               transition={{ duration: 0.3, ease: "easeInOut" }}
               className="overflow-hidden"
             >
-              <p className="text-gray-400 pb-6 leading-relaxed">{answer}</p>
+              <p className="text-gray-700 pb-6 leading-relaxed">{answer}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -60,7 +60,7 @@ export default function FAQClient() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-3xl mx-auto">
           <ScrollReveal>
@@ -69,7 +69,7 @@ export default function FAQClient() {
             </h1>
           </ScrollReveal>
           <ScrollReveal delay={0.2}>
-            <p className="text-gray-400 text-lg md:text-xl text-center mb-16">
+            <p className="text-gray-700 text-lg md:text-xl text-center mb-16">
               ריכזנו עבורכם תשובות לשאלות הנפוצות ביותר
             </p>
           </ScrollReveal>

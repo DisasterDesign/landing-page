@@ -87,26 +87,26 @@ function FontCard({ font }: { font: FontFamily }) {
       />
 
       {/* Main card */}
-      <div className="relative bg-gray-950 border border-gray-800 rounded-[18px] p-6 transition-all duration-300 group-hover:-translate-y-1">
+      <div className="relative bg-gray-950 border border-gray-200 rounded-[18px] p-6 transition-all duration-300 group-hover:-translate-y-1">
         {/* Category badge */}
         {font.category && (
-          <span className="inline-block text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-full mb-4">
+          <span className="inline-block text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full mb-4">
             {categoryLabels[font.category] || font.category}
           </span>
         )}
 
         {/* Font Name */}
-        <h3 className="text-xl font-bold text-white mb-1">{font.name}</h3>
+        <h3 className="text-xl font-bold text-black mb-1">{font.name}</h3>
 
         {/* Designer */}
         {font.designer && (
-          <p className="text-gray-500 text-sm mb-4">{font.designer}</p>
+          <p className="text-gray-600 text-sm mb-4">{font.designer}</p>
         )}
 
         {/* Preview text in the actual font */}
-        <div className="bg-gray-900 rounded-xl p-4 mb-4 min-h-[60px] flex items-center justify-center overflow-hidden">
+        <div className="bg-gray-50 rounded-xl p-4 mb-4 min-h-[60px] flex items-center justify-center overflow-hidden">
           <span
-            className="text-gray-300 text-lg transition-all duration-300"
+            className="text-gray-700 text-lg transition-all duration-300"
             style={{
               fontFamily: loadedFontName || "inherit",
               opacity: loadedFontName ? 1 : 0.5,
@@ -118,10 +118,10 @@ function FontCard({ font }: { font: FontFamily }) {
 
         {/* Price + styles count */}
         <div className="flex items-center justify-between">
-          <span className="text-white font-semibold">
+          <span className="text-black font-semibold">
             {getMinPrice() > 0 ? `מ-₪${getMinPrice()}` : "חינם"}
           </span>
-          <span className="text-gray-500 text-sm">
+          <span className="text-gray-600 text-sm">
             {font.styles.length} סגנונות
           </span>
         </div>
@@ -172,17 +172,17 @@ export default function FontStoreClient() {
   }, [fonts, sortMode]);
 
   return (
-    <div className="min-h-screen bg-black" dir="rtl">
+    <div className="min-h-screen bg-white" dir="rtl">
       {/* Hero */}
       <section className="py-24 md:py-32 px-6">
         <div className="max-w-6xl mx-auto text-center">
           <h1
-            className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-white w-full mb-6"
+            className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-6"
             data-text="חנות פונטים"
           >
             חנות פונטים
           </h1>
-          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto">
+          <p className="text-gray-700 text-lg md:text-xl max-w-2xl mx-auto">
             פונטים מקוריים באיכות גבוהה לשימוש אישי ומסחרי
           </p>
         </div>
@@ -199,7 +199,7 @@ export default function FontStoreClient() {
                 className={`px-4 py-2.5 rounded-full text-sm font-medium transition-colors ${
                   activeCategory === cat.value
                     ? "bg-pink text-white"
-                    : "bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800 border border-gray-800"
+                    : "bg-gray-50 text-gray-700 hover:text-black hover:bg-gray-100 border border-gray-200"
                 }`}
               >
                 {cat.label}
@@ -213,7 +213,7 @@ export default function FontStoreClient() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 sortMode === "newest"
                   ? "bg-cyan/20 text-cyan border border-cyan/40"
-                  : "bg-gray-900 text-gray-500 hover:text-gray-300 border border-gray-800"
+                  : "bg-gray-50 text-gray-600 hover:text-gray-700 border border-gray-200"
               }`}
             >
               חדש
@@ -223,7 +223,7 @@ export default function FontStoreClient() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 sortMode === "alpha"
                   ? "bg-cyan/20 text-cyan border border-cyan/40"
-                  : "bg-gray-900 text-gray-500 hover:text-gray-300 border border-gray-800"
+                  : "bg-gray-50 text-gray-600 hover:text-gray-700 border border-gray-200"
               }`}
             >
               א-ת
@@ -236,11 +236,11 @@ export default function FontStoreClient() {
       <section className="px-6 pb-24">
         <div className="max-w-6xl mx-auto">
           {loading ? (
-            <div className="text-gray-400 text-center py-16">
+            <div className="text-gray-700 text-center py-16">
               טוען פונטים...
             </div>
           ) : fonts.length === 0 ? (
-            <div className="text-gray-400 text-center py-16">
+            <div className="text-gray-700 text-center py-16">
               <p className="text-lg">אין פונטים בקטגוריה זו</p>
             </div>
           ) : (

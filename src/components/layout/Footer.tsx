@@ -5,7 +5,7 @@ import VersionTag from "@/components/VersionTag";
 
 export default function Footer() {
   return (
-    <footer className="relative border-t border-pink/30">
+    <footer className="relative bg-white border-t border-pink/30">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-12">
           {/* Logo & Description */}
@@ -16,21 +16,22 @@ export default function Footer() {
               width={140}
               height={46}
               className="h-10 w-auto mb-4"
+              style={{ filter: "invert(1)" }}
             />
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="text-gray-700 text-sm leading-relaxed">
               סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים. אנחנו יוצרים חוויות דיגיטליות שממירות.
             </p>
           </div>
 
           {/* Services */}
           <div>
-            <h3 className="text-white font-bold mb-4">שירותים</h3>
+            <h3 className="text-black font-bold mb-4">שירותים</h3>
             <ul className="space-y-3">
               {FOOTER_LINKS.services.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors text-sm"
+                    className="text-gray-600 hover:text-black transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -41,13 +42,13 @@ export default function Footer() {
 
           {/* Resources */}
           <div>
-            <h3 className="text-white font-bold mb-4">משאבים</h3>
+            <h3 className="text-black font-bold mb-4">משאבים</h3>
             <ul className="space-y-3">
               {FOOTER_LINKS.resources.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors text-sm"
+                    className="text-gray-600 hover:text-black transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -58,13 +59,13 @@ export default function Footer() {
 
           {/* Company */}
           <div>
-            <h3 className="text-white font-bold mb-4">החברה</h3>
+            <h3 className="text-black font-bold mb-4">החברה</h3>
             <ul className="space-y-3">
               {FOOTER_LINKS.company.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors text-sm"
+                    className="text-gray-600 hover:text-black transition-colors text-sm"
                   >
                     {link.label}
                   </Link>
@@ -75,7 +76,7 @@ export default function Footer() {
         </div>
 
         {/* Social & Copyright */}
-        <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-8 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex gap-6">
             {Object.entries(SOCIAL_LINKS).map(([name, url]) => (
               <a
@@ -83,7 +84,7 @@ export default function Footer() {
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-500 hover:text-white transition-colors hover:scale-110 transform duration-200 text-sm capitalize"
+                className="text-gray-500 hover:text-black transition-colors hover:scale-110 transform duration-200 text-sm capitalize"
                 aria-label={name}
               >
                 {name}

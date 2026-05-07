@@ -195,7 +195,7 @@ export const PRICING_TIERS: PricingTier[] = [
   {
     id: "premium",
     name: "פרימיום",
-    price: 299,
+    price: 599,
     currency: "₪",
     period: "חודש",
     tagline: "פתרון דיגיטלי מלא עם מערכת ניהול ובנייה מותאמת לעסק",

@@ -19,7 +19,7 @@ export default function MobileMenu({ onClose }: MobileMenuProps) {
 
   return (
     <motion.div
-      className="absolute inset-0 z-[30] bg-black flex flex-col items-center justify-center"
+      className="absolute inset-0 z-[30] bg-white flex flex-col items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -36,7 +36,7 @@ export default function MobileMenu({ onClose }: MobileMenuProps) {
             <Link
               href={item.href}
               onClick={onClose}
-              className="text-3xl font-bold text-white hover:text-pink transition-colors"
+              className="text-3xl font-bold text-black hover:text-pink transition-colors"
             >
               {item.label}
             </Link>
@@ -56,7 +56,7 @@ export default function MobileMenu({ onClose }: MobileMenuProps) {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 hover:text-pink transition-colors text-sm capitalize"
+            className="text-gray-600 hover:text-pink transition-colors text-sm capitalize"
           >
             {name}
           </a>

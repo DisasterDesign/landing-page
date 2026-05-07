@@ -65,7 +65,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
       {/* Cover Image Hero — falls back to generated OG card when coverImage is null */}
       <div className="relative w-full h-[40vh] md:h-[50vh]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -88,7 +88,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
                 </span>
               )}
               {post.publishedAt && (
-                <span className="text-gray-500">
+                <span className="text-gray-600">
                   {new Date(post.publishedAt).toLocaleDateString("he-IL", {
                     year: "numeric",
                     month: "long",
@@ -96,7 +96,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
                   })}
                 </span>
               )}
-              <span className="text-gray-500">{post.author.name}</span>
+              <span className="text-gray-600">{post.author.name}</span>
             </div>
           </ScrollReveal>
 
@@ -111,17 +111,17 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
           {/* Article Content */}
           <ScrollReveal delay={0.2}>
             <div
-              className="prose prose-invert prose-lg max-w-none
-                prose-headings:font-bold prose-headings:text-white
+              className="prose prose prose-lg max-w-none
+                prose-headings:font-bold prose-headings:text-black
                 prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
                 prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
-                prose-p:text-gray-300 prose-p:leading-relaxed
+                prose-p:text-gray-700 prose-p:leading-relaxed
                 prose-a:text-cyan prose-a:no-underline hover:prose-a:underline
-                prose-strong:text-white
-                prose-ul:text-gray-300 prose-ol:text-gray-300
-                prose-blockquote:border-pink prose-blockquote:text-gray-400
-                prose-code:text-pink prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
-                prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700
+                prose-strong:text-black
+                prose-ul:text-gray-700 prose-ol:text-gray-700
+                prose-blockquote:border-pink prose-blockquote:text-gray-700
+                prose-code:text-pink prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+                prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-300
                 prose-img:rounded-xl"
               dir="rtl"
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
@@ -131,11 +131,11 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
           {/* Tags */}
           {post.tags.length > 0 && (
             <ScrollReveal delay={0.3}>
-              <div className="flex flex-wrap gap-2 mt-12 pt-8 border-t border-gray-800">
+              <div className="flex flex-wrap gap-2 mt-12 pt-8 border-t border-gray-200">
                 {post.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="bg-gray-800 text-gray-400 text-xs px-3 py-1.5 rounded-full"
+                    className="bg-gray-100 text-gray-700 text-xs px-3 py-1.5 rounded-full"
                   >
                     #{tag}
                   </span>
@@ -146,8 +146,8 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
 
           {/* Share Buttons */}
           <ScrollReveal delay={0.3}>
-            <div className="flex items-center gap-3 mt-8 pt-8 border-t border-gray-800">
-              <span className="text-sm text-gray-500">שתף:</span>
+            <div className="flex items-center gap-3 mt-8 pt-8 border-t border-gray-200">
+              <span className="text-sm text-gray-600">שתף:</span>
               <button
                 onClick={handleWhatsAppShare}
                 className="bg-green-900/30 hover:bg-green-900/50 text-green-400 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
@@ -156,7 +156,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
               </button>
               <button
                 onClick={handleCopyLink}
-                className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
               >
                 העתק קישור
               </button>
@@ -166,16 +166,16 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
           {/* Previous / Next */}
           {(prevPost || nextPost) && (
             <ScrollReveal delay={0.4}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-12 pt-8 border-t border-gray-800">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-12 pt-8 border-t border-gray-200">
                 {prevPost ? (
                   <Link
                     href={`/blog/${prevPost.slug}`}
-                    className="group bg-gray-900 border border-gray-800 rounded-xl p-5 transition-all hover:border-gray-600 hover:-translate-y-0.5"
+                    className="group bg-gray-50 border border-gray-200 rounded-xl p-5 transition-all hover:border-gray-400 hover:-translate-y-0.5"
                   >
-                    <span className="text-xs text-gray-500 block mb-1">
+                    <span className="text-xs text-gray-600 block mb-1">
                       מאמר קודם
                     </span>
-                    <span className="text-sm font-medium text-white group-hover:text-pink transition-colors">
+                    <span className="text-sm font-medium text-black group-hover:text-pink transition-colors">
                       {prevPost.title}
                     </span>
                   </Link>
@@ -185,12 +185,12 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
                 {nextPost ? (
                   <Link
                     href={`/blog/${nextPost.slug}`}
-                    className="group bg-gray-900 border border-gray-800 rounded-xl p-5 transition-all hover:border-gray-600 hover:-translate-y-0.5 text-left"
+                    className="group bg-gray-50 border border-gray-200 rounded-xl p-5 transition-all hover:border-gray-400 hover:-translate-y-0.5 text-left"
                   >
-                    <span className="text-xs text-gray-500 block mb-1">
+                    <span className="text-xs text-gray-600 block mb-1">
                       מאמר הבא
                     </span>
-                    <span className="text-sm font-medium text-white group-hover:text-pink transition-colors">
+                    <span className="text-sm font-medium text-black group-hover:text-pink transition-colors">
                       {nextPost.title}
                     </span>
                   </Link>
@@ -205,7 +205,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
           <div className="text-center mt-12">
             <Link
               href="/blog"
-              className="text-gray-500 hover:text-white text-sm transition-colors"
+              className="text-gray-600 hover:text-black text-sm transition-colors"
             >
               &larr; חזרה לבלוג
             </Link>
