@@ -82,16 +82,16 @@ export default function Portfolio() {
     <section id="portfolio" className="relative bg-white py-24 md:py-32 px-6">
       <div className="max-w-[1400px] mx-auto">
         <ScrollReveal>
-          <div className="flex items-baseline justify-between mb-10 px-1">
+          <div className="text-center mb-10">
+            <span dir="ltr" className="block text-xs uppercase tracking-[0.25em] text-gray-500 mb-3">
+              {projects.length} projects
+            </span>
             <h2
-              className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-black"
+              className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-black w-full"
               data-text="העבודות שלנו"
             >
               העבודות שלנו
             </h2>
-            <span dir="ltr" className="text-xs uppercase tracking-[0.25em] text-gray-500">
-              {projects.length} projects
-            </span>
           </div>
         </ScrollReveal>
 
