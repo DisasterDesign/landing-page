@@ -108,8 +108,8 @@ void main() {
   float mouseGlow = exp(-mouseDist * 0.8) * u_mouseInfluence;
 
   // Base colors
-  vec3 baseColor = vec3(0.96, 0.96, 0.97);
-  vec3 lineColor = vec3(0.0, 0.0, 0.0); // Black lines
+  vec3 baseColor = vec3(0.04, 0.04, 0.06);
+  vec3 lineColor = vec3(1.0, 1.0, 1.0); // White lines
   vec3 pinkAccent = vec3(0.90, 0.01, 0.64); // #E503A2
   vec3 cyanAccent = vec3(0.0, 1.0, 1.0);   // #01FFFF
 
