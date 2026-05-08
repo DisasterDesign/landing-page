@@ -1,57 +1,7 @@
 "use client";
 
-import { TEAM_MEMBERS } from "@/lib/constants";
 import { motion } from "framer-motion";
-import { useInView } from "@/hooks/useInView";
 import { useRef, useState, useEffect } from "react";
-import Image from "next/image";
-import ScrollReveal from "@/components/animations/ScrollReveal";
-
-function ChromaticCard({ member, index }: { member: typeof TEAM_MEMBERS[0]; index: number }) {
-  const { ref, isInView } = useInView({ threshold: 0.2 });
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 60, scale: 0.95 }}
-      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
-      transition={{ duration: 0.7, delay: index * 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-      className="group"
-    >
-      <div className="relative">
-        <div
-          className="absolute inset-0 rounded-[18px] bg-[#00D0CE] transition-transform duration-500 group-hover:translate-x-[5px] group-hover:-translate-y-[5px]"
-          style={{ transform: "translate(3px, -3px)" }}
-        />
-        <div
-          className="absolute inset-0 rounded-[18px] bg-[#C80084] transition-transform duration-500 group-hover:-translate-x-[5px] group-hover:translate-y-[5px]"
-          style={{ transform: "translate(-3px, 3px)" }}
-        />
-        <div className="relative bg-white rounded-[18px] border border-gray-200/80 p-8 md:p-10 overflow-hidden transition-all duration-500 group-hover:border-gray-300">
-          <div className="relative w-[calc(100%+4rem)] md:w-[calc(100%+5rem)] aspect-[4/3] overflow-hidden -mt-8 md:-mt-10 -mx-8 md:-mx-10 mb-8 bg-gray-100">
-            <Image
-              src={member.image}
-              alt={member.nameHe}
-              fill
-              sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover object-[center_5%] transition-transform duration-700 group-hover:scale-105"
-              priority={index === 0}
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-[#C80084]/10 via-transparent to-[#00D0CE]/10 mix-blend-overlay pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          </div>
-          <div className="relative mb-1">
-            <span className="absolute text-[#C80084] text-2xl md:text-3xl font-extrabold" style={{ transform: "translate(-1px, 1px)" }} aria-hidden="true">{member.nameHe}</span>
-            <span className="absolute text-[#00D0CE] text-2xl md:text-3xl font-extrabold" style={{ transform: "translate(1px, -1px)" }} aria-hidden="true">{member.nameHe}</span>
-            <h3 className="relative text-2xl md:text-3xl font-extrabold text-black">{member.nameHe}</h3>
-          </div>
-          <p className="text-gray-500 text-sm font-bold mb-5 mt-2">{member.roleHe}</p>
-          <p className="text-gray-700 leading-relaxed text-[15px]">{member.bio}</p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
 const values = [
   { number: "01", title: "חדשנות", description: "תמיד בחזית הטכנולוגיה והעיצוב, מביאים פתרונות מתקדמים לכל פרויקט" },
@@ -183,20 +133,6 @@ export default function AboutUs() {
   return (
     <section id="about" className="relative bg-white py-24 md:py-32 px-6">
       <div className="max-w-6xl mx-auto">
-        <ScrollReveal>
-          <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="מי אנחנו?">
-            מי אנחנו?
-          </h2>
-        </ScrollReveal>
-
-        {/* Team Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 mb-32">
-          {TEAM_MEMBERS.map((member, i) => (
-            <ChromaticCard key={member.email} member={member} index={i} />
-          ))}
-        </div>
-
-        {/* Values Stepper — pinned section */}
         <ValuesStepper />
       </div>
     </section>
