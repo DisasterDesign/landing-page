@@ -15,27 +15,19 @@ interface Project {
 }
 
 const projects: Project[] = [
-  // Video projects first — Titans is the default selected
+  // 12 video projects, alternating original showcase work and new screencaptures
   { id: "titans", name: "Titans Global", description: "Global investment platform", gradient: "linear-gradient(135deg, #F37021, #ff6b6b)", url: "https://titans.global/", video: "/c-video/compressed/Titans.mp4", poster: "/c-video/posters/Titans.webp" },
-  { id: "aquatis", name: "Aquatis", description: "Water management platform", gradient: "linear-gradient(135deg, #11998e, #38ef7d)", url: "https://aquatis.ai/", video: "/c-video/compressed/Aquatis.mp4", poster: "/c-video/posters/Aquatis.webp" },
-  { id: "innercosmos", name: "Inner Cosmos", description: "AI-powered meditation", gradient: "linear-gradient(135deg, #667eea, #764ba2)", url: "https://innercosmos.ai/", video: "/c-video/compressed/INNERCOSMOS.mp4", poster: "/c-video/posters/INNERCOSMOS.webp" },
-  { id: "thirdeye", name: "Third Eye", description: "Analytics dashboard", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://3i.titans.global/", video: "/c-video/compressed/3i.mp4", poster: "/c-video/posters/3i.webp" },
-  { id: "dentalcare", name: "Dental Care", description: "Dental clinic website", gradient: "linear-gradient(135deg, #74ebd5, #ACB6E5)", url: "https://dental-care-d5g.pages.dev/", video: "/c-video/compressed/dental-care.mp4", poster: "/c-video/posters/dental-care.webp" },
-  { id: "ams-law", name: "AMS Law", description: "משרד עורכי דין", gradient: "linear-gradient(135deg, #1a1a2e, #16213e)", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
-  // New video projects (recorded screencaptures)
   { id: "olamhamamtakim", name: "עולם הממתקים", description: "רשת חנויות ממתקים", gradient: "linear-gradient(135deg, #ff9a9e, #fecfef)", url: "https://olamhamamtakim.co.il/", video: "/c-video/compressed/olamhamamtakim.mp4", poster: "/c-video/posters/olamhamamtakim.webp" },
+  { id: "aquatis", name: "Aquatis", description: "Water management platform", gradient: "linear-gradient(135deg, #11998e, #38ef7d)", url: "https://aquatis.ai/", video: "/c-video/compressed/Aquatis.mp4", poster: "/c-video/posters/Aquatis.webp" },
   { id: "fixtickets", name: "פיקס טיקטס", description: "שירותי תיקון ושירות", gradient: "linear-gradient(135deg, #a18cd1, #fbc2eb)", url: "https://fixtickets.co.il/", video: "/c-video/compressed/fixtickets.mp4", poster: "/c-video/posters/fixtickets.webp" },
+  { id: "innercosmos", name: "Inner Cosmos", description: "AI-powered meditation", gradient: "linear-gradient(135deg, #667eea, #764ba2)", url: "https://innercosmos.ai/", video: "/c-video/compressed/INNERCOSMOS.mp4", poster: "/c-video/posters/INNERCOSMOS.webp" },
   { id: "roza", name: "רוזה", description: "מסעדה ברחובות", gradient: "linear-gradient(135deg, #2d4a22, #5a7a42)", url: "https://roza-rehovot-website.pages.dev/", video: "/c-video/compressed/roza.mp4", poster: "/c-video/posters/roza.webp" },
+  { id: "thirdeye", name: "Third Eye", description: "Analytics dashboard", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://3i.titans.global/", video: "/c-video/compressed/3i.mp4", poster: "/c-video/posters/3i.webp" },
   { id: "baguette", name: "באגט התרנגול", description: "מסעדה", gradient: "linear-gradient(135deg, #3a2a1a, #6b4c30)", url: "https://baguette-hatarnegol.pages.dev/", video: "/c-video/compressed/baguette.mp4", poster: "/c-video/posters/baguette.webp" },
+  { id: "dentalcare", name: "Dental Care", description: "Dental clinic website", gradient: "linear-gradient(135deg, #74ebd5, #ACB6E5)", url: "https://dental-care-d5g.pages.dev/", video: "/c-video/compressed/dental-care.mp4", poster: "/c-video/posters/dental-care.webp" },
   { id: "helena", name: "הלן המתקשרת", description: "תיקשור וקלפי טארוט", gradient: "linear-gradient(135deg, #1a1033, #3d2266)", url: "https://maalen-landing.pages.dev/", video: "/c-video/compressed/helena.mp4", poster: "/c-video/posters/helena.webp" },
+  { id: "ams-law", name: "AMS Law", description: "משרד עורכי דין", gradient: "linear-gradient(135deg, #1a1a2e, #16213e)", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
   { id: "emek-ayalon", name: "עמק איילון", description: "ניהול תשתיות ופרויקטים", gradient: "linear-gradient(135deg, #c5a55a, #e8d5a0)", url: "https://www.emek-ayalon.com/", video: "/c-video/compressed/emek-ayalon.mp4", poster: "/c-video/posters/emek-ayalon.webp" },
-  // No-video projects (poster screenshot only)
-  { id: "natansart", name: "נתן ארט", description: "אמנות ועיצוב", gradient: "linear-gradient(135deg, #ffecd2, #fcb69f)", url: "https://natansart.com/", poster: "/c-video/posters/natansart.webp" },
-  { id: "jumarie", name: "Jumarie", description: "מותג אופנה", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://jumarie.co/en", poster: "/c-video/posters/jumarie.webp" },
-  { id: "yoni-burger", name: "יוני המבורגר", description: "מסעדת המבורגרים", gradient: "linear-gradient(135deg, #f6d365, #fda085)", url: "https://burger-yoni-71.pages.dev/", poster: "/c-video/posters/yoni-burger.webp" },
-  { id: "yoni-shawarma", name: "יוני שווארמה", description: "מסעדת שווארמה", gradient: "linear-gradient(135deg, #ff8a00, #e52e71)", url: "https://yoni71.davidalelad.workers.dev/", poster: "/c-video/posters/yoni-shawarma.webp" },
-  { id: "ariela-beauty", name: "אריאלה ביוטי", description: "חנות יופי וטיפוח", gradient: "linear-gradient(135deg, #fbc2eb, #a6c1ee)", url: "https://ariela-storefront.davidalelad.workers.dev/", poster: "/c-video/posters/ariela-beauty.webp" },
-  { id: "juju", name: "ג׳וג׳ו", description: "מטבח אסייתי", gradient: "linear-gradient(135deg, #fa709a, #fee140)", url: "https://juju-asian-kitchen.pages.dev/", poster: "/c-video/posters/juju.webp" },
 ];
 
 const HOVER_DELAY = 380; // ms before lift triggers
