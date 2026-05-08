@@ -70,7 +70,7 @@ export default function BlogPostClient({ post, prevPost, nextPost }: Props) {
       <div className="relative w-full h-[40vh] md:h-[50vh]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={post.coverImage || `/blog/${post.slug}/opengraph-image`}
+          src={post.coverImage || `/api/blog/og/${post.slug}`}
           alt={post.title}
           className="w-full h-full object-cover"
         />

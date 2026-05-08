@@ -154,7 +154,7 @@ export default function BlogPageClient() {
                         <div className="aspect-video rounded-xl mb-4 overflow-hidden">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={post.coverImage || `/blog/${post.slug}/opengraph-image`}
+                            src={post.coverImage || `/api/blog/og/${post.slug}`}
                             alt={post.title}
                             loading="lazy"
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

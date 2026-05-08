@@ -69,7 +69,7 @@ export default async function BlogPostPage({ params }: Props) {
     : { prev: null, next: null };
 
   const canonicalImage =
-    post.coverImage || `${SITE_URL}/blog/${post.slug}/opengraph-image`;
+    post.coverImage || `${SITE_URL}/api/blog/og/${post.slug}`;
   const plainExcerpt =
     post.excerpt ||
     post.content.replace(/<[^>]+>/g, "").trim().slice(0, 200);
