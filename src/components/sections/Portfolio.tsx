@@ -22,20 +22,20 @@ const projects: Project[] = [
   { id: "thirdeye", name: "Third Eye", description: "Analytics dashboard", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://3i.titans.global/", video: "/c-video/compressed/3i.mp4", poster: "/c-video/posters/3i.webp" },
   { id: "dentalcare", name: "Dental Care", description: "Dental clinic website", gradient: "linear-gradient(135deg, #74ebd5, #ACB6E5)", url: "https://dental-care-d5g.pages.dev/", video: "/c-video/compressed/dental-care.mp4", poster: "/c-video/posters/dental-care.webp" },
   { id: "ams-law", name: "AMS Law", description: "משרד עורכי דין", gradient: "linear-gradient(135deg, #1a1a2e, #16213e)", url: "https://ams-law.com/", video: "/c-video/compressed/ams-law.mp4", poster: "/c-video/posters/ams-law.webp" },
+  // New video projects (recorded screencaptures)
+  { id: "olamhamamtakim", name: "עולם הממתקים", description: "רשת חנויות ממתקים", gradient: "linear-gradient(135deg, #ff9a9e, #fecfef)", url: "https://olamhamamtakim.co.il/", video: "/c-video/compressed/olamhamamtakim.mp4", poster: "/c-video/posters/olamhamamtakim.webp" },
+  { id: "fixtickets", name: "פיקס טיקטס", description: "שירותי תיקון ושירות", gradient: "linear-gradient(135deg, #a18cd1, #fbc2eb)", url: "https://fixtickets.co.il/", video: "/c-video/compressed/fixtickets.mp4", poster: "/c-video/posters/fixtickets.webp" },
+  { id: "roza", name: "רוזה", description: "מסעדה ברחובות", gradient: "linear-gradient(135deg, #2d4a22, #5a7a42)", url: "https://roza-rehovot-website.pages.dev/", video: "/c-video/compressed/roza.mp4", poster: "/c-video/posters/roza.webp" },
+  { id: "baguette", name: "באגט התרנגול", description: "מסעדה", gradient: "linear-gradient(135deg, #3a2a1a, #6b4c30)", url: "https://baguette-hatarnegol.pages.dev/", video: "/c-video/compressed/baguette.mp4", poster: "/c-video/posters/baguette.webp" },
+  { id: "helena", name: "הלן המתקשרת", description: "תיקשור וקלפי טארוט", gradient: "linear-gradient(135deg, #1a1033, #3d2266)", url: "https://maalen-landing.pages.dev/", video: "/c-video/compressed/helena.mp4", poster: "/c-video/posters/helena.webp" },
+  { id: "emek-ayalon", name: "עמק איילון", description: "ניהול תשתיות ופרויקטים", gradient: "linear-gradient(135deg, #c5a55a, #e8d5a0)", url: "https://www.emek-ayalon.com/", video: "/c-video/compressed/emek-ayalon.mp4", poster: "/c-video/posters/emek-ayalon.webp" },
   // No-video projects
-  { id: "olamhamamtakim", name: "עולם הממתקים", description: "חנות ממתקים אונליין", gradient: "linear-gradient(135deg, #ff9a9e, #fecfef)", url: "https://olamhamamtakim.co.il/" },
-  { id: "fixtickets", name: "פיקס טיקטס", description: "שירותי תיקון ושירות", gradient: "linear-gradient(135deg, #a18cd1, #fbc2eb)", url: "https://fixtickets.co.il/" },
   { id: "natansart", name: "נתן ארט", description: "אמנות ועיצוב", gradient: "linear-gradient(135deg, #ffecd2, #fcb69f)", url: "https://natansart.com/" },
-  { id: "roza", name: "רוזה", description: "מסעדה ברחובות", gradient: "linear-gradient(135deg, #f093fb, #f5576c)", url: "https://roza-rehovot-website.pages.dev/" },
   { id: "jumarie", name: "Jumarie", description: "מותג אופנה", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://jumarie.co/en" },
-  { id: "bingo", name: "Bingo", description: "פלטפורמה דיגיטלית", gradient: "linear-gradient(135deg, #43e97b, #38f9d7)", url: "https://bingo-nu-kohl.vercel.app/" },
   { id: "yoni-burger", name: "יוני המבורגר", description: "מסעדת המבורגרים", gradient: "linear-gradient(135deg, #f6d365, #fda085)", url: "https://burger-yoni-71.pages.dev/" },
   { id: "yoni-shawarma", name: "יוני שווארמה", description: "מסעדת שווארמה", gradient: "linear-gradient(135deg, #ff8a00, #e52e71)", url: "https://yoni71.davidalelad.workers.dev/" },
   { id: "ariela-beauty", name: "אריאלה ביוטי", description: "חנות יופי וטיפוח", gradient: "linear-gradient(135deg, #fbc2eb, #a6c1ee)", url: "https://ariela-storefront.davidalelad.workers.dev/" },
-  { id: "baguette", name: "בגט התרנגול", description: "מסעדה", gradient: "linear-gradient(135deg, #e0c3fc, #8ec5fc)", url: "https://baguette-hatarnegol.pages.dev/" },
   { id: "juju", name: "ג׳וג׳ו", description: "מטבח אסייתי", gradient: "linear-gradient(135deg, #fa709a, #fee140)", url: "https://juju-asian-kitchen.pages.dev/" },
-  { id: "helena", name: "הלנה לפיד סידלר", description: "דף נחיתה", gradient: "linear-gradient(135deg, #a1c4fd, #c2e9fb)", url: "https://maalen-landing.pages.dev/" },
-  { id: "emek-ayalon", name: "עמק איילון", description: "ניהול תשתיות ופרויקטים", gradient: "linear-gradient(135deg, #667eea, #764ba2)", url: "https://www.emek-ayalon.com/" },
 ];
 
 const HOVER_DELAY = 380; // ms before lift triggers
@@ -108,6 +108,7 @@ export default function Portfolio() {
           style={{
             display: "grid",
             gap: "6px",
+            gridAutoFlow: "dense",
             perspective: "1200px",
             transformStyle: "preserve-3d",
           }}
