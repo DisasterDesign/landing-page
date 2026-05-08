@@ -29,13 +29,13 @@ const projects: Project[] = [
   { id: "baguette", name: "באגט התרנגול", description: "מסעדה", gradient: "linear-gradient(135deg, #3a2a1a, #6b4c30)", url: "https://baguette-hatarnegol.pages.dev/", video: "/c-video/compressed/baguette.mp4", poster: "/c-video/posters/baguette.webp" },
   { id: "helena", name: "הלן המתקשרת", description: "תיקשור וקלפי טארוט", gradient: "linear-gradient(135deg, #1a1033, #3d2266)", url: "https://maalen-landing.pages.dev/", video: "/c-video/compressed/helena.mp4", poster: "/c-video/posters/helena.webp" },
   { id: "emek-ayalon", name: "עמק איילון", description: "ניהול תשתיות ופרויקטים", gradient: "linear-gradient(135deg, #c5a55a, #e8d5a0)", url: "https://www.emek-ayalon.com/", video: "/c-video/compressed/emek-ayalon.mp4", poster: "/c-video/posters/emek-ayalon.webp" },
-  // No-video projects
-  { id: "natansart", name: "נתן ארט", description: "אמנות ועיצוב", gradient: "linear-gradient(135deg, #ffecd2, #fcb69f)", url: "https://natansart.com/" },
-  { id: "jumarie", name: "Jumarie", description: "מותג אופנה", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://jumarie.co/en" },
-  { id: "yoni-burger", name: "יוני המבורגר", description: "מסעדת המבורגרים", gradient: "linear-gradient(135deg, #f6d365, #fda085)", url: "https://burger-yoni-71.pages.dev/" },
-  { id: "yoni-shawarma", name: "יוני שווארמה", description: "מסעדת שווארמה", gradient: "linear-gradient(135deg, #ff8a00, #e52e71)", url: "https://yoni71.davidalelad.workers.dev/" },
-  { id: "ariela-beauty", name: "אריאלה ביוטי", description: "חנות יופי וטיפוח", gradient: "linear-gradient(135deg, #fbc2eb, #a6c1ee)", url: "https://ariela-storefront.davidalelad.workers.dev/" },
-  { id: "juju", name: "ג׳וג׳ו", description: "מטבח אסייתי", gradient: "linear-gradient(135deg, #fa709a, #fee140)", url: "https://juju-asian-kitchen.pages.dev/" },
+  // No-video projects (poster screenshot only)
+  { id: "natansart", name: "נתן ארט", description: "אמנות ועיצוב", gradient: "linear-gradient(135deg, #ffecd2, #fcb69f)", url: "https://natansart.com/", poster: "/c-video/posters/natansart.webp" },
+  { id: "jumarie", name: "Jumarie", description: "מותג אופנה", gradient: "linear-gradient(135deg, #4facfe, #00f2fe)", url: "https://jumarie.co/en", poster: "/c-video/posters/jumarie.webp" },
+  { id: "yoni-burger", name: "יוני המבורגר", description: "מסעדת המבורגרים", gradient: "linear-gradient(135deg, #f6d365, #fda085)", url: "https://burger-yoni-71.pages.dev/", poster: "/c-video/posters/yoni-burger.webp" },
+  { id: "yoni-shawarma", name: "יוני שווארמה", description: "מסעדת שווארמה", gradient: "linear-gradient(135deg, #ff8a00, #e52e71)", url: "https://yoni71.davidalelad.workers.dev/", poster: "/c-video/posters/yoni-shawarma.webp" },
+  { id: "ariela-beauty", name: "אריאלה ביוטי", description: "חנות יופי וטיפוח", gradient: "linear-gradient(135deg, #fbc2eb, #a6c1ee)", url: "https://ariela-storefront.davidalelad.workers.dev/", poster: "/c-video/posters/ariela-beauty.webp" },
+  { id: "juju", name: "ג׳וג׳ו", description: "מטבח אסייתי", gradient: "linear-gradient(135deg, #fa709a, #fee140)", url: "https://juju-asian-kitchen.pages.dev/", poster: "/c-video/posters/juju.webp" },
 ];
 
 const HOVER_DELAY = 380; // ms before lift triggers
@@ -206,6 +206,14 @@ function SelectedTile({ project }: { project: Project }) {
           preload="metadata"
           className="absolute inset-0 w-full h-full object-cover"
         />
+      ) : project.poster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={project.poster}
+          alt={project.name}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
       ) : (
         <div className="absolute inset-0" style={{ background: project.gradient }} />
       )}
@@ -245,6 +253,15 @@ function SmallTile({ project }: { project: Project }) {
       className="absolute inset-0 group/sm"
       style={{ background: project.gradient }}
     >
+      {project.poster && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={project.poster}
+          alt={project.name}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+      )}
       {project.video && (
         <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/30 backdrop-blur-sm border border-white/40 flex items-center justify-center pointer-events-none">
           <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3" style={{ marginLeft: 1 }}>
@@ -253,7 +270,7 @@ function SmallTile({ project }: { project: Project }) {
         </div>
       )}
       {/* Name on hover (RTL bottom strip) */}
-      <div className="absolute inset-x-0 bottom-0 p-2 text-white text-[10px] md:text-[11px] font-bold opacity-0 group-hover/sm:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/55 to-transparent text-right pointer-events-none">
+      <div className="absolute inset-x-0 bottom-0 p-2 text-white text-[10px] md:text-[11px] font-bold opacity-0 group-hover/sm:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/65 to-transparent text-right pointer-events-none">
         {project.name}
       </div>
     </div>
