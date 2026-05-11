@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
+import AssigneePicker from "@/components/admin/AssigneePicker";
 
 type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "SPAM";
 type StatusFilter = "ALL" | Status;
 type Category = "sales" | "landing" | "branding" | "other";
+
+interface UserLite {
+  id: string;
+  name: string;
+}
 
 interface Lead {
   id: string;
@@ -22,6 +29,7 @@ interface Lead {
   lastContactedAt: string | null;
   createdAt: string;
   _count: { notes: number };
+  assignees: UserLite[];
 }
 
 interface Note {
@@ -140,6 +148,8 @@ const FILTER_TABS: { id: StatusFilter; label: string }[] = [
 ];
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats>({
     openCount: 0,
@@ -151,6 +161,8 @@ export default function LeadsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [users, setUsers] = useState<UserLite[]>([]);
+  const focusHandledRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -174,7 +186,7 @@ export default function LeadsPage() {
   }, [search]);
 
   const setQuickFollowUp = useCallback(
-    async (leadId: string, date: string | null) => {
+    async (leadId: string, date: string | null, assigneeIds?: string[]) => {
       // Optimistic: flip the chip immediately so it feels instant.
       setLeads((prev) =>
         prev.map((l) =>
@@ -184,10 +196,12 @@ export default function LeadsPage() {
         )
       );
       try {
+        const body: Record<string, unknown> = { nextFollowUpAt: date };
+        if (assigneeIds !== undefined) body.assigneeIds = assigneeIds;
         const res = await fetch(`/api/leads/${leadId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nextFollowUpAt: date }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error();
         toast.success(date ? "תזכורת נקבעה" : "תזכורת בוטלה", {
@@ -226,6 +240,47 @@ export default function LeadsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Load the admin roster once — used by the assignee picker inside expanded
+  // panels. Cheap call, kept outside the polling lifecycle.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/users", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((json) => {
+        if (cancelled) return;
+        const list = Array.isArray(json) ? json : json.users || [];
+        setUsers(
+          list.map((u: { id: string; name: string }) => ({
+            id: u.id,
+            name: u.name,
+          }))
+        );
+      })
+      .catch(() => {
+        /* silent — picker shows fallback message */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Deep-link support: /admin/leads?focus=<id> auto-expands that row once
+  // the leads list has loaded, then strips the query and scrolls to it.
+  useEffect(() => {
+    const focus = searchParams.get("focus");
+    if (!focus || loading || focusHandledRef.current === focus) return;
+    if (!leads.some((l) => l.id === focus)) return;
+    focusHandledRef.current = focus;
+    setExpandedId(focus);
+    // strip the query so a refresh doesn't keep retriggering
+    router.replace("/admin/leads", { scroll: false });
+    // wait a tick for the expanded row to render before scrolling
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`lead-row-${focus}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [searchParams, loading, leads, router]);
 
   const summary = useMemo(() => {
     const startOfMonth = new Date();
@@ -375,6 +430,7 @@ export default function LeadsPage() {
                   onToggle={handleToggle}
                   onSetFollowUp={setQuickFollowUp}
                   onChange={load}
+                  users={users}
                 />
               );
             })}
@@ -414,13 +470,19 @@ function CategoryTable({
   onToggle,
   onSetFollowUp,
   onChange,
+  users,
 }: {
   category: Category;
   leads: Lead[];
   expandedId: string | null;
   onToggle: (id: string) => void;
-  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
+  onSetFollowUp: (
+    id: string,
+    date: string | null,
+    assigneeIds?: string[]
+  ) => Promise<void>;
   onChange: () => void;
+  users: UserLite[];
 }) {
   return (
     <section>
@@ -464,6 +526,7 @@ function CategoryTable({
                 onToggle={onToggle}
                 onSetFollowUp={onSetFollowUp}
                 onChange={onChange}
+                users={users}
               />
             ))}
           </tbody>
@@ -479,17 +542,24 @@ function LeadRow({
   onToggle,
   onSetFollowUp,
   onChange,
+  users,
 }: {
   lead: Lead;
   expanded: boolean;
   onToggle: (id: string) => void;
-  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
+  onSetFollowUp: (
+    id: string,
+    date: string | null,
+    assigneeIds?: string[]
+  ) => Promise<void>;
   onChange: () => void;
+  users: UserLite[];
 }) {
   const due = dueChip(lead.nextFollowUpAt);
   return (
     <>
       <tr
+        id={`lead-row-${lead.id}`}
         onClick={() => onToggle(lead.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -602,6 +672,7 @@ function LeadRow({
           <td colSpan={6} className="p-4">
             <ExpandedPanel
               leadId={lead.id}
+              users={users}
               onSetFollowUp={onSetFollowUp}
               onChange={onChange}
             />
@@ -614,11 +685,17 @@ function LeadRow({
 
 function ExpandedPanel({
   leadId,
+  users,
   onSetFollowUp,
   onChange,
 }: {
   leadId: string;
-  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
+  users: UserLite[];
+  onSetFollowUp: (
+    id: string,
+    date: string | null,
+    assigneeIds?: string[]
+  ) => Promise<void>;
   onChange: () => void;
 }) {
   const [detail, setDetail] = useState<LeadDetail | null>(null);
@@ -627,6 +704,8 @@ function ExpandedPanel({
   const [saving, setSaving] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
   const [statusSaving, setStatusSaving] = useState<Status | null>(null);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [assigneeSaving, setAssigneeSaving] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -637,6 +716,7 @@ function ExpandedPanel({
       setFollowUpDate(
         json.nextFollowUpAt ? json.nextFollowUpAt.slice(0, 10) : ""
       );
+      setAssigneeIds((json.assignees ?? []).map((a) => a.id));
     } catch {
       toast.error("שגיאה בטעינת הליד");
     } finally {
@@ -683,6 +763,37 @@ function ExpandedPanel({
       toast.error("עדכון הסטטוס נכשל");
     } finally {
       setStatusSaving(null);
+    }
+  };
+
+  // Save date + assignees atomically through the parent helper (which keeps
+  // the optimistic UX). After the round-trip we reload local detail so the
+  // notes/assignees panel reflects what the server saved.
+  const saveFollowUp = async (date: string | null, ids: string[]) => {
+    setFollowUpDate(date || "");
+    await onSetFollowUp(leadId, date, ids);
+    reload();
+  };
+
+  // Save only the assignees (no notification fires unless the date changed).
+  const saveAssignees = async (ids: string[]) => {
+    const previous = assigneeIds;
+    setAssigneeIds(ids);
+    setAssigneeSaving(true);
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigneeIds: ids }),
+      });
+      if (!res.ok) throw new Error();
+      await reload();
+      onChange();
+    } catch {
+      toast.error("שמירת האחראים נכשלה");
+      setAssigneeIds(previous);
+    } finally {
+      setAssigneeSaving(false);
     }
   };
 
@@ -774,6 +885,24 @@ function ExpandedPanel({
         </div>
 
         <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-gray-500">אחראים למעקב</label>
+            {assigneeSaving && (
+              <span className="text-[10px] text-gray-500">שומר…</span>
+            )}
+          </div>
+          <AssigneePicker
+            users={users}
+            selectedIds={assigneeIds}
+            onChange={saveAssignees}
+            disabled={assigneeSaving}
+          />
+          <p className="text-[10px] text-gray-500 mt-1.5">
+            כל אחראי שמסומן יקבל התראה ברגע שיוקצה תאריך מעקב חדש.
+          </p>
+        </div>
+
+        <div>
           <label className="block text-xs text-gray-500 mb-1.5">
             תאריך מעקב הבא
           </label>
@@ -781,20 +910,13 @@ function ExpandedPanel({
             <input
               type="date"
               value={followUpDate}
-              onChange={(e) => {
-                const v = e.target.value;
-                setFollowUpDate(v);
-                onSetFollowUp(leadId, v || null);
-              }}
+              onChange={(e) => saveFollowUp(e.target.value || null, assigneeIds)}
               className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-pink"
             />
             {followUpDate && (
               <button
                 type="button"
-                onClick={() => {
-                  setFollowUpDate("");
-                  onSetFollowUp(leadId, null);
-                }}
+                onClick={() => saveFollowUp(null, assigneeIds)}
                 className="text-xs text-gray-500 hover:text-white px-2"
               >
                 נקה

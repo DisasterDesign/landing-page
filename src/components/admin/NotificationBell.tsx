@@ -8,7 +8,8 @@ type NotifType =
   | "TASK_UPDATED"
   | "TASK_COMMENTED"
   | "CONTACT_RECEIVED"
-  | "AGREEMENT_SIGNED";
+  | "AGREEMENT_SIGNED"
+  | "LEAD_FOLLOWUP";
 
 interface NotificationItem {
   id: string;
@@ -18,6 +19,7 @@ interface NotificationItem {
   readAt: string | null;
   createdAt: string;
   task: { id: string; title: string } | null;
+  leadId: string | null;
 }
 
 function targetUrlFor(n: NotificationItem): string | null {
@@ -30,6 +32,8 @@ function targetUrlFor(n: NotificationItem): string | null {
       return "/admin/contacts";
     case "AGREEMENT_SIGNED":
       return "/admin/agreements";
+    case "LEAD_FOLLOWUP":
+      return n.leadId ? `/admin/leads?focus=${n.leadId}` : "/admin/leads";
   }
 }
 
@@ -96,6 +100,23 @@ export default function NotificationBell() {
     }
   };
 
+  const deleteAll = async () => {
+    if (items.length === 0) return;
+    if (!confirm("למחוק את כל ההתראות? פעולה זו לא ניתנת לביטול.")) return;
+    const prevItems = items;
+    const prevUnread = unread;
+    setItems([]);
+    setUnread(0);
+    try {
+      const res = await fetch("/api/notifications", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      // revert on failure
+      setItems(prevItems);
+      setUnread(prevUnread);
+    }
+  };
+
   const handleClick = async (n: NotificationItem) => {
     setOpen(false);
 
@@ -143,14 +164,25 @@ export default function NotificationBell() {
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
             <h3 className="text-sm font-bold text-white">התראות</h3>
-            {unread > 0 && (
-              <button
-                onClick={markAllRead}
-                className="text-xs text-cyan hover:text-cyan/80 underline-offset-2 hover:underline"
-              >
-                סמן הכל כנקרא
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {unread > 0 && (
+                <button
+                  onClick={markAllRead}
+                  className="text-xs text-cyan hover:text-cyan/80 underline-offset-2 hover:underline"
+                >
+                  סמן הכל כנקרא
+                </button>
+              )}
+              {items.length > 0 && (
+                <button
+                  onClick={deleteAll}
+                  className="text-xs text-red-400 hover:text-red-300 underline-offset-2 hover:underline"
+                  title="מחק את כל ההתראות"
+                >
+                  🗑 מחק הכל
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto">

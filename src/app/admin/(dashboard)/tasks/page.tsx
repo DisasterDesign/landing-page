@@ -482,7 +482,7 @@ export default function TasksPage() {
       </div>
 
       {/* Filter */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <select
           value={filterAssignee}
           onChange={(e) => setFilterAssignee(e.target.value)}
@@ -495,6 +495,10 @@ export default function TasksPage() {
             </option>
           ))}
         </select>
+        <ClearCompletedButton
+          count={tasks.filter((t) => t.status === "DONE").length}
+          onCleared={fetchData}
+        />
       </div>
 
       {/* Kanban Board (desktop) */}
@@ -625,5 +629,42 @@ export default function TasksPage() {
       </Modal>
     </div>
     </PullToRefresh>
+  );
+}
+
+function ClearCompletedButton({
+  count,
+  onCleared,
+}: {
+  count: number;
+  onCleared: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (count === 0) return null;
+  const handle = async () => {
+    if (!confirm(`למחוק ${count} משימות שהסתיימו? פעולה זו לא ניתנת לביטול.`))
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/tasks/completed", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      toast.success(`נמחקו ${json.deleted ?? count} משימות`);
+      onCleared();
+    } catch {
+      toast.error("מחיקת המשימות שהסתיימו נכשלה");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handle}
+      disabled={busy}
+      className="text-xs font-bold px-3 py-2 rounded-xl border border-red-500/40 text-red-400 hover:border-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+    >
+      🗑 {busy ? "מנקה…" : `נקה משימות שהסתיימו (${count})`}
+    </button>
   );
 }

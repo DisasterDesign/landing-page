@@ -54,3 +54,24 @@ export async function POST() {
     );
   }
 }
+
+export async function DELETE() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { count } = await prisma.notification.deleteMany({
+      where: { recipientId: session.user.id },
+    });
+
+    return NextResponse.json({ success: true, deleted: count });
+  } catch (error) {
+    console.error("Error deleting notifications:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

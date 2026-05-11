@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
       ],
       include: {
         _count: { select: { notes: true } },
+        assignees: { select: { id: true, name: true } },
       },
       take: 200,
     });

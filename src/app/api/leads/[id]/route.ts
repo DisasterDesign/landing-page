@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { createNotification, notifyAllAdmins } from "@/lib/notifications";
 
 const patchSchema = z.object({
   status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"]).optional(),
   nextFollowUpAt: z.string().nullable().optional(), // ISO date or null
   isRead: z.boolean().optional(),
+  assigneeIds: z.array(z.string()).optional(),
 });
 
 export async function GET(
@@ -28,6 +30,7 @@ export async function GET(
           orderBy: { createdAt: "asc" },
           include: { author: { select: { id: true, name: true } } },
         },
+        assignees: { select: { id: true, name: true } },
       },
     });
     if (!lead) {
@@ -62,6 +65,16 @@ export async function PATCH(
       );
     }
 
+    // Load the previous state so we can decide whether the follow-up date
+    // actually changed (and thus whether to fire a notification).
+    const before = await prisma.contactSubmission.findUnique({
+      where: { id },
+      select: { nextFollowUpAt: true, name: true },
+    });
+    if (!before) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const data: Record<string, unknown> = {};
     if (parsed.data.status !== undefined) {
       data.status = parsed.data.status;
@@ -73,8 +86,60 @@ export async function PATCH(
         ? new Date(parsed.data.nextFollowUpAt)
         : null;
     }
+    if (parsed.data.assigneeIds !== undefined) {
+      data.assignees = {
+        set: parsed.data.assigneeIds.map((id) => ({ id })),
+      };
+    }
 
-    const lead = await prisma.contactSubmission.update({ where: { id }, data });
+    const lead = await prisma.contactSubmission.update({
+      where: { id },
+      data,
+      include: { assignees: { select: { id: true, name: true } } },
+    });
+
+    // Fire LEAD_FOLLOWUP only when nextFollowUpAt was set or rescheduled.
+    // (Pure assignee changes stay silent — user spec.)
+    const incomingDate = parsed.data.nextFollowUpAt;
+    if (incomingDate !== undefined) {
+      const beforeMs = before.nextFollowUpAt
+        ? new Date(before.nextFollowUpAt).getTime()
+        : null;
+      const afterMs = incomingDate ? new Date(incomingDate).getTime() : null;
+      const dateChanged = beforeMs !== afterMs;
+      if (dateChanged && afterMs !== null) {
+        const title = `פולואפ: ${lead.name}`;
+        const body = `תאריך: ${new Date(afterMs).toLocaleDateString("he-IL")}`;
+        const actorId = session.user.id;
+        if (lead.assignees.length > 0) {
+          await Promise.all(
+            lead.assignees.map((a) =>
+              createNotification(
+                {
+                  recipientId: a.id,
+                  type: "LEAD_FOLLOWUP",
+                  title,
+                  body,
+                  leadId: lead.id,
+                },
+                actorId
+              )
+            )
+          );
+        } else {
+          await notifyAllAdmins(
+            {
+              type: "LEAD_FOLLOWUP",
+              title,
+              body,
+              leadId: lead.id,
+            },
+            actorId
+          );
+        }
+      }
+    }
+
     return NextResponse.json(lead);
   } catch (error) {
     console.error("Lead patch error:", error);

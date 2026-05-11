@@ -8,20 +8,26 @@ interface CreateNotificationInput {
   title: string;
   body?: string;
   taskId?: string;
+  leadId?: string;
   /** Override the URL the notification opens. Default: based on type. */
   url?: string;
 }
 
-function defaultUrl(type: NotificationType, taskId?: string): string {
+function defaultUrl(
+  type: NotificationType,
+  ids: { taskId?: string; leadId?: string }
+): string {
   switch (type) {
     case "TASK_ASSIGNED":
     case "TASK_UPDATED":
     case "TASK_COMMENTED":
-      return taskId ? `/admin/tasks/${taskId}` : "/admin/tasks";
+      return ids.taskId ? `/admin/tasks/${ids.taskId}` : "/admin/tasks";
     case "CONTACT_RECEIVED":
       return "/admin/contacts";
     case "AGREEMENT_SIGNED":
       return "/admin/agreements";
+    case "LEAD_FOLLOWUP":
+      return ids.leadId ? `/admin/leads?focus=${ids.leadId}` : "/admin/leads";
     default:
       return "/admin";
   }
@@ -45,6 +51,7 @@ export async function createNotification(
         title: input.title,
         body: input.body,
         taskId: input.taskId,
+        leadId: input.leadId,
       },
     });
   } catch (err) {
@@ -56,7 +63,9 @@ export async function createNotification(
     await sendPushToUser(input.recipientId, {
       title: input.title,
       body: input.body,
-      url: input.url || defaultUrl(input.type, input.taskId),
+      url:
+        input.url ||
+        defaultUrl(input.type, { taskId: input.taskId, leadId: input.leadId }),
       tag: `fw-${input.type.toLowerCase()}`,
     });
   } catch (err) {
