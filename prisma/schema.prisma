@@ -201,6 +201,7 @@ model ContactSubmission {
   externalAdId       String?
   nextFollowUpAt     DateTime?
   lastContactedAt    DateTime?
+  closedAt           DateTime?
   createdAt          DateTime      @default(now())
 
   notes         ContactNote[]

@@ -66,10 +66,11 @@ export async function PATCH(
     }
 
     // Load the previous state so we can decide whether the follow-up date
-    // actually changed (and thus whether to fire a notification).
+    // actually changed (and thus whether to fire a notification), and whether
+    // this PATCH is transitioning the lead INTO CLOSED for the first time.
     const before = await prisma.contactSubmission.findUnique({
       where: { id },
-      select: { nextFollowUpAt: true, name: true },
+      select: { nextFollowUpAt: true, name: true, status: true, closedAt: true },
     });
     if (!before) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -79,6 +80,16 @@ export async function PATCH(
     if (parsed.data.status !== undefined) {
       data.status = parsed.data.status;
       if (parsed.data.status !== "NEW") data.isRead = true;
+      // Stamp closedAt the moment a lead transitions into CLOSED so the
+      // "נסגרו החודש" summary card has a real timestamp to filter on.
+      // Reverting out of CLOSED leaves closedAt as-is (history of last close).
+      if (
+        parsed.data.status === "CLOSED" &&
+        before.status !== "CLOSED" &&
+        !before.closedAt
+      ) {
+        data.closedAt = new Date();
+      }
     }
     if (parsed.data.isRead !== undefined) data.isRead = parsed.data.isRead;
     if (parsed.data.nextFollowUpAt !== undefined) {

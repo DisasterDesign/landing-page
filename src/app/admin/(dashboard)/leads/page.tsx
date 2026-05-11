@@ -27,6 +27,7 @@ interface Lead {
   source: string | null;
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
+  closedAt: string | null;
   createdAt: string;
   _count: { notes: number };
   assignees: UserLite[];
@@ -289,11 +290,12 @@ export default function LeadsPage() {
     const monthStartMs = startOfMonth.getTime();
     const closedThisMonth = leads.filter((l) => {
       if (l.status !== "CLOSED") return false;
-      // No closedAt field on Lead — use the last touch we have as a proxy.
-      const ts = l.lastContactedAt
-        ? new Date(l.lastContactedAt).getTime()
-        : new Date(l.createdAt).getTime();
-      return ts >= monthStartMs;
+      // Prefer the real closedAt timestamp; fall back to last touch /
+      // createdAt for rows that pre-date the schema field (shouldn't happen
+      // after backfill but kept for safety).
+      const tsSource =
+        l.closedAt ?? l.lastContactedAt ?? l.createdAt;
+      return new Date(tsSource).getTime() >= monthStartMs;
     }).length;
     return {
       newCount: leads.filter((l) => l.status === "NEW").length,
