@@ -101,10 +101,10 @@ export default function AccessibilityPage() {
                   <li>
                     <strong className="text-black">טלפון:</strong>{" "}
                     <a
-                      href="tel:+972500000000"
+                      href="tel:+972547136666"
                       className="text-pink hover:text-cyan transition-colors"
                     >
-                      050-000-0000
+                      054-713-6666
                     </a>
                   </li>
                 </ul>
