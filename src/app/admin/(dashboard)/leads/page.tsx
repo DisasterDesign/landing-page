@@ -385,18 +385,29 @@ export default function LeadsPage() {
           <div className="flex flex-wrap gap-1.5">
             {FILTER_TABS.map((tab) => {
               const active = statusFilter === tab.id;
+              const count =
+                tab.id === "ALL"
+                  ? leads.length
+                  : leads.filter((l) => l.status === tab.id).length;
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setStatusFilter(tab.id)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5 ${
                     active
                       ? "bg-pink text-white"
                       : "bg-gray-800 text-gray-400 hover:text-white"
                   }`}
                 >
-                  {tab.label}
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 rounded-full ${
+                      active ? "bg-white/25" : "bg-gray-700 text-gray-300"
+                    }`}
+                  >
+                    {count}
+                  </span>
                 </button>
               );
             })}
