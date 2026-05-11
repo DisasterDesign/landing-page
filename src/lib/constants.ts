@@ -11,7 +11,7 @@ import type {
 export const SITE_NAME = "Fuzion Webz";
 export const SITE_URL = "https://www.fuzionwebz.com";
 export const SITE_DESCRIPTION = "סטודיו לעיצוב ובניית אתרים מתקדמים";
-export const WHATSAPP_NUMBER = "972000000000";
+export const WHATSAPP_NUMBER = "972547136666";
 export const WHATSAPP_MESSAGE = "היי, אשמח לשמוע עוד על השירותים שלכם!";
 
 export const NAV_ITEMS: NavItem[] = [
@@ -369,7 +369,7 @@ export const FAQ_ITEMS: FAQItem[] = [
 ];
 
 export const SOCIAL_LINKS = {
-  instagram: "https://instagram.com/fuzionwebz",
+  instagram: "https://instagram.com/fuzion_webz",
   facebook: "https://facebook.com/fuzionwebz",
   linkedin: "https://linkedin.com/company/fuzionwebz",
   tiktok: "https://tiktok.com/@fuzionwebz",

@@ -14,7 +14,7 @@ export function OrganizationJsonLd() {
       addressCountry: "IL",
     },
     sameAs: [
-      "https://instagram.com/fuzionwebz",
+      "https://instagram.com/fuzion_webz",
       "https://facebook.com/fuzionwebz",
       "https://linkedin.com/company/fuzionwebz",
       "https://tiktok.com/@fuzionwebz",
