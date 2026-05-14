@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { createNotification, notifyAllAdmins } from "@/lib/notifications";
 
 const patchSchema = z.object({
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"]).optional(),
+  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
   nextFollowUpAt: z.string().nullable().optional(), // ISO date or null
   isRead: z.boolean().optional(),
   assigneeIds: z.array(z.string()).optional(),

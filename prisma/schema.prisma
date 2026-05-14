@@ -72,6 +72,7 @@ enum ContactStatus {
   NEW
   IN_PROGRESS
   CLOSED
+  LOST
   SPAM
 }
 

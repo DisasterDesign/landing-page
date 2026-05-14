@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import AssigneePicker from "@/components/admin/AssigneePicker";
 
-type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "SPAM";
+type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "LOST" | "SPAM";
 type StatusFilter = "ALL" | Status;
 type Category = "sales" | "landing" | "branding" | "other";
 
@@ -54,6 +54,7 @@ const STATUS_LABEL: Record<Status, string> = {
   NEW: "חדש",
   IN_PROGRESS: "בטיפול",
   CLOSED: "נסגר",
+  LOST: "לא נסגרו",
   SPAM: "ספאם",
 };
 
@@ -61,6 +62,7 @@ const STATUS_BADGE: Record<Status, string> = {
   NEW: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
   IN_PROGRESS: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   CLOSED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  LOST: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   SPAM: "bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
 };
 
@@ -68,7 +70,8 @@ const STATUS_ORDER: Record<Status, number> = {
   NEW: 0,
   IN_PROGRESS: 1,
   CLOSED: 2,
-  SPAM: 3,
+  LOST: 3,
+  SPAM: 4,
 };
 
 const CATEGORY_ORDER: Category[] = ["sales", "landing", "branding", "other"];
@@ -145,6 +148,7 @@ const FILTER_TABS: { id: StatusFilter; label: string }[] = [
   { id: "NEW", label: "חדש" },
   { id: "IN_PROGRESS", label: "בטיפול" },
   { id: "CLOSED", label: "נסגר" },
+  { id: "LOST", label: "לא נסגרו" },
   { id: "SPAM", label: "ספאם" },
 ];
 
@@ -875,7 +879,7 @@ function ExpandedPanel({
         <div>
           <p className="text-xs text-gray-500 mb-1.5">שינוי סטטוס</p>
           <div className="flex flex-wrap gap-1.5">
-            {(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"] as Status[]).map((s) => {
+            {(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"] as Status[]).map((s) => {
               const active = detail.status === s;
               const busy = statusSaving === s;
               return (
