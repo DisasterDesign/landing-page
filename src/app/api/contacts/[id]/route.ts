@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 
 const patchSchema = z.object({
   isRead: z.boolean().optional(),
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"]).optional(),
+  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
 

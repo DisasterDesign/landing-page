@@ -5,7 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { confirmDanger } from "@/lib/confirm";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 
-type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "SPAM";
+type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "LOST" | "SPAM";
 
 interface Contact {
   id: string;
@@ -24,6 +24,7 @@ const STATUS_LABEL: Record<Status, string> = {
   NEW: "חדש",
   IN_PROGRESS: "בטיפול",
   CLOSED: "נסגר",
+  LOST: "לא נסגרו",
   SPAM: "ספאם",
 };
 
@@ -31,6 +32,7 @@ const STATUS_CLASS: Record<Status, string> = {
   NEW: "bg-pink/15 text-pink",
   IN_PROGRESS: "bg-yellow-500/15 text-yellow-400",
   CLOSED: "bg-green-500/15 text-green-400",
+  LOST: "bg-red-500/15 text-red-400",
   SPAM: "bg-gray-700/40 text-gray-400",
 };
 
@@ -82,7 +84,7 @@ export default function ContactsPage() {
   }, [contacts, search, statusFilter, unreadOnly]);
 
   const counts = useMemo(() => {
-    const by = { ALL: contacts.length, NEW: 0, IN_PROGRESS: 0, CLOSED: 0, SPAM: 0 };
+    const by = { ALL: contacts.length, NEW: 0, IN_PROGRESS: 0, CLOSED: 0, LOST: 0, SPAM: 0 };
     let unread = 0;
     for (const c of contacts) {
       by[c.status]++;
@@ -239,7 +241,7 @@ export default function ContactsPage() {
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          {(["ALL", "NEW", "IN_PROGRESS", "CLOSED", "SPAM"] as const).map((s) => (
+          {(["ALL", "NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -411,7 +413,7 @@ export default function ContactsPage() {
                     {/* Status quick set */}
                     <div className="flex flex-wrap gap-1.5">
                       <span className="text-xs text-gray-500 self-center ml-1">סטטוס:</span>
-                      {(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"] as Status[]).map((s) => (
+                      {(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"] as Status[]).map((s) => (
                         <button
                           key={s}
                           onClick={() => updateStatus(contact.id, s)}

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 const schema = z.object({
   ids: z.array(z.string().min(1)).min(1),
   action: z.enum(["markRead", "markUnread", "delete", "setStatus"]),
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "SPAM"]).optional(),
+  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
