@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
@@ -6,10 +8,67 @@ import SignAgreementClient from "./SignAgreementClient";
 export const dynamic = "force-dynamic";
 
 const TIER_LABEL: Record<string, string> = {
+  LANDING: "דף נחיתה",
   BASIC: "בסיס",
   ADVANCED: "מתקדם",
   PREMIUM: "פרימיום",
 };
+
+// Cached so generateMetadata + the page render share a single query
+// per request instead of hitting the DB twice.
+const getAgreement = cache(async (token: string) => {
+  return prisma.agreement.findUnique({
+    where: { signToken: token },
+    select: {
+      tier: true,
+      monthlyPrice: true,
+      oneTimeFee: true,
+      customerName: true,
+      businessName: true,
+      idNumber: true,
+      phone: true,
+      email: true,
+      status: true,
+      content: true,
+      signedAt: true,
+    },
+  });
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const agreement = await getAgreement(token);
+
+  // Contract links are private — never index them.
+  if (!agreement) {
+    return { title: "הסכם לא נמצא", robots: { index: false, follow: false } };
+  }
+
+  const who = agreement.businessName || agreement.customerName;
+  const signed = agreement.status === "SIGNED";
+  // Root layout's title template appends " | Fuzion Webz" — keep the
+  // brand out of `title` to avoid doubling it.
+  const title = signed ? "הסכם חתום" : "הסכם שירות לחתימה";
+  const description = signed
+    ? `ההסכם של ${who} עם Fuzion Webz נחתם.`
+    : `${who}, ההסכם שלך עם Fuzion Webz מוכן לעיון ולחתימה דיגיטלית.`;
+
+  return {
+    title,
+    description,
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: `${title} — Fuzion Webz`,
+      description,
+      type: "website",
+      // opengraph-image.tsx in this segment is wired in automatically.
+    },
+  };
+}
 
 function BrandShell({ children }: { children: React.ReactNode }) {
   return (
@@ -34,22 +93,7 @@ export default async function AgreementSignPage({
 }) {
   const { token } = await params;
 
-  const agreement = await prisma.agreement.findUnique({
-    where: { signToken: token },
-    select: {
-      tier: true,
-      monthlyPrice: true,
-      oneTimeFee: true,
-      customerName: true,
-      businessName: true,
-      idNumber: true,
-      phone: true,
-      email: true,
-      status: true,
-      content: true,
-      signedAt: true,
-    },
-  });
+  const agreement = await getAgreement(token);
 
   if (!agreement) notFound();
 

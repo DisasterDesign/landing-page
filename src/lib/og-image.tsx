@@ -156,6 +156,182 @@ function fitFontSize(title: string): number {
 }
 
 /**
+ * Renders a contract-flavoured OG card for agreement signing links.
+ * Distinct from the marketing splash so a WhatsApp preview reads as
+ * "a document to sign", not "a link to the website". Hebrew is shaped
+ * with Meruba-Bold (Satori needs an embedded Hebrew font for RTL).
+ */
+export function renderAgreementOgImage(
+  recipientName: string,
+  signed: boolean
+): ImageResponse {
+  const iconDataUrl = getIconDataUrl();
+  const brandFont = getBrandFont();
+  const hebrewFont = getHebrewFont();
+
+  const fonts: {
+    name: string;
+    data: ArrayBuffer;
+    weight: 400 | 700;
+    style: "normal";
+  }[] = [];
+  if (brandFont) {
+    fonts.push({ name: "FuzionFirst", data: brandFont, weight: 700, style: "normal" });
+  }
+  if (hebrewFont) {
+    fonts.push({ name: "Meruba", data: hebrewFont, weight: 700, style: "normal" });
+  }
+
+  const heFamily = hebrewFont
+    ? "Meruba, FuzionFirst, Arial, sans-serif"
+    : "FuzionFirst, Arial, sans-serif";
+  const brandFamily = brandFont
+    ? "FuzionFirst, Arial, sans-serif"
+    : "Arial, sans-serif";
+
+  const title = signed ? "הסכם חתום ✓" : "הסכם שירות לחתימה";
+  // Keep the recipient line from overflowing the card.
+  const who = recipientName.length > 42
+    ? `${recipientName.slice(0, 41)}…`
+    : recipientName;
+
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          padding: "40px",
+          backgroundColor: "#000000",
+        }}
+      >
+        {/* Document-style framed card */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "56px 64px",
+            border: "2px solid #2a2a2a",
+            borderRadius: "24px",
+            backgroundColor: "#0a0a0a",
+            color: "#ffffff",
+          }}
+        >
+          {/* Top row — brand */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: "18px",
+              fontFamily: brandFamily,
+            }}
+          >
+            {iconDataUrl ? (
+              <img
+                src={iconDataUrl}
+                width={64}
+                height={64}
+                alt=""
+                style={{ borderRadius: "12px" }}
+              />
+            ) : null}
+            <div style={{ display: "flex", flexDirection: "row", alignItems: "baseline", gap: "10px" }}>
+              <span style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-1px" }}>FUZION</span>
+              <span style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-1px", color: "#888888" }}>WEBZ</span>
+            </div>
+          </div>
+
+          {/* Title block — right-aligned for Hebrew */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              width: "100%",
+              textAlign: "right",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "26px",
+                letterSpacing: "2px",
+                color: "#999999",
+                fontFamily: heFamily,
+                direction: "rtl",
+                marginBottom: "14px",
+              }}
+            >
+              מסמך רשמי · לחתימה דיגיטלית
+            </div>
+            <div
+              style={{
+                fontSize: "78px",
+                lineHeight: 1.1,
+                fontWeight: 700,
+                fontFamily: heFamily,
+                direction: "rtl",
+                color: "#ffffff",
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                fontSize: "34px",
+                fontFamily: heFamily,
+                direction: "rtl",
+                color: "#cccccc",
+                marginTop: "18px",
+              }}
+            >
+              {`עבור: ${who}`}
+            </div>
+          </div>
+
+          {/* Bottom row — gradient bar + signature label */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "20px",
+                letterSpacing: "6px",
+                color: "#cccccc",
+                textTransform: "uppercase",
+                fontFamily: brandFamily,
+              }}
+            >
+              Service Agreement
+            </div>
+            <div
+              style={{
+                width: "180px",
+                height: "6px",
+                background: "linear-gradient(90deg, #E503A2 0%, #01FFFF 100%)",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    ),
+    {
+      ...OG_IMAGE_SIZE,
+      ...(fonts.length ? { fonts } : {}),
+    }
+  );
+}
+
+/**
  * Renders a per-post OG card with Hebrew title + Fuzion branding.
  * The Hebrew title uses Meruba-Bold so Satori shapes RTL glyphs correctly.
  */
