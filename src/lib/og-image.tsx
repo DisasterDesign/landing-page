@@ -159,7 +159,9 @@ function fitFontSize(title: string): number {
  * Renders a contract-flavoured OG card for agreement signing links.
  * Distinct from the marketing splash so a WhatsApp preview reads as
  * "a document to sign", not "a link to the website". Hebrew is shaped
- * with Meruba-Bold (Satori needs an embedded Hebrew font for RTL).
+ * with Meruba-Bold and right-aligned via flex/textAlign — do NOT set
+ * `direction: rtl` on the text nodes (Satori double-reverses glyphs
+ * and the preview comes out mirrored).
  */
 export function renderAgreementOgImage(
   recipientName: string,
@@ -261,7 +263,6 @@ export function renderAgreementOgImage(
                 letterSpacing: "2px",
                 color: "#999999",
                 fontFamily: heFamily,
-                direction: "rtl",
                 marginBottom: "14px",
               }}
             >
@@ -273,7 +274,6 @@ export function renderAgreementOgImage(
                 lineHeight: 1.1,
                 fontWeight: 700,
                 fontFamily: heFamily,
-                direction: "rtl",
                 color: "#ffffff",
               }}
             >
@@ -283,7 +283,6 @@ export function renderAgreementOgImage(
               style={{
                 fontSize: "34px",
                 fontFamily: heFamily,
-                direction: "rtl",
                 color: "#cccccc",
                 marginTop: "18px",
               }}
