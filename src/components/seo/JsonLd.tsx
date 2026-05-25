@@ -1,4 +1,4 @@
-import { SITE_URL, SITE_NAME, FAQ_ITEMS, SERVICES } from "@/lib/constants";
+import { SITE_URL, SITE_NAME, FAQ_ITEMS, SERVICES, WHATSAPP_NUMBER } from "@/lib/constants";
 
 // Organization schema — for the root layout or homepage
 export function OrganizationJsonLd() {
@@ -44,6 +44,7 @@ export function LocalBusinessJsonLd() {
     logo: `${SITE_URL}/logo.svg`,
     image: `${SITE_URL}/og-image.jpg`,
     description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים. עיצוב UX/UI, פיתוח אתרים, מיתוג דיגיטלי.",
+    telephone: `+${WHATSAPP_NUMBER}`,
     address: {
       "@type": "PostalAddress",
       addressCountry: "IL",

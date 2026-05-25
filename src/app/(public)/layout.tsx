@@ -9,7 +9,7 @@ import Loader from "@/components/animations/Loader";
 import WhatsAppButton from "@/components/shared/WhatsAppButton";
 import CookieConsent from "@/components/shared/CookieConsent";
 import AccessibilityWidget from "@/components/shared/AccessibilityWidget";
-import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/JsonLd";
+import { OrganizationJsonLd, WebSiteJsonLd, LocalBusinessJsonLd } from "@/components/seo/JsonLd";
 import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +17,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     <>
       <GoogleAnalytics />
       <OrganizationJsonLd />
+      <LocalBusinessJsonLd />
       <WebSiteJsonLd />
       <CustomCursor />
       <Loader />
