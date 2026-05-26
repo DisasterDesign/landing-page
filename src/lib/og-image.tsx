@@ -156,12 +156,31 @@ function fitFontSize(title: string): number {
 }
 
 /**
+ * Satori does not run a BiDi pass for Hebrew, and `direction: "rtl"`
+ * in its style sheet is a no-op for text reordering — so naive Hebrew
+ * rendering comes out mirrored. Pre-reverse the whole string so that
+ * Satori's LTR pass produces visually-RTL output, then re-reverse
+ * Latin/digit runs (acronyms like "SEO", years like "2026") so they
+ * stay readable in their own LTR direction.
+ *
+ * Only handles single-segment text; multi-line wrapping is solved at
+ * the call site by splitting on " — " into separate <div> children
+ * so each rendered line is its own bidi-correct segment.
+ */
+function bidiHebrew(text: string): string {
+  if (!text || !/[֐-׿]/.test(text)) return text;
+  return [...text]
+    .reverse()
+    .join("")
+    .replace(/[A-Za-z0-9]+/g, (m) => [...m].reverse().join(""));
+}
+
+/**
  * Renders a contract-flavoured OG card for agreement signing links.
  * Distinct from the marketing splash so a WhatsApp preview reads as
  * "a document to sign", not "a link to the website". Hebrew is shaped
- * with Meruba-Bold and MUST have `direction: "rtl"` on each text node
- * — Satori applies no implicit BiDi pass, so without it Hebrew chars
- * render in storage order and the preview reads mirrored.
+ * with Meruba-Bold and pre-reversed via `bidiHebrew()` because Satori
+ * does not honour CSS `direction: rtl` for text reordering.
  */
 export function renderAgreementOgImage(
   recipientName: string,
@@ -191,11 +210,14 @@ export function renderAgreementOgImage(
     ? "FuzionFirst, Arial, sans-serif"
     : "Arial, sans-serif";
 
-  const title = signed ? "הסכם חתום ✓" : "הסכם שירות לחתימה";
+  const titleRaw = signed ? "הסכם חתום ✓" : "הסכם שירות לחתימה";
   // Keep the recipient line from overflowing the card.
   const who = recipientName.length > 42
     ? `${recipientName.slice(0, 41)}…`
     : recipientName;
+  const eyebrow = bidiHebrew("מסמך רשמי · לחתימה דיגיטלית");
+  const title = bidiHebrew(titleRaw);
+  const recipient = bidiHebrew(`עבור: ${who}`);
 
   return new ImageResponse(
     (
@@ -263,11 +285,10 @@ export function renderAgreementOgImage(
                 letterSpacing: "2px",
                 color: "#999999",
                 fontFamily: heFamily,
-                direction: "rtl",
                 marginBottom: "14px",
               }}
             >
-              מסמך רשמי · לחתימה דיגיטלית
+              {eyebrow}
             </div>
             <div
               style={{
@@ -275,7 +296,6 @@ export function renderAgreementOgImage(
                 lineHeight: 1.1,
                 fontWeight: 700,
                 fontFamily: heFamily,
-                direction: "rtl",
                 color: "#ffffff",
               }}
             >
@@ -285,12 +305,11 @@ export function renderAgreementOgImage(
               style={{
                 fontSize: "34px",
                 fontFamily: heFamily,
-                direction: "rtl",
                 color: "#cccccc",
                 marginTop: "18px",
               }}
             >
-              {`עבור: ${who}`}
+              {recipient}
             </div>
           </div>
 
@@ -335,9 +354,12 @@ export function renderAgreementOgImage(
 
 /**
  * Renders a per-post OG card with Hebrew title + Fuzion branding.
- * The Hebrew title uses Meruba-Bold; each Hebrew text node sets
- * `direction: "rtl"` because Satori applies no implicit BiDi pass —
- * without it Hebrew renders in storage order and reads mirrored.
+ * Hebrew goes through `bidiHebrew()` before reaching Satori, because
+ * Satori does not reorder Hebrew for `direction: rtl`. When the title
+ * contains " — ", the two halves render as separate stacked lines so
+ * the reader sees the source halves in the correct top→bottom order
+ * (Satori's auto-wrap would otherwise put the tail of the title on
+ * top and the head on the bottom).
  */
 export function renderBlogPostOgImage(title: string, category?: string | null): ImageResponse {
   const iconDataUrl = getIconDataUrl();
@@ -364,7 +386,23 @@ export function renderBlogPostOgImage(title: string, category?: string | null): 
     ? "FuzionFirst, Arial, sans-serif"
     : "Arial, sans-serif";
 
-  const titleSize = fitFontSize(title);
+  const DASH = " — ";
+  const dashIdx = title.indexOf(DASH);
+  let titleLines: string[];
+  let titleSize: number;
+  if (dashIdx === -1) {
+    titleLines = [bidiHebrew(title)];
+    titleSize = fitFontSize(title);
+  } else {
+    const before = title.slice(0, dashIdx);
+    const after = title.slice(dashIdx + DASH.length);
+    titleLines = [bidiHebrew(before), bidiHebrew(`— ${after}`)];
+    // `fitFontSize` assumes the title may wrap; in split mode each
+    // half stays on one line so size against the longer half, then
+    // shrink a notch so a wide Hebrew half fits 1056px width.
+    const longerHalf = before.length > after.length ? before : after;
+    titleSize = Math.floor(fitFontSize(longerHalf) * 0.75);
+  }
 
   return new ImageResponse(
     (
@@ -415,19 +453,21 @@ export function renderBlogPostOgImage(title: string, category?: string | null): 
             textAlign: "right",
           }}
         >
-          <div
-            style={{
-              fontSize: `${titleSize}px`,
-              lineHeight: 1.15,
-              fontWeight: 700,
-              fontFamily: titleFontFamily,
-              direction: "rtl",
-              color: "#ffffff",
-              maxWidth: "100%",
-            }}
-          >
-            {title}
-          </div>
+          {titleLines.map((line, i) => (
+            <div
+              key={i}
+              style={{
+                fontSize: `${titleSize}px`,
+                lineHeight: 1.15,
+                fontWeight: 700,
+                fontFamily: titleFontFamily,
+                color: "#ffffff",
+                maxWidth: "100%",
+              }}
+            >
+              {line}
+            </div>
+          ))}
         </div>
 
         {/* Bottom row — gradient bar + category / blog label */}
@@ -455,8 +495,8 @@ export function renderBlogPostOgImage(title: string, category?: string | null): 
             {category ? (
               <>
                 <span>·</span>
-                <span style={{ direction: "rtl", fontFamily: titleFontFamily }}>
-                  {category}
+                <span style={{ fontFamily: titleFontFamily }}>
+                  {bidiHebrew(category)}
                 </span>
               </>
             ) : null}
