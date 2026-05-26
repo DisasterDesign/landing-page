@@ -225,18 +225,39 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
   company: string | null;
   message: string;
 } {
+  // Meta autogenerates internal field keys by replacing spaces with
+  // underscores ("שם מלא" → "שם_מלא"), so we normalize both sides of
+  // every comparison before matching.
+  const normalize = (s: string) => s.replace(/_/g, " ").trim();
+
+  // Track every field we've already pulled into a structured column so
+  // the "extra lines" message body doesn't repeat them.
+  const consumed = new Set<string>();
+
   const getExact = (...candidates: string[]): string | null => {
     for (const cand of candidates) {
-      const found = lead.field_data.find((f) => f.name === cand);
-      if (found && found.values?.[0]) return found.values[0];
+      const target = normalize(cand);
+      const found = lead.field_data.find(
+        (f) => f.name === cand || normalize(f.name) === target
+      );
+      if (found && found.values?.[0]) {
+        consumed.add(found.name);
+        return found.values[0];
+      }
     }
     return null;
   };
 
   const getContains = (...needles: string[]): LeadFieldDatum | null => {
     for (const needle of needles) {
-      const found = lead.field_data.find((f) => f.name.includes(needle));
-      if (found && found.values?.[0]) return found;
+      const normalized = normalize(needle);
+      const found = lead.field_data.find((f) =>
+        normalize(f.name).includes(normalized)
+      );
+      if (found && found.values?.[0]) {
+        consumed.add(found.name);
+        return found;
+      }
     }
     return null;
   };
@@ -257,26 +278,32 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
 
   const findContaining = (...needles: string[]): string | null => {
     for (const needle of needles) {
-      const found = lead.field_data.find(
-        (f) => f.name.includes(needle) && !isCompanyName(f.name)
-      );
-      if (found && found.values?.[0]) return found.values[0];
+      const normalized = normalize(needle);
+      const found = lead.field_data.find((f) => {
+        const fname = normalize(f.name);
+        return fname.includes(normalized) && !isCompanyName(fname);
+      });
+      if (found && found.values?.[0]) {
+        consumed.add(found.name);
+        return found.values[0];
+      }
     }
     return null;
   };
 
   // Standard Meta names first (forms in English, or that use Meta's
   // built-in name fields), then the Hebrew variants the Fuzion forms
-  // actually use ("שם מלא", "שם פרטי", "שם משפחה", or just "שם").
+  // actually use ("שם מלא" / "שם_מלא", "שם פרטי", "שם משפחה", or just
+  // "שם"). All comparisons normalize underscores → spaces.
   const fullName =
-    getExact("full_name") ??
+    getExact("full_name", "שם מלא") ??
     findContaining("שם מלא", "השם שלך", "מה שמך");
-  const firstName = getExact("first_name") ?? findContaining("שם פרטי");
-  const lastName = getExact("last_name") ?? findContaining("שם משפחה");
+  const firstName = getExact("first_name", "שם פרטי") ?? findContaining("שם פרטי");
+  const lastName = getExact("last_name", "שם משפחה") ?? findContaining("שם משפחה");
   const genericHebrewName = findContaining("שם"); // catches a lone "שם" field
 
-  const email = getExact("email") ?? "";
-  const phone = getExact("phone_number", "phone");
+  const email = getExact("email", 'דוא"ל', "דואל", "כתובת מייל") ?? "";
+  const phone = getExact("phone_number", "phone", "מספר טלפון", "טלפון");
 
   // Last-ditch fallback before the literal placeholder: the user-portion of
   // the email reads much better in the leads table than "ליד מפייסבוק" and
@@ -290,22 +317,12 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
     emailNamePart ||
     "ליד מפייסבוק";
 
-  // Collect any remaining custom fields for the message body.
-  const standardNames = new Set([
-    "full_name",
-    "first_name",
-    "last_name",
-    "email",
-    "phone_number",
-    "phone",
-  ]);
-  const consumed = new Set<string>();
-  if (companyField) consumed.add(companyField.name);
-  if (interestField) consumed.add(interestField.name);
-
+  // Anything matched above already lives in a structured column (the
+  // helpers populate `consumed` as they go). Only stragglers — like the
+  // service selector "אתר_מכירות_אונליין" — should land in the message.
   const extraLines = lead.field_data
-    .filter((f) => !standardNames.has(f.name) && !consumed.has(f.name) && f.values?.[0])
-    .map((f) => `${f.name}: ${f.values.join(", ")}`);
+    .filter((f) => !consumed.has(f.name) && f.values?.[0])
+    .map((f) => `${normalize(f.name)}: ${f.values.join(", ")}`);
 
   const parts: string[] = [];
   if (interest) parts.push(interest);
