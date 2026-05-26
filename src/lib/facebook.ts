@@ -241,20 +241,54 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
     return null;
   };
 
-  const fullName = getExact("full_name");
-  const firstName = getExact("first_name");
-  const lastName = getExact("last_name");
-  const name =
-    fullName || [firstName, lastName].filter(Boolean).join(" ") || "ליד מפייסבוק";
-
-  const email = getExact("email") ?? "";
-  const phone = getExact("phone_number", "phone");
-
+  // Locate the company field first so the Hebrew-name detection below can
+  // exclude it — "שם החברה" contains "שם" and would otherwise hijack the
+  // generic name fallback.
   const companyField = getContains("שם החברה", "חברה/עסק", "company");
   const company = companyField?.values?.[0] ?? null;
 
   const interestField = getContains("מתעניין", "interest");
   const interest = interestField?.values?.[0] ?? null;
+
+  // A "company-flavoured" predicate keeps generic "שם" matchers from
+  // pointing at "שם החברה" / "שם העסק" / similar company labels.
+  const isCompanyName = (n: string) =>
+    /חברה|עסק|company|business/i.test(n);
+
+  const findContaining = (...needles: string[]): string | null => {
+    for (const needle of needles) {
+      const found = lead.field_data.find(
+        (f) => f.name.includes(needle) && !isCompanyName(f.name)
+      );
+      if (found && found.values?.[0]) return found.values[0];
+    }
+    return null;
+  };
+
+  // Standard Meta names first (forms in English, or that use Meta's
+  // built-in name fields), then the Hebrew variants the Fuzion forms
+  // actually use ("שם מלא", "שם פרטי", "שם משפחה", or just "שם").
+  const fullName =
+    getExact("full_name") ??
+    findContaining("שם מלא", "השם שלך", "מה שמך");
+  const firstName = getExact("first_name") ?? findContaining("שם פרטי");
+  const lastName = getExact("last_name") ?? findContaining("שם משפחה");
+  const genericHebrewName = findContaining("שם"); // catches a lone "שם" field
+
+  const email = getExact("email") ?? "";
+  const phone = getExact("phone_number", "phone");
+
+  // Last-ditch fallback before the literal placeholder: the user-portion of
+  // the email reads much better in the leads table than "ליד מפייסבוק" and
+  // is almost always present in a Meta lead.
+  const emailNamePart = email && email.includes("@") ? email.split("@")[0] : "";
+
+  const name =
+    fullName ||
+    [firstName, lastName].filter(Boolean).join(" ") ||
+    genericHebrewName ||
+    emailNamePart ||
+    "ליד מפייסבוק";
 
   // Collect any remaining custom fields for the message body.
   const standardNames = new Set([
