@@ -235,6 +235,9 @@ model BlogPost {
   id          String    @id @default(cuid())
   title       String
   slug        String    @unique
+  /// Previous slug, populated by the slug migration. Used to 301-redirect
+  /// stale URLs to the new canonical slug.
+  oldSlug     String?
   excerpt     String?
   content     String    // Rich HTML from TipTap
   coverImage  String?
@@ -262,6 +265,7 @@ model BlogPost {
   @@index([published, publishedAt])
   @@index([category])
   @@index([status, scheduledAt])
+  @@index([oldSlug])
 }
 
 // ==================

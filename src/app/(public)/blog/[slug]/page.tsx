@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import BlogPostClient from "./BlogPostClient";
@@ -16,6 +16,20 @@ async function getPost(slug: string) {
     },
   });
   return post;
+}
+
+/**
+ * If the requested slug doesn't match a current post, fall back to `oldSlug`.
+ * When that hits, we 308-permanent-redirect to the canonical slug — preserves
+ * the rankings Google built up against the URL-encoded Hebrew slugs that the
+ * old generateSlug produced.
+ */
+async function findRedirectTarget(slug: string): Promise<string | null> {
+  const stale = await prisma.blogPost.findFirst({
+    where: { oldSlug: slug, published: true },
+    select: { slug: true },
+  });
+  return stale?.slug ?? null;
 }
 
 async function getAdjacentPosts(publishedAt: Date) {
@@ -38,6 +52,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
   const post = await getPost(slug);
+  // Don't waste a 404 metadata payload on a stale slug — let the page handler
+  // run the redirect. Generating bare metadata here is fine for both cases.
   if (!post) return { title: "מאמר לא נמצא" };
 
   return {
@@ -62,7 +78,11 @@ export default async function BlogPostPage({ params }: Props) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
   const post = await getPost(slug);
-  if (!post) notFound();
+  if (!post) {
+    const target = await findRedirectTarget(slug);
+    if (target) permanentRedirect(`/blog/${target}`);
+    notFound();
+  }
 
   const adjacent = post.publishedAt
     ? await getAdjacentPosts(post.publishedAt)

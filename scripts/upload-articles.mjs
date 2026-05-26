@@ -1,21 +1,57 @@
 import { PrismaClient } from '@prisma/client';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { slugify as transliterate } from 'transliteration';
 
 const prisma = new PrismaClient();
 
-function generateSlug(title) {
-  return (
-    title
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^\w֐-׿-]/g, '')
-      .toLowerCase() +
-    '-' +
-    Date.now().toString(36) +
-    '-' +
-    Math.random().toString(36).slice(2, 6)
-  );
+/**
+ * Build a clean SEO-friendly slug from an article title.
+ *
+ *   • Hebrew → Latin via `transliteration` (consistent, ASCII-safe).
+ *   • Strips em-dashes, gershayim, and other punctuation BEFORE transliteration
+ *     so they don't leak into the slug as orphan separators.
+ *   • Collapses repeated hyphens, trims leading/trailing hyphens.
+ *   • Caps at 60 chars, cut at the nearest word boundary.
+ *   • No timestamps, no random suffixes — uniqueness is handled separately
+ *     by `ensureUniqueSlug` against the DB (-2, -3, …).
+ */
+function baseSlugFromTitle(title) {
+  const cleaned = title
+    .replace(/[–——]/g, ' ') // en-dash, em-dash → space
+    .replace(/[״׳"'`]/g, '') // Hebrew gershayim + quotes
+    .replace(/[?!:;,.()\[\]{}<>|/\\]/g, '') // punctuation
+    .trim();
+
+  let slug = transliterate(cleaned, { lowercase: true, separator: '-' });
+  slug = slug.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+
+  if (slug.length > 60) {
+    slug = slug.slice(0, 60);
+    const lastDash = slug.lastIndexOf('-');
+    if (lastDash > 30) slug = slug.slice(0, lastDash);
+    slug = slug.replace(/-+$/g, '');
+  }
+
+  return slug || 'untitled';
+}
+
+/** Returns the first slug from { base, base-2, base-3, … } not already taken. */
+async function ensureUniqueSlug(base, excludeId = null) {
+  let slug = base;
+  let n = 1;
+  while (n < 50) {
+    const existing = await prisma.blogPost.findUnique({ where: { slug } });
+    if (!existing || existing.id === excludeId) return slug;
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+  throw new Error(`Could not find a unique slug for "${base}" after 50 attempts`);
+}
+
+async function generateSlug(title, excludeId = null) {
+  const base = baseSlugFromTitle(title);
+  return ensureUniqueSlug(base, excludeId);
 }
 
 function parseArticle(content) {
@@ -88,7 +124,7 @@ async function main() {
       continue;
     }
 
-    const slug = generateSlug(article.title);
+    const slug = await generateSlug(article.title);
 
     await prisma.blogPost.create({
       data: {
@@ -109,10 +145,7 @@ async function main() {
     });
 
     created++;
-    console.log(`  ✓ ${article.title.slice(0, 60)}`);
-
-    // Small delay to avoid slug collision (timestamp-based)
-    await new Promise(r => setTimeout(r, 50));
+    console.log(`  ✓ ${slug}  ←  ${article.title.slice(0, 60)}`);
   }
 
   console.log(`\nDone! Created: ${created}, Skipped: ${skipped}`);
