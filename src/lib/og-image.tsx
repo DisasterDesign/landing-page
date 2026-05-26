@@ -159,9 +159,9 @@ function fitFontSize(title: string): number {
  * Renders a contract-flavoured OG card for agreement signing links.
  * Distinct from the marketing splash so a WhatsApp preview reads as
  * "a document to sign", not "a link to the website". Hebrew is shaped
- * with Meruba-Bold and right-aligned via flex/textAlign — do NOT set
- * `direction: rtl` on the text nodes (Satori double-reverses glyphs
- * and the preview comes out mirrored).
+ * with Meruba-Bold and MUST have `direction: "rtl"` on each text node
+ * — Satori applies no implicit BiDi pass, so without it Hebrew chars
+ * render in storage order and the preview reads mirrored.
  */
 export function renderAgreementOgImage(
   recipientName: string,
@@ -263,6 +263,7 @@ export function renderAgreementOgImage(
                 letterSpacing: "2px",
                 color: "#999999",
                 fontFamily: heFamily,
+                direction: "rtl",
                 marginBottom: "14px",
               }}
             >
@@ -274,6 +275,7 @@ export function renderAgreementOgImage(
                 lineHeight: 1.1,
                 fontWeight: 700,
                 fontFamily: heFamily,
+                direction: "rtl",
                 color: "#ffffff",
               }}
             >
@@ -283,6 +285,7 @@ export function renderAgreementOgImage(
               style={{
                 fontSize: "34px",
                 fontFamily: heFamily,
+                direction: "rtl",
                 color: "#cccccc",
                 marginTop: "18px",
               }}
@@ -332,7 +335,9 @@ export function renderAgreementOgImage(
 
 /**
  * Renders a per-post OG card with Hebrew title + Fuzion branding.
- * The Hebrew title uses Meruba-Bold so Satori shapes RTL glyphs correctly.
+ * The Hebrew title uses Meruba-Bold; each Hebrew text node sets
+ * `direction: "rtl"` because Satori applies no implicit BiDi pass —
+ * without it Hebrew renders in storage order and reads mirrored.
  */
 export function renderBlogPostOgImage(title: string, category?: string | null): ImageResponse {
   const iconDataUrl = getIconDataUrl();
@@ -416,6 +421,7 @@ export function renderBlogPostOgImage(title: string, category?: string | null): 
               lineHeight: 1.15,
               fontWeight: 700,
               fontFamily: titleFontFamily,
+              direction: "rtl",
               color: "#ffffff",
               maxWidth: "100%",
             }}
@@ -436,14 +442,24 @@ export function renderBlogPostOgImage(title: string, category?: string | null): 
         >
           <div
             style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: "12px",
               fontSize: "22px",
-              letterSpacing: "8px",
               color: "#cccccc",
-              textTransform: "uppercase",
               fontFamily: brandFontFamily,
             }}
           >
-            {category ? `Blog · ${category}` : "Blog"}
+            <span style={{ letterSpacing: "8px", textTransform: "uppercase" }}>Blog</span>
+            {category ? (
+              <>
+                <span>·</span>
+                <span style={{ direction: "rtl", fontFamily: titleFontFamily }}>
+                  {category}
+                </span>
+              </>
+            ) : null}
           </div>
           <div
             style={{
