@@ -104,6 +104,20 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("he-IL");
 }
 
+/**
+ * Stale FB leads in DB still carry "ליד מפייסבוק" as the parsed name
+ * (older parser missed the Hebrew "שם" fields). Render a friendlier
+ * fallback at display time so the admin doesn't have to wait for a
+ * full sync to backfill the column.
+ */
+function displayName(lead: Pick<Lead, "name" | "email" | "phone">): string {
+  const stale = !lead.name || lead.name.trim() === "" || lead.name === "ליד מפייסבוק";
+  if (!stale) return lead.name;
+  if (lead.email && lead.email.includes("@")) return lead.email.split("@")[0];
+  if (lead.phone) return lead.phone;
+  return "ליד ללא שם";
+}
+
 interface DueInfo {
   text: string;
   className: string;
@@ -599,7 +613,7 @@ function LeadRow({
                 aria-label="לא נקרא"
               />
             )}
-            <span className="font-bold text-white truncate">{lead.name}</span>
+            <span className="font-bold text-white truncate">{displayName(lead)}</span>
             {lead.source === "FACEBOOK" && (
               <span
                 title="הגיע מפייסבוק"
