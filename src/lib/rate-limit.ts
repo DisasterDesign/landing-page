@@ -3,22 +3,25 @@ const rateMap = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute per IP
 
-export function rateLimit(ip: string): { ok: boolean; remaining: number } {
+export function rateLimit(
+  key: string,
+  maxRequests: number = MAX_REQUESTS
+): { ok: boolean; remaining: number } {
   const now = Date.now();
-  const entry = rateMap.get(ip);
+  const entry = rateMap.get(key);
 
   if (!entry || now > entry.resetAt) {
-    rateMap.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return { ok: true, remaining: MAX_REQUESTS - 1 };
+    rateMap.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return { ok: true, remaining: maxRequests - 1 };
   }
 
   entry.count++;
 
-  if (entry.count > MAX_REQUESTS) {
+  if (entry.count > maxRequests) {
     return { ok: false, remaining: 0 };
   }
 
-  return { ok: true, remaining: MAX_REQUESTS - entry.count };
+  return { ok: true, remaining: maxRequests - entry.count };
 }
 
 // Cleanup stale entries periodically

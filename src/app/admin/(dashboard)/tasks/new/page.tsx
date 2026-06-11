@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import AssigneePicker from "@/components/admin/AssigneePicker";
+import {
+  ImageDropArea,
+  imageSkipMessage,
+  Lightbox,
+  localId,
+  prepareImages,
+  ThumbGrid,
+  uploadTaskImage,
+  useImagePaste,
+  type PendingImage,
+} from "@/components/admin/TaskImages";
 
 interface User {
   id: string;
@@ -20,6 +31,10 @@ export default function NewTaskPage() {
   const [description, setDescription] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
+
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [processingImages, setProcessingImages] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchUsers() {
@@ -40,6 +55,47 @@ export default function NewTaskPage() {
     }
     fetchUsers();
   }, []);
+
+  // Revoke preview object URLs on unmount
+  useEffect(() => {
+    return () => {
+      setPendingImages((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        return prev;
+      });
+    };
+  }, []);
+
+  const handleNewImages = useCallback(async (files: File[]) => {
+    setProcessingImages(true);
+    try {
+      const prepared = await prepareImages(files, (name, reason) =>
+        toast.error(imageSkipMessage(name, reason))
+      );
+      if (prepared.length > 0) {
+        setPendingImages((prev) => [
+          ...prev,
+          ...prepared.map((compressed) => ({
+            localId: localId(),
+            compressed,
+            previewUrl: URL.createObjectURL(compressed.blob),
+          })),
+        ]);
+      }
+    } finally {
+      setProcessingImages(false);
+    }
+  }, []);
+
+  useImagePaste(handleNewImages);
+
+  const removePendingImage = (localId: string) => {
+    setPendingImages((prev) => {
+      const target = prev.find((p) => p.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.localId !== localId);
+    });
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,12 +129,47 @@ export default function NewTaskPage() {
         throw new Error(data.error || "שגיאה ביצירת המשימה");
       }
 
-      toast.success("המשימה נוצרה בהצלחה!");
-      router.push("/admin/tasks");
+      const task = await res.json();
+
+      // Upload collected screenshots one by one (keeps each request small)
+      let failed = 0;
+      if (pendingImages.length > 0) {
+        const progressToast = toast.loading(
+          `מעלה תמונות (0/${pendingImages.length})...`
+        );
+        for (let i = 0; i < pendingImages.length; i++) {
+          toast.loading(`מעלה תמונות (${i + 1}/${pendingImages.length})...`, {
+            id: progressToast,
+          });
+          try {
+            await uploadTaskImage(task.id, pendingImages[i].compressed);
+          } catch (err) {
+            console.error("Upload failed:", err);
+            failed++;
+          }
+        }
+        toast.dismiss(progressToast);
+      }
+
+      if (failed > 0) {
+        toast.error(
+          failed === 1
+            ? "המשימה נוצרה, אך תמונה אחת לא הועלתה — ניתן להוסיף אותה מעמוד המשימה"
+            : `המשימה נוצרה, אך ${failed} תמונות לא הועלו — ניתן להוסיף אותן מעמוד המשימה`
+        );
+      } else {
+        toast.success(
+          pendingImages.length === 0
+            ? "המשימה נוצרה בהצלחה!"
+            : pendingImages.length === 1
+              ? "המשימה נוצרה עם תמונה אחת!"
+              : `המשימה נוצרה עם ${pendingImages.length} תמונות!`
+        );
+      }
+      router.push(`/admin/tasks/${task.id}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "שגיאה ביצירת המשימה";
       toast.error(message);
-    } finally {
       setSubmitting(false);
     }
   }
@@ -127,6 +218,35 @@ export default function NewTaskPage() {
           />
         </div>
 
+        {/* Images */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-300">
+            תמונות
+            {pendingImages.length > 0 && (
+              <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full mr-2">
+                {pendingImages.length}
+              </span>
+            )}
+          </label>
+          <ImageDropArea onFiles={handleNewImages} busy={processingImages}>
+            <ThumbGrid
+              items={pendingImages.map((p) => ({
+                key: p.localId,
+                url: p.previewUrl,
+                filename: p.compressed.filename,
+              }))}
+              onOpen={setLightboxIndex}
+              onRemove={removePendingImage}
+            />
+            {pendingImages.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-3">
+                קיבלת צילומי מסך מהלקוח? פשוט הדבק אותם כאן (Ctrl+V / ⌘V) —
+                הם יועלו אוטומטית עם יצירת המשימה
+              </p>
+            )}
+          </ImageDropArea>
+        </div>
+
         {/* Assignees */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-300">
@@ -172,6 +292,18 @@ export default function NewTaskPage() {
           </button>
         </div>
       </form>
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={pendingImages.map((p) => ({
+            url: p.previewUrl,
+            filename: p.compressed.filename,
+          }))}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }

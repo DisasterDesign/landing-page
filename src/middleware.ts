@@ -6,18 +6,34 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
 
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
+
   // Rate limit mutating requests
   if (["POST", "PATCH", "DELETE"].includes(req.method)) {
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
-    const { ok } = rateLimit(ip);
+    // Attachment uploads are one POST per pasted screenshot — a bulk paste
+    // would burn the shared 30/min budget, so give them their own wider bucket.
+    const isAttachmentUpload =
+      req.method === "POST" && /^\/api\/tasks\/[^/]+\/attachments$/.test(pathname);
+    const { ok } = isAttachmentUpload
+      ? rateLimit(`attach-up:${ip}`, 120)
+      : rateLimit(ip);
     if (!ok) {
       return NextResponse.json(
         { error: "Too many requests" },
         { status: 429 }
       );
+    }
+  }
+
+  // Bound anonymous reads of public attachment binaries (the only public GET
+  // that does a per-request DB read of up to 4MB).
+  if (req.method === "GET" && pathname.startsWith("/api/attachments/")) {
+    const { ok } = rateLimit(`attach-get:${ip}`, 120);
+    if (!ok) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
   }
 
@@ -38,6 +54,13 @@ export default auth((req) => {
 
   // Allow public Meta webhook endpoint
   if (pathname.startsWith("/api/webhooks/facebook")) {
+    return NextResponse.next();
+  }
+
+  // Allow public GET of task attachment binaries — URLs carry an unguessable
+  // cuid (same model as agreement signTokens) so copied briefs render images
+  // when pasted outside the admin. Upload/delete stay behind auth.
+  if (pathname.startsWith("/api/attachments/") && req.method === "GET") {
     return NextResponse.next();
   }
 

@@ -97,6 +97,7 @@ model User {
   assignedTasks Task[]   @relation("TaskAssignees")
   createdTasks  Task[]   @relation("CreatedTasks")
   comments      Comment[]
+  attachments   TaskAttachment[] @relation("UploadedAttachments")
   blogPosts     BlogPost[]
   notifications Notification[] @relation("NotificationRecipient")
   googleIntegration GoogleIntegration?
@@ -140,12 +141,36 @@ model Task {
 
   comments      Comment[]
   notifications Notification[]
+  attachments   TaskAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([projectId])
+}
+
+/// Image attachment on a task (client screenshots etc.). The binary lives in
+/// Postgres (`data Bytes`) — no external storage dependency; images are
+/// compressed client-side (WebP, max 1920px) before upload, so rows stay small.
+model TaskAttachment {
+  id       String @id @default(cuid())
+  filename String
+  mimeType String
+  size     Int
+  width    Int?
+  height   Int?
+  data     Bytes
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  uploaderId String
+  uploader   User   @relation("UploadedAttachments", fields: [uploaderId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 model Notification {

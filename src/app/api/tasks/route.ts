@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
           project: { select: { id: true, name: true } },
           assignees: { select: { id: true, name: true, email: true } },
           creator: { select: { id: true, name: true, email: true } },
-          _count: { select: { comments: true } },
+          _count: { select: { comments: true, attachments: true } },
         },
         orderBy: [{ order: "asc" }, { createdAt: "desc" }],
         skip,

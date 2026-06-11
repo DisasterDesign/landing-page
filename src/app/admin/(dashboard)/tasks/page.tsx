@@ -37,6 +37,26 @@ interface Task {
   assignees: { id: string; name: string }[];
   dueDate?: string | null;
   order: number;
+  _count?: { comments: number; attachments: number };
+}
+
+function AttachmentsBadge({ count }: { count?: number }) {
+  if (!count) return null;
+  return (
+    <span
+      title={count === 1 ? "תמונה אחת" : `${count} תמונות`}
+      className="flex items-center gap-1 text-[11px] text-gray-500"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"
+        />
+      </svg>
+      {count}
+    </span>
+  );
 }
 
 function initialsOf(name: string): string {
@@ -173,13 +193,14 @@ function TaskCard({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        {task.dueDate ? (
-          <span className="text-[11px] text-gray-500">
-            {new Date(task.dueDate).toLocaleDateString("he-IL")}
-          </span>
-        ) : (
-          <span />
-        )}
+        <span className="flex items-center gap-2">
+          {task.dueDate && (
+            <span className="text-[11px] text-gray-500">
+              {new Date(task.dueDate).toLocaleDateString("he-IL")}
+            </span>
+          )}
+          <AttachmentsBadge count={task._count?.attachments} />
+        </span>
         <AssigneesBadge assignees={task.assignees} />
       </div>
     </div>
@@ -210,13 +231,14 @@ function MobileTaskCard({
         </Link>
       </div>
       <div className="flex items-center justify-between gap-2">
-        {task.dueDate ? (
-          <span className="text-[11px] text-gray-500">
-            {new Date(task.dueDate).toLocaleDateString("he-IL")}
-          </span>
-        ) : (
-          <span />
-        )}
+        <span className="flex items-center gap-2">
+          {task.dueDate && (
+            <span className="text-[11px] text-gray-500">
+              {new Date(task.dueDate).toLocaleDateString("he-IL")}
+            </span>
+          )}
+          <AttachmentsBadge count={task._count?.attachments} />
+        </span>
         <AssigneesBadge assignees={task.assignees} />
       </div>
     </div>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { updateTaskSchema } from "@/lib/validations";
 import { createNotification } from "@/lib/notifications";
+import { attachmentMetaSelect } from "@/lib/attachment-select";
 
 export async function GET(
   request: NextRequest,
@@ -26,6 +27,10 @@ export async function GET(
           include: {
             author: { select: { id: true, name: true } },
           },
+          orderBy: { createdAt: "asc" },
+        },
+        attachments: {
+          select: attachmentMetaSelect,
           orderBy: { createdAt: "asc" },
         },
       },
