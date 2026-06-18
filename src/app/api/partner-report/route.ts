@@ -47,13 +47,15 @@ export async function GET(_req: NextRequest) {
       name: true,
       amount: true,
       paymentDate: true,
+      vatExempt: true,
     },
     orderBy: { name: "asc" },
   });
 
   const rows: PartnerRow[] = clients.map((c) => {
     const amount = c.amount ?? 0;
-    const vat = (amount * VAT_RATE) / (100 + VAT_RATE);
+    // Foreign (zero-rated) clients: no VAT was collected, so none is backed out.
+    const vat = c.vatExempt ? 0 : (amount * VAT_RATE) / (100 + VAT_RATE);
     const cardcomFee = amount * CARDCOM_FEE_RATE;
     const profit = amount - vat - cardcomFee;
     const partnerShare = profit / 2;

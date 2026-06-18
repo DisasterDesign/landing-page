@@ -19,7 +19,7 @@ export default async function Image({ params }: Props) {
 
   const agreement = await prisma.agreement.findUnique({
     where: { signToken: token },
-    select: { customerName: true, businessName: true, status: true },
+    select: { customerName: true, businessName: true, status: true, locale: true },
   });
 
   // Unknown / bad token — fall back to the generic brand card.
@@ -27,6 +27,7 @@ export default async function Image({ params }: Props) {
 
   return renderAgreementOgImage(
     agreement.businessName || agreement.customerName,
-    agreement.status === "SIGNED"
+    agreement.status === "SIGNED",
+    agreement.locale === "en" ? "en" : "he"
   );
 }

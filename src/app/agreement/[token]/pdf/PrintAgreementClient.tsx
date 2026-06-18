@@ -7,10 +7,13 @@ interface Props {
   status: "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
   customerName: string;
   signedAt: string | null;
+  locale?: "he" | "en";
 }
 
-export default function PrintAgreementClient({ content, status, customerName, signedAt }: Props) {
+export default function PrintAgreementClient({ content, status, customerName, signedAt, locale = "he" }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const en = locale === "en";
+  const dateLocale = en ? "en-GB" : "he-IL";
 
   const triggerPrint = () => {
     const iframe = iframeRef.current;
@@ -32,18 +35,24 @@ export default function PrintAgreementClient({ content, status, customerName, si
   }, []);
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-100">
+    <div dir={en ? "ltr" : "rtl"} className="min-h-screen bg-gray-100">
       {/* Toolbar (hidden when printing) */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 print:hidden">
         <div>
           <div className="text-sm font-bold text-gray-900">
-            הסכם של {customerName}
+            {en ? `${customerName}'s agreement` : `הסכם של ${customerName}`}
           </div>
           <div className="text-xs text-gray-500">
             {status === "SIGNED" && signedAt
-              ? `נחתם ${new Date(signedAt).toLocaleDateString("he-IL")}`
+              ? en
+                ? `Signed ${new Date(signedAt).toLocaleDateString(dateLocale)}`
+                : `נחתם ${new Date(signedAt).toLocaleDateString(dateLocale)}`
               : status === "SIGNED"
-              ? "נחתם"
+              ? en
+                ? "Signed"
+                : "נחתם"
+              : en
+              ? "Draft (unsigned)"
               : "טיוטה (לא חתום)"}
           </div>
         </div>
@@ -54,7 +63,7 @@ export default function PrintAgreementClient({ content, status, customerName, si
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3M16 12V3H8v9M4 16h16M9 16v-2a3 3 0 016 0v2" />
           </svg>
-          הורד / הדפס
+          {en ? "Download / Print" : "הורד / הדפס"}
         </button>
       </div>
 
@@ -63,7 +72,7 @@ export default function PrintAgreementClient({ content, status, customerName, si
           ref={iframeRef}
           srcDoc={content}
           sandbox="allow-same-origin allow-modals"
-          title="הסכם להדפסה"
+          title={en ? "Agreement to print" : "הסכם להדפסה"}
           className="w-full bg-white shadow-lg print:shadow-none"
           style={{ height: "calc(100vh - 80px)", border: "0" }}
         />

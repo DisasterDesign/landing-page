@@ -43,6 +43,8 @@ export function getBillGoldConfig(): {
   return { terminal: tNum, userName, password };
 }
 
+export type CardcomLanguage = "he" | "en";
+
 export interface CreatePaymentInput {
   agreementId: string;
   amount: number;
@@ -56,6 +58,10 @@ export interface CreatePaymentInput {
     email: string;
     phone?: string;
   };
+  /** Hosted page + invoice language. Default "he". */
+  language?: CardcomLanguage;
+  /** Issue a zero-VAT (VAT-free) invoice — foreign clients. Default false. */
+  vatFree?: boolean;
 }
 
 export interface CreatePaymentResult {
@@ -94,6 +100,9 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
   // ApiPassword intentionally NOT included at top-level for LowProfile/Create
   // — per Cardcom v11 docs it belongs only inside AdvancedDefinition for
   // refunds/cancellations.
+  const language: CardcomLanguage = input.language === "en" ? "en" : "he";
+  const vatFree = !!input.vatFree;
+
   const body = {
     TerminalNumber: cfg.terminal,
     ApiName: cfg.apiName,
@@ -104,18 +113,24 @@ export async function createPaymentPage(input: CreatePaymentInput): Promise<Crea
     WebHookUrl: input.webhookUrl,
     ReturnValue: input.agreementId,
     ProductName: input.productName,
-    Language: "he",
-    ISOCoinId: 1, // ILS
+    Language: language, // hosted payment page language
+    ISOCoinId: 1, // ILS — foreign clients are still billed in ₪ (no terminal change)
     Document: {
       DocumentTypeToCreate: "Auto",
+      // Invoice/receipt PDF language — separate from the page Language above.
+      Language: language,
       Name: input.customer.name,
       Email: input.customer.email,
       ...(input.customer.phone ? { Phone: input.customer.phone } : {}),
+      // Zero-rate VAT on the document (export of services). When false Cardcom
+      // computes 18% VAT out of the VAT-inclusive amount as before.
+      ...(vatFree ? { IsVatFree: true } : {}),
       Products: [
         {
           Description: input.productName,
           UnitCost: Number(input.amount.toFixed(2)),
           Quantity: 1,
+          ...(vatFree ? { IsVatFree: true } : {}),
         },
       ],
     },
@@ -402,6 +417,10 @@ export interface CreateRecurringOrderNTVInput {
   customerPhone?: string;
   productDescription: string;
   agreementId: string;
+  /** English recurring invoices (foreign clients). Default false (Hebrew). */
+  documentLangEnglish?: boolean;
+  /** Zero-VAT recurring invoices (foreign clients). Default false. */
+  vatFree?: boolean;
 }
 
 /**
@@ -445,16 +464,33 @@ export async function createRecurringOrderNTV(
   params.set("Account.CompanyName", input.customerName);
   params.set("Account.Email", input.customerEmail);
   if (input.customerPhone) params.set("Account.PhMobile", input.customerPhone);
+  // Foreign clients: English invoices + zero-VAT, mirroring the BillGold
+  // ExtAccount.IsDocumentLangEnglish / ExtAccount.VatFree fields.
+  if (input.documentLangEnglish) {
+    params.set("Account.IsDocumentLangEnglish", "true");
+  }
+  if (input.vatFree) {
+    params.set("Account.VatFree", "true");
+  }
 
   // Recurring schedule
   params.set("RecurringPayments.InternalDecription", input.productDescription);
   params.set("RecurringPayments.NextDateToBill", nextBillStr);
   params.set("RecurringPayments.TotalNumOfBills", "999999");
-  params.set("RecurringPayments.FinalDebitCoinId", "1");
+  params.set("RecurringPayments.FinalDebitCoinId", "1"); // ILS
   params.set("RecurringPayments.DocTypeToCreate", "3");
   params.set("RecurringPayments.ReturnValue", input.agreementId);
   params.set("RecurringPayments.FlexItem.Price", input.monthlyAmount.toFixed(2));
-  params.set("RecurringPayments.FlexItem.IsPriceIncludeVat", "true");
+  if (input.vatFree) {
+    // Foreign clients: zero-rate the line itself (mirrors the LowProfile
+    // per-product IsVatFree). Do NOT also assert IsPriceIncludeVat — "price
+    // includes VAT" contradicts a VAT-free account and could make Cardcom
+    // back 18% out of the net amount on the invoice document.
+    params.set("RecurringPayments.FlexItem.IsVatFree", "true");
+  } else {
+    // Israeli clients: the Price is the VAT-inclusive gross.
+    params.set("RecurringPayments.FlexItem.IsPriceIncludeVat", "true");
+  }
   params.set(
     "RecurringPayments.FlexItem.InvoiceDescription",
     input.productDescription

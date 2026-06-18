@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { withVat } from "@/lib/vat";
 
+type Locale = "he" | "en";
+
 interface PriceInfo {
   tier: string | null;
   tierLabel: string | null;
@@ -14,6 +16,8 @@ interface Props {
   token: string;
   content: string;
   priceInfo: PriceInfo;
+  locale?: Locale;
+  vatExempt?: boolean;
   initial: {
     customerName: string;
     businessName: string | null;
@@ -23,9 +27,153 @@ interface Props {
   };
 }
 
-const fmtNum = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+interface Strings {
+  dir: "rtl" | "ltr";
+  brandTagline: string;
+  servicePlanLabel: string;
+  planNamed: (label: string) => string;
+  planCustom: string;
+  monthlyLabel: string;
+  vatSuffix: string;
+  vatExemptNote: string;
+  totalCharged: (v: string) => string;
+  setupLabel: string;
+  agreementContentLabel: string;
+  scrollHint: string;
+  signerDetails: string;
+  signerDetailsNote: string;
+  fullName: string;
+  businessName: string;
+  idNumber: string;
+  phone: string;
+  email: string;
+  signature: string;
+  clearSignature: string;
+  consent: string;
+  submit: string;
+  submitting: string;
+  submitFootnote: string;
+  errSignature: string;
+  errConsent: string;
+  errSign: string;
+  errPaymentLink: string;
+  pdfDownload: string;
+  signedOk: string;
+  preparingPayment: string;
+  redirectingNote: string;
+  paymentReady: string;
+  goToPayment: string;
+  retrying: string;
+  trouble: string;
+  contact: string;
+  noPaymentNeeded: string;
+}
 
-export default function SignAgreementClient({ token, content, priceInfo, initial }: Props) {
+function buildStrings(locale: Locale, vatExempt: boolean): Strings {
+  if (locale === "en") {
+    return {
+      dir: "ltr",
+      brandTagline: "Digital Agreement · Secure digital signature",
+      servicePlanLabel: "Service plan",
+      planNamed: (label) => `${label} plan`,
+      planCustom: "Custom package",
+      monthlyLabel: "Monthly payment",
+      vatSuffix: " + VAT",
+      vatExemptNote: "VAT-exempt (export of services)",
+      totalCharged: (v) => `Total charged: ${v}`,
+      setupLabel: "One-time setup fee",
+      agreementContentLabel: "Agreement content",
+      scrollHint: "Scroll within the document to read it in full",
+      signerDetails: "Signer details",
+      signerDetailsNote: "Please make sure all details are correct. They will appear on the signed agreement.",
+      fullName: "Full name *",
+      businessName: "Business name",
+      idNumber: "Company / VAT no.",
+      phone: "Phone *",
+      email: "Email *",
+      signature: "Signature *",
+      clearSignature: "Clear signature",
+      consent:
+        "I have read the agreement in full and I accept all the terms, including the engagement period, the fees, and delivery of the agreement by digital signature in accordance with the Israeli Electronic Signature Law, 5761-2001.",
+      submit: "Confirm and sign the agreement",
+      submitting: "Signing...",
+      submitFootnote:
+        'By clicking "Confirm and sign" you confirm that you have read the agreement and understood its content. The time of signing, your IP address and browser identifier will be recorded for legal documentation.',
+      errSignature: "Please add your signature",
+      errConsent: "Please accept the terms",
+      errSign: "Signing error",
+      errPaymentLink: "Error creating a payment link",
+      pdfDownload: "Download the signed agreement (PDF) ↓",
+      signedOk: "The agreement was signed successfully",
+      preparingPayment: "Preparing payment page…",
+      redirectingNote: "You will shortly be redirected to a secure payment via CardCom.",
+      paymentReady: "All that remains is to complete the first payment. The payment link is ready.",
+      goToPayment: "Go to payment",
+      retrying: "Retrying…",
+      trouble: "Ran into a problem?",
+      contact: "Contact us",
+      noPaymentNeeded: "Thank you! No payment is required for this plan.",
+    };
+  }
+  return {
+    dir: "rtl",
+    brandTagline: "Digital Agreement · חתימה דיגיטלית מאובטחת",
+    servicePlanLabel: "מסלול שירות",
+    planNamed: (label) => `מסלול ${label}`,
+    planCustom: "חבילה מותאמת אישית",
+    monthlyLabel: "תשלום חודשי",
+    vatSuffix: " + מע״מ",
+    vatExemptNote: "ללא מע״מ (יצוא שירות)",
+    totalCharged: (v) => `סה״כ לחיוב: ${v}`,
+    setupLabel: "סכום הקמה חד-פעמי",
+    agreementContentLabel: "תוכן ההסכם",
+    scrollHint: "גלול בתוך המסמך לקריאה מלאה",
+    signerDetails: "פרטי החותם",
+    signerDetailsNote: "אנא ודא שכל הפרטים נכונים. הם יופיעו על ההסכם החתום.",
+    fullName: "שם מלא *",
+    businessName: "שם העסק",
+    idNumber: "ח.פ. / ע.מ.",
+    phone: "טלפון *",
+    email: "אימייל *",
+    signature: "חתימה *",
+    clearSignature: "נקה חתימה",
+    consent:
+      "קראתי את ההסכם במלואו ואני מסכים/ה לכל התנאים, לרבות תקופת ההתקשרות, התמורה ומסירת ההסכם בחתימה דיגיטלית בהתאם לחוק חתימה אלקטרונית, התשס״א-2001.",
+    submit: "אישור וחתימה על ההסכם",
+    submitting: "חותם...",
+    submitFootnote:
+      'על ידי לחיצה על "אישור וחתימה" אתה מאשר שקראת את ההסכם והבנת את תוכנו. ייאספו וייתועדו: מועד החתימה, כתובת ה-IP שלך וזיהוי הדפדפן, לצורך תיעוד משפטי.',
+    errSignature: "נא לחתום בחתימה",
+    errConsent: "נא לאשר את התנאים",
+    errSign: "שגיאה בחתימה",
+    errPaymentLink: "שגיאה ביצירת לינק תשלום",
+    pdfDownload: "הורד PDF של ההסכם החתום ↓",
+    signedOk: "ההסכם נחתם בהצלחה",
+    preparingPayment: "מכין דף תשלום…",
+    redirectingNote: "מיד תועבר/י לתשלום מאובטח דרך CardCom.",
+    paymentReady: "כעת נותר רק להשלים את התשלום הראשון. הלינק לתשלום מוכן.",
+    goToPayment: "מעבר לתשלום",
+    retrying: "מנסה שוב…",
+    trouble: "נתקלת בבעיה?",
+    contact: "צור קשר",
+    noPaymentNeeded: "תודה! אין צורך בתשלום במסלול זה.",
+  };
+}
+
+export default function SignAgreementClient({
+  token,
+  content,
+  priceInfo,
+  initial,
+  locale = "he",
+  vatExempt = false,
+}: Props) {
+  const t = buildStrings(locale, vatExempt);
+  const moneyLocale = locale === "en" ? "en-US" : "he-IL";
+  const fmtNum = (n: number) =>
+    n.toLocaleString(moneyLocale, { maximumFractionDigits: 0 });
+  const money = (n: number) => `${fmtNum(n)} ₪`;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -131,16 +279,16 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.url) {
-        setPaymentError(typeof json.error === "string" ? json.error : "שגיאה ביצירת לינק תשלום");
+        setPaymentError(typeof json.error === "string" ? json.error : t.errPaymentLink);
         return false;
       }
       window.location.href = json.url;
       return true;
     } catch {
-      setPaymentError("שגיאה ביצירת לינק תשלום");
+      setPaymentError(t.errPaymentLink);
       return false;
     }
-  }, [token]);
+  }, [token, t.errPaymentLink]);
 
   // Auto-retry on entering "preparing-payment". Up to 3 attempts at
   // 0s / 2s / 6s. If all fail we surface the manual retry button.
@@ -175,11 +323,11 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
     setError(null);
 
     if (!hasSignature || !canvasRef.current) {
-      setError("נא לחתום בחתימה");
+      setError(t.errSignature);
       return;
     }
     if (!agreed) {
-      setError("נא לאשר את התנאים");
+      setError(t.errConsent);
       return;
     }
 
@@ -200,7 +348,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error(json.error || "שגיאה בחתימה");
+        throw new Error(json.error || t.errSign);
       }
       const json = (await res.json().catch(() => ({}))) as { paymentUrl?: string };
 
@@ -220,7 +368,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         setPostSignState("preparing-payment");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שגיאה בחתימה");
+      setError(err instanceof Error ? err.message : t.errSign);
     } finally {
       setSubmitting(false);
     }
@@ -233,7 +381,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
       rel="noopener noreferrer"
       className="inline-flex items-center gap-2 text-cyan hover:text-cyan/80 text-sm hover:underline"
     >
-      הורד PDF של ההסכם החתום ↓
+      {t.pdfDownload}
     </a>
   );
 
@@ -244,14 +392,12 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
           <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
             ✓
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">{t.signedOk}</h1>
           <div className="flex items-center justify-center gap-3 text-gray-300">
             <div className="w-5 h-5 border-2 border-pink border-t-transparent rounded-full animate-spin" />
-            <span>מכין דף תשלום…</span>
+            <span>{t.preparingPayment}</span>
           </div>
-          <p className="text-xs text-gray-500">
-            מיד תועבר/י לתשלום מאובטח דרך CardCom.
-          </p>
+          <p className="text-xs text-gray-500">{t.redirectingNote}</p>
           <div className="pt-2">{pdfDownload}</div>
         </div>
       </div>
@@ -265,10 +411,8 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
           <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
             ✓
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
-          <p className="text-sm text-gray-300">
-            כעת נותר רק להשלים את התשלום הראשון. הלינק לתשלום מוכן.
-          </p>
+          <h1 className="text-2xl font-extrabold tracking-tight">{t.signedOk}</h1>
+          <p className="text-sm text-gray-300">{t.paymentReady}</p>
           {paymentError && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl px-3 py-2">
               {paymentError}
@@ -279,15 +423,15 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
             disabled={paymentRetrying}
             className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-8 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {paymentRetrying ? "מנסה שוב…" : "מעבר לתשלום"}
-            <span>←</span>
+            {paymentRetrying ? t.retrying : t.goToPayment}
+            <span>{t.dir === "rtl" ? "←" : "→"}</span>
           </button>
           <div className="text-xs text-gray-500 space-y-2 pt-2">
             <div>{pdfDownload}</div>
             <div>
-              נתקלת בבעיה?{" "}
+              {t.trouble}{" "}
               <a href="https://www.fuzionwebz.com/contact" className="text-cyan hover:underline">
-                צור קשר
+                {t.contact}
               </a>
             </div>
           </div>
@@ -303,13 +447,16 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
           <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
             ✓
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">ההסכם נחתם בהצלחה</h1>
-          <p className="text-sm text-gray-300">תודה! אין צורך בתשלום במסלול זה.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">{t.signedOk}</h1>
+          <p className="text-sm text-gray-300">{t.noPaymentNeeded}</p>
           <div className="pt-2">{pdfDownload}</div>
         </div>
       </div>
     );
   }
+
+  // Side the monthly price text aligns to — mirrors with locale direction.
+  const priceAlign = t.dir === "rtl" ? "text-right" : "text-left";
 
   return (
     <>
@@ -323,7 +470,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         </h1>
         <div className="w-24 h-[2px] mx-auto mt-4 bg-gradient-to-r from-pink to-cyan" />
         <p className="mt-4 text-[10px] sm:text-xs tracking-[0.35em] uppercase text-gray-500">
-          Digital Agreement · חתימה דיגיטלית מאובטחת
+          {t.brandTagline}
         </p>
       </header>
 
@@ -332,33 +479,44 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         <section className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">מסלול שירות</div>
+              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">{t.servicePlanLabel}</div>
               <div className="text-xl md:text-2xl font-bold mt-1">
-                {priceInfo.tierLabel ? `מסלול ${priceInfo.tierLabel}` : "חבילה מותאמת אישית"}
+                {priceInfo.tierLabel ? t.planNamed(priceInfo.tierLabel) : t.planCustom}
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">תשלום חודשי</div>
+            <div className={priceAlign}>
+              <div className="text-[10px] tracking-[0.3em] uppercase text-gray-500">{t.monthlyLabel}</div>
               <div className="text-2xl md:text-3xl font-extrabold mt-1">
                 {fmtNum(priceInfo.monthlyPrice)}
-                <span className="text-base text-gray-400 mr-1">₪</span>
-                <span className="text-sm text-gray-500"> + מע״מ</span>
+                <span className="text-base text-gray-400 mx-1">₪</span>
+                {!vatExempt && <span className="text-sm text-gray-500">{t.vatSuffix}</span>}
               </div>
               <div className="text-[11px] text-gray-500 mt-1">
-                סה״כ לחיוב: <span className="font-mono text-gray-300">{fmtNum(withVat(priceInfo.monthlyPrice))} ₪</span>
+                {vatExempt ? (
+                  t.vatExemptNote
+                ) : (
+                  <>
+                    {t.totalCharged("")}
+                    <span className="font-mono text-gray-300">{money(withVat(priceInfo.monthlyPrice))}</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
           {priceInfo.oneTimeFee ? (
             <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-sm">
-              <span className="text-gray-400">סכום הקמה חד-פעמי</span>
-              <div className="text-left">
+              <span className="text-gray-400">{t.setupLabel}</span>
+              <div className={t.dir === "rtl" ? "text-left" : "text-right"}>
                 <div className="font-mono">
-                  {fmtNum(priceInfo.oneTimeFee)} ₪ <span className="text-xs text-gray-500">+ מע״מ</span>
+                  {money(priceInfo.oneTimeFee)}{" "}
+                  {!vatExempt && <span className="text-xs text-gray-500">{t.vatSuffix}</span>}
                 </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">
-                  סה״כ לחיוב: <span className="font-mono">{fmtNum(withVat(priceInfo.oneTimeFee))} ₪</span>
-                </div>
+                {!vatExempt && (
+                  <div className="text-[10px] text-gray-500 mt-0.5">
+                    {t.totalCharged("")}
+                    <span className="font-mono">{money(withVat(priceInfo.oneTimeFee))}</span>
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
@@ -367,9 +525,9 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         {/* Agreement preview */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs tracking-[0.3em] uppercase text-gray-500">תוכן ההסכם</h2>
+            <h2 className="text-xs tracking-[0.3em] uppercase text-gray-500">{t.agreementContentLabel}</h2>
             <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span>גלול בתוך המסמך לקריאה מלאה</span>
+              <span>{t.scrollHint}</span>
               <svg className="w-3.5 h-3.5 animate-bounce text-pink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
@@ -381,7 +539,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
             <iframe
               srcDoc={content}
               sandbox=""
-              title="הסכם"
+              title={t.agreementContentLabel}
               className="w-full"
               style={{ height: "70vh", border: "0" }}
             />
@@ -391,13 +549,13 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
         {/* Sign form */}
         <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 space-y-5">
           <div>
-            <h2 className="text-xl font-bold">פרטי החותם</h2>
-            <p className="text-sm text-gray-400 mt-1">אנא ודא שכל הפרטים נכונים. הם יופיעו על ההסכם החתום.</p>
+            <h2 className="text-xl font-bold">{t.signerDetails}</h2>
+            <p className="text-sm text-gray-400 mt-1">{t.signerDetailsNote}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs tracking-wide text-gray-400 mb-1">שם מלא *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">{t.fullName}</label>
               <input
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
@@ -406,7 +564,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
               />
             </div>
             <div>
-              <label className="block text-xs tracking-wide text-gray-400 mb-1">שם העסק</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">{t.businessName}</label>
               <input
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
@@ -414,7 +572,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
               />
             </div>
             <div>
-              <label className="block text-xs tracking-wide text-gray-400 mb-1">ח.פ. / ע.מ.</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">{t.idNumber}</label>
               <input
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
@@ -422,7 +580,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
               />
             </div>
             <div>
-              <label className="block text-xs tracking-wide text-gray-400 mb-1">טלפון *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">{t.phone}</label>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -432,7 +590,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-xs tracking-wide text-gray-400 mb-1">אימייל *</label>
+              <label className="block text-xs tracking-wide text-gray-400 mb-1">{t.email}</label>
               <input
                 type="email"
                 value={email}
@@ -445,13 +603,13 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs tracking-wide text-gray-400">חתימה *</label>
+              <label className="text-xs tracking-wide text-gray-400">{t.signature}</label>
               <button
                 type="button"
                 onClick={clearSignature}
                 className="text-xs text-cyan hover:underline"
               >
-                נקה חתימה
+                {t.clearSignature}
               </button>
             </div>
             <canvas
@@ -475,9 +633,7 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
               onChange={(e) => setAgreed(e.target.checked)}
               className="mt-1 w-4 h-4 accent-pink"
             />
-            <span>
-              קראתי את ההסכם במלואו ואני מסכים/ה לכל התנאים, לרבות תקופת ההתקשרות, התמורה ומסירת ההסכם בחתימה דיגיטלית בהתאם לחוק חתימה אלקטרונית, התשס״א-2001.
-            </span>
+            <span>{t.consent}</span>
           </label>
 
           {error && (
@@ -491,14 +647,10 @@ export default function SignAgreementClient({ token, content, priceInfo, initial
             disabled={submitting || !hasSignature || !agreed}
             className="w-full bg-gradient-to-r from-pink to-cyan text-black font-extrabold py-3.5 rounded-full hover:shadow-[0_0_40px_rgba(229,3,162,0.45)] disabled:opacity-40 disabled:cursor-not-allowed transition-shadow"
           >
-            {submitting ? "חותם..." : "אישור וחתימה על ההסכם"}
+            {submitting ? t.submitting : t.submit}
           </button>
 
-          <p className="text-[11px] text-center text-gray-500">
-            על ידי לחיצה על &quot;אישור וחתימה&quot; אתה מאשר שקראת את ההסכם והבנת את תוכנו.
-            <br />
-            ייאספו וייתועדו: מועד החתימה, כתובת ה-IP שלך וזיהוי הדפדפן, לצורך תיעוד משפטי.
-          </p>
+          <p className="text-[11px] text-center text-gray-500">{t.submitFootnote}</p>
         </form>
 
         <footer className="text-center text-xs text-gray-600 pt-6">

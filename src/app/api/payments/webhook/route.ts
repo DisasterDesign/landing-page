@@ -101,6 +101,8 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       cardcomRecurringId: true,
       email: true,
       phone: true,
+      locale: true,
+      vatExempt: true,
     },
   });
   if (!agreement) {
@@ -188,13 +190,21 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         });
         const r = await createRecurringOrderNTV({
           lowProfileDealGuid: lowProfileId,
-          // Cardcom expects the gross amount; agreement.monthlyPrice is NET.
-          monthlyAmount: withVat(agreement.monthlyPrice),
+          // VAT-exempt foreign clients are debited the NET amount; Israeli
+          // clients the VAT-inclusive gross. agreement.monthlyPrice is NET.
+          monthlyAmount: agreement.vatExempt
+            ? agreement.monthlyPrice
+            : withVat(agreement.monthlyPrice),
           customerName: agreement.customerName,
           customerEmail: agreement.email,
           customerPhone: agreement.phone ?? undefined,
-          productDescription: `חבילה חודשית — ${agreement.customerName}`,
+          productDescription:
+            agreement.locale === "en"
+              ? `Monthly package — ${agreement.customerName}`
+              : `חבילה חודשית — ${agreement.customerName}`,
           agreementId,
+          documentLangEnglish: agreement.locale === "en",
+          vatFree: agreement.vatExempt,
         });
         console.log("Recurring order created:", r);
         await prisma.agreement.update({
@@ -204,6 +214,17 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
             cardcomAccountId: r.accountId,
           },
         });
+        // Foreign recurring uses Cardcom NTV flags (Account.VatFree /
+        // IsDocumentLangEnglish) that the NTV endpoint accepts silently — a
+        // wrong flag would not error. Ask an admin to eyeball the first
+        // recurring invoice (English + 0% VAT) once.
+        if (agreement.vatExempt || agreement.locale === "en") {
+          await notifyAllAdmins({
+            type: "AGREEMENT_SIGNED",
+            title: `🌍 הוראת קבע ללקוח חו״ל נוצרה — ${agreement.customerName}`,
+            body: `יש לאמת בחשבונית הראשונה ב-Cardcom שהיא באנגלית וב-0% מע״מ.`,
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error("Cardcom recurring setup failed:", err);
         await notifyAllAdmins({

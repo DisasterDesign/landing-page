@@ -66,6 +66,8 @@ export const createCommentSchema = z.object({
 export const agreementTierEnum = z.enum(["LANDING", "BASIC", "ADVANCED", "PREMIUM"]);
 export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
 
+export const agreementLocaleEnum = z.enum(["he", "en"]);
+
 export const createAgreementSchema = z.object({
   tier: agreementTierEnum.nullable().optional(),
   additionalServices: z.array(z.string().min(1).max(300)).max(30).optional().default([]),
@@ -77,6 +79,10 @@ export const createAgreementSchema = z.object({
   phone: z.string().min(9, "טלפון לא תקין"),
   email: z.string().email("אימייל לא תקין"),
   clientId: z.string().optional(),
+  // Foreign clients: English contract/page + zero-rate VAT. Driven by one
+  // "foreign client" toggle in the admin UI; stored as two fields.
+  locale: agreementLocaleEnum.optional().default("he"),
+  vatExempt: z.boolean().optional().default(false),
 });
 
 export const updateAgreementSchema = z.object({
@@ -91,6 +97,8 @@ export const updateAgreementSchema = z.object({
   phone: z.string().min(9).optional(),
   email: z.string().email().optional(),
   clientId: z.string().nullable().optional(),
+  locale: agreementLocaleEnum.optional(),
+  vatExempt: z.boolean().optional(),
 });
 
 export const signAgreementSchema = z.object({

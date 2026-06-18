@@ -117,6 +117,8 @@ export default function AgreementsPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [clientId, setClientId] = useState<string>("");
+  // Foreign client: English contract + English Cardcom page + zero-rate VAT.
+  const [isForeign, setIsForeign] = useState(false);
 
   // Client list (for create-time picker + inline relink action)
   const [clientsList, setClientsList] = useState<ClientLite[]>([]);
@@ -171,6 +173,7 @@ export default function AgreementsPage() {
     setPhone("");
     setEmail("");
     setClientId("");
+    setIsForeign(false);
   };
 
   const onPickClient = (id: string) => {
@@ -259,6 +262,8 @@ export default function AgreementsPage() {
           idNumber: idNumber.trim() || undefined,
           phone: phone.trim(),
           email: email.trim(),
+          locale: isForeign ? "en" : "he",
+          vatExempt: isForeign,
           ...(clientId ? { clientId } : {}),
         }),
       });
@@ -820,8 +825,48 @@ export default function AgreementsPage() {
             </div>
           </div>
           <p className="text-[11px] text-gray-500 -mt-1">
-            המחירים נרשמים לפני מע״מ. החוזה והחיוב ב-Cardcom יוסיפו מע״מ אוטומטית.
+            {isForeign
+              ? "לקוח חו״ל: המחירים נרשמים בש״ח ללא מע״מ (עסקה בשיעור מע״מ אפס). החוזה והחיוב ב-Cardcom יהיו ללא מע״מ."
+              : "המחירים נרשמים לפני מע״מ. החוזה והחיוב ב-Cardcom יוסיפו מע״מ אוטומטית."}
           </p>
+
+          {/* Foreign client toggle — English contract + English Cardcom page + zero-rate VAT */}
+          <button
+            type="button"
+            onClick={() => setIsForeign((v) => !v)}
+            aria-pressed={isForeign}
+            className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors text-right ${
+              isForeign
+                ? "border-cyan bg-cyan/10"
+                : "border-gray-700 bg-gray-800/40 hover:border-gray-600"
+            }`}
+          >
+            <span>
+              <span className="block text-sm font-bold text-white">לקוח חו״ל 🌍</span>
+              <span className="block text-[11px] text-gray-400 mt-0.5">
+                חוזה ודף תשלום באנגלית + ללא מע״מ (יצוא שירות, מע״מ אפס). חיוב נשאר בש״ח.
+              </span>
+            </span>
+            <span
+              className={`shrink-0 relative w-11 h-6 rounded-full transition-colors ${
+                isForeign ? "bg-cyan" : "bg-gray-600"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+                  isForeign ? "right-0.5" : "right-5"
+                }`}
+              />
+            </span>
+          </button>
+          {isForeign && (
+            <p className="text-[11px] text-amber-500/90 -mt-1 leading-relaxed">
+              ⚠️ מע״מ אפס תקף רק אם הלקוח באמת תושב חוץ והשירות אינו ניתן בפועל גם
+              לישראלי. יש לאמת זכאות מול רו״ח ולתעד (סעיף 30(א)(5) לחוק מע״מ).
+              שים לב: &quot;סעיפים נוספים&quot; שתוסיף ייכנסו לחוזה כפי שהם — כתוב
+              אותם <span className="font-bold">באנגלית</span>.
+            </p>
+          )}
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">קישור ללקוח קיים (אופציונלי)</label>

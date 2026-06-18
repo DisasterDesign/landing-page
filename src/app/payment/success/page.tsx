@@ -7,9 +7,9 @@ interface Props {
   searchParams: Promise<{ agreement?: string }>;
 }
 
-function BrandShell({ children }: { children: React.ReactNode }) {
+function BrandShell({ children, dir = "rtl" }: { children: React.ReactNode; dir?: "rtl" | "ltr" }) {
   return (
-    <div dir="rtl" className="min-h-screen bg-black text-white">
+    <div dir={dir} className="min-h-screen bg-black text-white">
       <div
         className="pointer-events-none fixed inset-0 opacity-30"
         style={{
@@ -23,8 +23,10 @@ function BrandShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-const fmt = (n: number | null) =>
-  n != null ? n.toLocaleString("he-IL", { maximumFractionDigits: 0 }) : "—";
+const fmt = (n: number | null, locale: string) =>
+  n != null
+    ? n.toLocaleString(locale === "en" ? "en-US" : "he-IL", { maximumFractionDigits: 0 })
+    : "—";
 
 export default async function PaymentSuccessPage({ searchParams }: Props) {
   const { agreement: agreementId } = await searchParams;
@@ -34,18 +36,24 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
     paidAmount: number | null;
     paidAt: Date | null;
     invoiceNumber: string | null;
+    locale: string;
   } | null = null;
 
   if (agreementId) {
     const a = await prisma.agreement.findUnique({
       where: { id: agreementId },
-      select: { customerName: true, paidAmount: true, paidAt: true, invoiceNumber: true },
+      select: { customerName: true, paidAmount: true, paidAt: true, invoiceNumber: true, locale: true },
     });
     if (a) summary = a;
   }
 
+  const en = summary?.locale === "en";
+  const dir = en ? "ltr" : "rtl";
+  const dateLocale = en ? "en-GB" : "he-IL";
+  const colAlign = en ? "text-left" : "text-right";
+
   return (
-    <BrandShell>
+    <BrandShell dir={dir}>
       <header className="px-6 pt-10 pb-6 text-center">
         <h1 dir="ltr" className="text-3xl md:text-5xl font-extrabold tracking-[-0.04em]">
           FUZION <span className="text-gray-500">WEBZ</span>
@@ -58,38 +66,46 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
           <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
             ✓
           </div>
-          <h2 className="text-2xl font-extrabold tracking-tight mb-2">התשלום התקבל בהצלחה</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight mb-2">
+            {en ? "Payment received successfully" : "התשלום התקבל בהצלחה"}
+          </h2>
           {summary ? (
             <>
               <p className="text-sm text-gray-300 mb-6">
-                תודה {summary.customerName}! חשבונית דיגיטלית נשלחת אליך לאימייל.
+                {en
+                  ? `Thank you ${summary.customerName}! A digital invoice is on its way to your email.`
+                  : `תודה ${summary.customerName}! חשבונית דיגיטלית נשלחת אליך לאימייל.`}
               </p>
 
-              <dl className="grid grid-cols-3 gap-y-3 text-sm border-t border-white/10 pt-5">
-                <dt className="text-gray-400 col-span-1 text-right">סכום</dt>
-                <dd className="col-span-2 text-right font-mono">
-                  {fmt(summary.paidAmount)} ₪
+              <dl className={`grid grid-cols-3 gap-y-3 text-sm border-t border-white/10 pt-5 ${colAlign}`}>
+                <dt className={`text-gray-400 col-span-1 ${colAlign}`}>{en ? "Amount" : "סכום"}</dt>
+                <dd className={`col-span-2 font-mono ${colAlign}`}>
+                  {fmt(summary.paidAmount, summary.locale)} ₪
                 </dd>
-                <dt className="text-gray-400 col-span-1 text-right">תאריך</dt>
-                <dd className="col-span-2 text-right">
+                <dt className={`text-gray-400 col-span-1 ${colAlign}`}>{en ? "Date" : "תאריך"}</dt>
+                <dd className={`col-span-2 ${colAlign}`}>
                   {summary.paidAt
-                    ? summary.paidAt.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })
+                    ? summary.paidAt.toLocaleString(dateLocale, { dateStyle: "short", timeStyle: "short" })
                     : "—"}
                 </dd>
                 {summary.invoiceNumber && (
                   <>
-                    <dt className="text-gray-400 col-span-1 text-right">חשבונית</dt>
-                    <dd className="col-span-2 text-right font-mono">#{summary.invoiceNumber}</dd>
+                    <dt className={`text-gray-400 col-span-1 ${colAlign}`}>{en ? "Invoice" : "חשבונית"}</dt>
+                    <dd className={`col-span-2 font-mono ${colAlign}`}>#{summary.invoiceNumber}</dd>
                   </>
                 )}
               </dl>
             </>
           ) : (
-            <p className="text-sm text-gray-400 mb-2">תודה! חשבונית נשלחת אליך לאימייל.</p>
+            <p className="text-sm text-gray-400 mb-2">
+              {en ? "Thank you! An invoice is on its way to your email." : "תודה! חשבונית נשלחת אליך לאימייל."}
+            </p>
           )}
 
           <p className="text-xs text-gray-500 mt-6">
-            אם החשבונית לא הגיעה תוך מספר דקות, בדוק בתיקיית הספאם או צור קשר.
+            {en
+              ? "If the invoice doesn't arrive within a few minutes, check your spam folder or contact us."
+              : "אם החשבונית לא הגיעה תוך מספר דקות, בדוק בתיקיית הספאם או צור קשר."}
           </p>
         </div>
 

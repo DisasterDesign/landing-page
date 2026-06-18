@@ -14,6 +14,13 @@ const TIER_LABEL: Record<string, string> = {
   PREMIUM: "פרימיום",
 };
 
+const TIER_LABEL_EN: Record<string, string> = {
+  LANDING: "Landing Page",
+  BASIC: "Basic",
+  ADVANCED: "Advanced",
+  PREMIUM: "Premium",
+};
+
 // Cached so generateMetadata + the page render share a single query
 // per request instead of hitting the DB twice.
 const getAgreement = cache(async (token: string) => {
@@ -31,6 +38,8 @@ const getAgreement = cache(async (token: string) => {
       status: true,
       content: true,
       signedAt: true,
+      locale: true,
+      vatExempt: true,
     },
   });
 });
@@ -50,12 +59,23 @@ export async function generateMetadata({
 
   const who = agreement.businessName || agreement.customerName;
   const signed = agreement.status === "SIGNED";
+  const en = agreement.locale === "en";
   // Root layout's title template appends " | Fuzion Webz" — keep the
   // brand out of `title` to avoid doubling it.
-  const title = signed ? "הסכם חתום" : "הסכם שירות לחתימה";
-  const description = signed
-    ? `ההסכם של ${who} עם Fuzion Webz נחתם.`
-    : `${who}, ההסכם שלך עם Fuzion Webz מוכן לעיון ולחתימה דיגיטלית.`;
+  const title = en
+    ? signed
+      ? "Signed Agreement"
+      : "Service Agreement to Sign"
+    : signed
+      ? "הסכם חתום"
+      : "הסכם שירות לחתימה";
+  const description = en
+    ? signed
+      ? `${who}'s agreement with Fuzion Webz has been signed.`
+      : `${who}, your agreement with Fuzion Webz is ready to review and sign digitally.`
+    : signed
+      ? `ההסכם של ${who} עם Fuzion Webz נחתם.`
+      : `${who}, ההסכם שלך עם Fuzion Webz מוכן לעיון ולחתימה דיגיטלית.`;
 
   return {
     title,
@@ -70,9 +90,9 @@ export async function generateMetadata({
   };
 }
 
-function BrandShell({ children }: { children: React.ReactNode }) {
+function BrandShell({ children, dir = "rtl" }: { children: React.ReactNode; dir?: "rtl" | "ltr" }) {
   return (
-    <div dir="rtl" className="min-h-screen bg-black text-white">
+    <div dir={dir} className="min-h-screen bg-black text-white">
       <div
         className="pointer-events-none fixed inset-0 opacity-30"
         style={{
@@ -97,13 +117,22 @@ export default async function AgreementSignPage({
 
   if (!agreement) notFound();
 
+  const en = agreement.locale === "en";
+  const dir = en ? "ltr" : "rtl";
+
   if (agreement.status === "CANCELLED") {
     return (
-      <BrandShell>
+      <BrandShell dir={dir}>
         <div className="min-h-screen flex items-center justify-center px-6">
           <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
-            <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם בוטל</h1>
-            <p className="text-gray-400">לא ניתן לחתום על הסכם זה. אנא צור קשר עם Fuzion Webz.</p>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-3">
+              {en ? "Agreement Cancelled" : "ההסכם בוטל"}
+            </h1>
+            <p className="text-gray-400">
+              {en
+                ? "This agreement can no longer be signed. Please contact Fuzion Webz."
+                : "לא ניתן לחתום על הסכם זה. אנא צור קשר עם Fuzion Webz."}
+            </p>
             <Link href="https://www.fuzionwebz.com" className="inline-block mt-6 text-sm text-cyan hover:underline">
               fuzionwebz.com →
             </Link>
@@ -115,19 +144,27 @@ export default async function AgreementSignPage({
 
   if (agreement.status === "SIGNED") {
     return (
-      <BrandShell>
+      <BrandShell dir={dir}>
         <div className="min-h-screen flex items-center justify-center px-6">
           <div className="max-w-md text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10">
             <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl">
               ✓
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight mb-3">ההסכם נחתם</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-3">
+              {en ? "Agreement Signed" : "ההסכם נחתם"}
+            </h1>
             <p className="text-gray-400 mb-6">
-              ההסכם נחתם בתאריך{" "}
-              {agreement.signedAt
-                ? new Date(agreement.signedAt).toLocaleDateString("he-IL")
-                : ""}
-              . תודה!
+              {en
+                ? `Signed on ${
+                    agreement.signedAt
+                      ? new Date(agreement.signedAt).toLocaleDateString("en-GB")
+                      : ""
+                  }. Thank you!`
+                : `ההסכם נחתם בתאריך ${
+                    agreement.signedAt
+                      ? new Date(agreement.signedAt).toLocaleDateString("he-IL")
+                      : ""
+                  }. תודה!`}
             </p>
             <a
               href={`/agreement/${token}/pdf`}
@@ -135,7 +172,7 @@ export default async function AgreementSignPage({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-6 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow"
             >
-              הורדת ההסכם החתום (PDF)
+              {en ? "Download signed agreement (PDF)" : "הורדת ההסכם החתום (PDF)"}
               <span>↓</span>
             </a>
           </div>
@@ -145,13 +182,19 @@ export default async function AgreementSignPage({
   }
 
   return (
-    <BrandShell>
+    <BrandShell dir={dir}>
       <SignAgreementClient
         token={token}
         content={agreement.content}
+        locale={en ? "en" : "he"}
+        vatExempt={agreement.vatExempt}
         priceInfo={{
           tier: agreement.tier,
-          tierLabel: agreement.tier ? TIER_LABEL[agreement.tier] : null,
+          tierLabel: agreement.tier
+            ? en
+              ? TIER_LABEL_EN[agreement.tier]
+              : TIER_LABEL[agreement.tier]
+            : null,
           monthlyPrice: agreement.monthlyPrice,
           oneTimeFee: agreement.oneTimeFee,
         }}

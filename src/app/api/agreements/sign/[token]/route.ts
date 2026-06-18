@@ -39,6 +39,8 @@ export async function GET(
         status: true,
         content: true,
         signedAt: true,
+        locale: true,
+        vatExempt: true,
       },
     });
 
@@ -100,6 +102,7 @@ export async function POST(
     const signedIp = getClientIp(request);
     const signedUserAgent = request.headers.get("user-agent");
 
+    const locale = existing.locale === "en" ? "en" : "he";
     const finalContent = renderAgreement(existing.tier, {
       customerName,
       businessName,
@@ -110,11 +113,13 @@ export async function POST(
       oneTimeFee: existing.oneTimeFee,
       tier: existing.tier,
       additionalServices: existing.additionalServices,
-      date: signedAt.toLocaleDateString("he-IL"),
+      date: signedAt.toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
       signatureData,
       signedAt: signedAt.toISOString(),
       signedIp: signedIp ?? undefined,
       signedUserAgent: signedUserAgent ?? undefined,
+      locale,
+      vatExempt: existing.vatExempt,
     });
 
     const linkedClientId = await ensureClientForAgreement({
@@ -144,6 +149,15 @@ export async function POST(
         ...(linkedClientId ? { clientId: linkedClientId } : {}),
       },
     });
+
+    // Derive the client's VAT status from ALL its signed agreements (not a
+    // sticky per-agreement flag): a client's revenue is zero-rated only when
+    // every signed agreement is VAT-exempt. A mixed Hebrew+foreign client
+    // therefore stays non-exempt, so the partner report keeps backing out VAT
+    // on the (gross) Israeli revenue.
+    if (linkedClientId) {
+      await recomputeClientVatExempt(linkedClientId);
+    }
 
     const tierLabel = existing.tier === "LANDING"
       ? "דף נחיתה"
@@ -234,4 +248,22 @@ async function ensureClientForAgreement(input: {
     },
   });
   return created.id;
+}
+
+/**
+ * A client's revenue is zero-rated only when ALL of its signed agreements are
+ * VAT-exempt. Recomputed (in both directions) on every sign so the partner
+ * report never zero-rates a client who also has a gross (VAT-bearing) Israeli
+ * agreement.
+ */
+async function recomputeClientVatExempt(clientId: string): Promise<void> {
+  const signed = await prisma.agreement.findMany({
+    where: { clientId, status: "SIGNED" },
+    select: { vatExempt: true },
+  });
+  const vatExempt = signed.length > 0 && signed.every((a) => a.vatExempt);
+  await prisma.client.update({
+    where: { id: clientId },
+    data: { vatExempt },
+  });
 }

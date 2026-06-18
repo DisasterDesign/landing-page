@@ -350,6 +350,9 @@ model Client {
   idNumber     String?
   source       String?   // "agreement_signed" | "manual" | "lead_converted" | "import"
   partner      String    @default("fuzion") // "fuzion" = part of fuzion-webz partnership; other = legacy/private client
+  // Foreign client whose revenue is zero-rated VAT — the partner report must
+  // NOT back out 18% VAT from their payments (none was collected).
+  vatExempt    Boolean   @default(false)
   archivedAt   DateTime?
   startDate    DateTime?
   paymentDate  DateTime?
@@ -382,6 +385,11 @@ model Agreement {
   additionalServices String[]        @default([])  // extra service clauses appended to the tier base list
   monthlyPrice       Float           // editable by creator; defaults to tier price when tier is picked
   oneTimeFee         Float?          // optional setup fee
+  // Foreign-client support. locale drives the contract + Cardcom page/invoice
+  // language; vatExempt zero-rates VAT (Israeli VAT law sec. 30(a)(5), export
+  // of services to a foreign resident). Both default to the Israeli case.
+  locale             String          @default("he")   // "he" | "en"
+  vatExempt          Boolean         @default(false)
   customerName    String
   businessName    String?
   idNumber        String?

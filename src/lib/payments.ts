@@ -13,9 +13,17 @@ import { withVat } from "@/lib/vat";
  */
 
 const TIER_LABEL: Record<string, string> = {
+  LANDING: "דף נחיתה",
   BASIC: "בסיס",
   ADVANCED: "מתקדם",
   PREMIUM: "פרימיום",
+};
+
+const TIER_LABEL_EN: Record<string, string> = {
+  LANDING: "Landing Page",
+  BASIC: "Basic",
+  ADVANCED: "Advanced",
+  PREMIUM: "Premium",
 };
 
 function siteUrl(): string {
@@ -30,8 +38,15 @@ function describeAgreement(a: {
   tier: string | null;
   customerName: string;
   businessName: string | null;
+  locale: string;
 }): string {
   const subject = a.businessName?.trim() || a.customerName;
+  if (a.locale === "en") {
+    if (a.tier && TIER_LABEL_EN[a.tier]) {
+      return `${TIER_LABEL_EN[a.tier]} package — ${subject}`;
+    }
+    return `Custom package — ${subject}`;
+  }
   if (a.tier && TIER_LABEL[a.tier]) {
     return `חבילת ${TIER_LABEL[a.tier]} — ${subject}`;
   }
@@ -54,6 +69,8 @@ export async function ensurePaymentUrlForAgreement(agreementId: string): Promise
       phone: true,
       paymentStatus: true,
       paymentUrl: true,
+      locale: true,
+      vatExempt: true,
     },
   });
   if (!agreement) return null;
@@ -62,21 +79,24 @@ export async function ensurePaymentUrlForAgreement(agreementId: string): Promise
   if (agreement.paymentStatus === "COMPLETED") return null;
 
   // First charge = setup fee + first month (if both exist), or whichever exists.
-  // The figures stored on the agreement are NET (what the contract declares as
-  // "X ₪ + מע״מ"); Cardcom is charged the GROSS amount.
+  // The figures stored on the agreement are NET (what the contract declares).
+  // Israeli clients are charged GROSS (net + VAT); VAT-exempt foreign clients
+  // are charged the NET amount with a zero-rate invoice.
   const setup = agreement.oneTimeFee ?? 0;
   const netAmount = setup + agreement.monthlyPrice;
   if (netAmount <= 0) return null;
-  const grossAmount = withVat(netAmount);
+  const amount = agreement.vatExempt ? netAmount : withVat(netAmount);
+  const language = agreement.locale === "en" ? "en" : "he";
 
   const base = siteUrl();
   const result: CreatePaymentResult = await createPaymentPage({
     agreementId: agreement.id,
-    amount: grossAmount,
+    amount,
     productName: describeAgreement({
       tier: agreement.tier,
       customerName: agreement.customerName,
       businessName: agreement.businessName,
+      locale: agreement.locale,
     }),
     saveToken: agreement.monthlyPrice > 0, // need a token only for recurring billing
     successUrl: `${base}/payment/success?agreement=${encodeURIComponent(agreement.id)}`,
@@ -87,6 +107,8 @@ export async function ensurePaymentUrlForAgreement(agreementId: string): Promise
       email: agreement.email,
       phone: agreement.phone,
     },
+    language,
+    vatFree: agreement.vatExempt,
   });
 
   await prisma.agreement.update({

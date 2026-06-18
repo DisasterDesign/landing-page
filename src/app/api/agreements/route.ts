@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
       phone,
       email,
       clientId,
+      locale,
+      vatExempt,
     } = parsed.data;
 
     const cleanedExtras = (additionalServices ?? [])
@@ -78,7 +80,9 @@ export async function POST(request: NextRequest) {
       oneTimeFee: oneTimeFee ?? null,
       tier: tier ?? null,
       additionalServices: cleanedExtras,
-      date: new Date().toLocaleDateString("he-IL"),
+      date: new Date().toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
+      locale,
+      vatExempt,
     });
 
     const agreement = await prisma.agreement.create({
@@ -93,6 +97,8 @@ export async function POST(request: NextRequest) {
         phone,
         email,
         content,
+        locale,
+        vatExempt,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
         createdBy: session.user.id,
         ...(clientId ? { clientId } : {}),

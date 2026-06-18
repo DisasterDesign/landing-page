@@ -7,9 +7,9 @@ interface Props {
   searchParams: Promise<{ agreement?: string }>;
 }
 
-function BrandShell({ children }: { children: React.ReactNode }) {
+function BrandShell({ children, dir = "rtl" }: { children: React.ReactNode; dir?: "rtl" | "ltr" }) {
   return (
-    <div dir="rtl" className="min-h-screen bg-black text-white">
+    <div dir={dir} className="min-h-screen bg-black text-white">
       <div
         className="pointer-events-none fixed inset-0 opacity-30"
         style={{
@@ -27,16 +27,18 @@ export default async function PaymentFailedPage({ searchParams }: Props) {
   const { agreement: agreementId } = await searchParams;
 
   let retryUrl: string | null = null;
+  let en = false;
   if (agreementId) {
     const a = await prisma.agreement.findUnique({
       where: { id: agreementId },
-      select: { paymentUrl: true, signToken: true, paymentStatus: true },
+      select: { paymentUrl: true, signToken: true, paymentStatus: true, locale: true },
     });
     if (a?.paymentUrl && a.paymentStatus !== "COMPLETED") retryUrl = a.paymentUrl;
+    en = a?.locale === "en";
   }
 
   return (
-    <BrandShell>
+    <BrandShell dir={en ? "ltr" : "rtl"}>
       <header className="px-6 pt-10 pb-6 text-center">
         <h1 dir="ltr" className="text-3xl md:text-5xl font-extrabold tracking-[-0.04em]">
           FUZION <span className="text-gray-500">WEBZ</span>
@@ -49,9 +51,13 @@ export default async function PaymentFailedPage({ searchParams }: Props) {
           <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center text-3xl text-red-400">
             ✕
           </div>
-          <h2 className="text-2xl font-extrabold tracking-tight mb-2">התשלום לא הושלם</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight mb-2">
+            {en ? "Payment not completed" : "התשלום לא הושלם"}
+          </h2>
           <p className="text-sm text-gray-300 mb-6">
-            התשלום לא עבר. הכרטיס לא חויב. אפשר לנסות שוב, או ליצור איתנו קשר אם הבעיה חוזרת.
+            {en
+              ? "The payment did not go through. Your card was not charged. You can try again, or contact us if the problem persists."
+              : "התשלום לא עבר. הכרטיס לא חויב. אפשר לנסות שוב, או ליצור איתנו קשר אם הבעיה חוזרת."}
           </p>
 
           <div className="flex flex-col gap-2">
@@ -60,14 +66,14 @@ export default async function PaymentFailedPage({ searchParams }: Props) {
                 href={retryUrl}
                 className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-6 py-3 rounded-full hover:shadow-[0_0_30px_rgba(229,3,162,0.4)] transition-shadow"
               >
-                נסה שוב
+                {en ? "Try again" : "נסה שוב"}
               </a>
             )}
             <Link
               href="https://www.fuzionwebz.com/contact"
               className="text-sm text-cyan hover:underline mt-2"
             >
-              צור קשר
+              {en ? "Contact us" : "צור קשר"}
             </Link>
           </div>
         </div>

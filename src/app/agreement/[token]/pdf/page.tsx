@@ -18,6 +18,7 @@ export default async function AgreementPdfPage({
       status: true,
       customerName: true,
       signedAt: true,
+      locale: true,
     },
   });
 
@@ -29,6 +30,7 @@ export default async function AgreementPdfPage({
       status={agreement.status}
       customerName={agreement.customerName}
       signedAt={agreement.signedAt ? agreement.signedAt.toISOString() : null}
+      locale={agreement.locale === "en" ? "en" : "he"}
     />
   );
 }

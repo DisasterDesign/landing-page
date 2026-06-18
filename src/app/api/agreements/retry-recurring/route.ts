@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
       monthlyPrice: true,
       cardcomToken: true,
       cardcomLowProfileId: true,
+      locale: true,
+      vatExempt: true,
     },
   });
 
@@ -96,15 +98,21 @@ export async function POST(req: NextRequest) {
       let r: { recurringId: number; accountId: number };
       let via: "NTV-LowProfile" | "NTV-Token";
 
-      // monthlyPrice is NET in our DB; Cardcom is charged GROSS.
-      const grossMonthly = withVat(a.monthlyPrice);
+      // monthlyPrice is NET. Israeli clients are charged GROSS; VAT-exempt
+      // foreign clients the NET amount with English, zero-VAT invoices.
+      const monthlyAmount = a.vatExempt ? a.monthlyPrice : withVat(a.monthlyPrice);
       const baseInput = {
-        monthlyAmount: grossMonthly,
+        monthlyAmount,
         customerName: a.customerName,
         customerEmail: a.email,
         customerPhone: a.phone ?? undefined,
-        productDescription: `חבילה חודשית — ${a.customerName}`,
+        productDescription:
+          a.locale === "en"
+            ? `Monthly package — ${a.customerName}`
+            : `חבילה חודשית — ${a.customerName}`,
         agreementId: a.id,
+        documentLangEnglish: a.locale === "en",
+        vatFree: a.vatExempt,
       };
       if (a.cardcomLowProfileId) {
         via = "NTV-LowProfile";

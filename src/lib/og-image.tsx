@@ -184,8 +184,10 @@ function bidiHebrew(text: string): string {
  */
 export function renderAgreementOgImage(
   recipientName: string,
-  signed: boolean
+  signed: boolean,
+  locale: "he" | "en" = "he"
 ): ImageResponse {
+  const en = locale === "en";
   const iconDataUrl = getIconDataUrl();
   const brandFont = getBrandFont();
   const hebrewFont = getHebrewFont();
@@ -210,14 +212,27 @@ export function renderAgreementOgImage(
     ? "FuzionFirst, Arial, sans-serif"
     : "Arial, sans-serif";
 
-  const titleRaw = signed ? "הסכם חתום ✓" : "הסכם שירות לחתימה";
   // Keep the recipient line from overflowing the card.
   const who = recipientName.length > 42
     ? `${recipientName.slice(0, 41)}…`
     : recipientName;
-  const eyebrow = bidiHebrew("מסמך רשמי · לחתימה דיגיטלית");
-  const title = bidiHebrew(titleRaw);
-  const recipient = bidiHebrew(`עבור: ${who}`);
+  const titleRaw = en
+    ? signed
+      ? "Agreement Signed ✓"
+      : "Service Agreement to Sign"
+    : signed
+      ? "הסכם חתום ✓"
+      : "הסכם שירות לחתימה";
+  const eyebrow = en
+    ? "Official document · Digital signing"
+    : bidiHebrew("מסמך רשמי · לחתימה דיגיטלית");
+  const title = en ? titleRaw : bidiHebrew(titleRaw);
+  const recipient = en ? `For: ${who}` : bidiHebrew(`עבור: ${who}`);
+  // English text uses the Latin brand font; Hebrew uses Meruba. Title block
+  // aligns to the reading side.
+  const textFamily = en ? brandFamily : heFamily;
+  const blockAlign = en ? "flex-start" : "flex-end";
+  const textAlign = en ? "left" : "right";
 
   return new ImageResponse(
     (
@@ -269,14 +284,14 @@ export function renderAgreementOgImage(
             </div>
           </div>
 
-          {/* Title block — right-aligned for Hebrew */}
+          {/* Title block — aligned to the reading side */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-end",
+              alignItems: blockAlign,
               width: "100%",
-              textAlign: "right",
+              textAlign: textAlign,
             }}
           >
             <div
@@ -284,7 +299,7 @@ export function renderAgreementOgImage(
                 fontSize: "26px",
                 letterSpacing: "2px",
                 color: "#999999",
-                fontFamily: heFamily,
+                fontFamily: textFamily,
                 marginBottom: "14px",
               }}
             >
@@ -295,7 +310,7 @@ export function renderAgreementOgImage(
                 fontSize: "78px",
                 lineHeight: 1.1,
                 fontWeight: 700,
-                fontFamily: heFamily,
+                fontFamily: textFamily,
                 color: "#ffffff",
               }}
             >
@@ -304,7 +319,7 @@ export function renderAgreementOgImage(
             <div
               style={{
                 fontSize: "34px",
-                fontFamily: heFamily,
+                fontFamily: textFamily,
                 color: "#cccccc",
                 marginTop: "18px",
               }}
