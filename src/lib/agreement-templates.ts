@@ -7,7 +7,9 @@ export type AgreementLocale = "he" | "en";
 
 // v6: added English (LTR) rendering + VAT-exempt (zero-rate) pricing for
 // foreign clients.
-export const AGREEMENT_DOCUMENT_VERSION = 6;
+// v7: term clause — no minimum commitment; website ownership transfers to the
+// client (ZIP of raw materials) after 12 consecutive months of active subscription.
+export const AGREEMENT_DOCUMENT_VERSION = 7;
 
 let cachedLogoDataUrl: string | null = null;
 function getLogoDataUrl(): string {
@@ -220,11 +222,11 @@ interface LocaleStrings {
 const HE_CLAUSES: { title: string; body: string }[] = [
   {
     title: "4. תקופת ההסכם",
-    body: "ההסכם הוא לתקופה של 24 חודשים מיום החתימה. בתום התקופה ההסכם יתחדש אוטומטית לתקופות נוספות של 12 חודשים, אלא אם אחד הצדדים יודיע לצד השני בכתב על סיום ההתקשרות לפחות 30 יום לפני תום התקופה.",
+    body: "להתקשרות אין תקופת התחייבות מינימלית. השירות ניתן על בסיס חודשי, והלקוח רשאי להפסיק את ההתקשרות בכל עת; ההפסקה תיכנס לתוקף בתום החודש ששולם. לאחר 12 חודשים רצופים של מנוי פעיל, בעלות האתר עוברת ללקוח כמפורט בסעיף 5.",
   },
   {
     title: "5. בעלות על קבצי האתר",
-    body: "קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות לאורך כל תקופת ההתקשרות. בתום תקופת 24 החודשים הראשונה ולאחר תשלום מלא של כל המגיע, הקבצים יועברו לבעלות הלקוח לפי דרישתו בכתב.",
+    body: "עד להשלמת 12 חודשים רצופים של מנוי פעיל, קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות. בתום 12 חודשים רצופים של מנוי פעיל ולאחר תשלום מלא של כל המגיע, האתר עובר לבעלותו המלאה של הלקוח, והלקוח מקבל קובץ ZIP הכולל את חומרי הגלם וקבצי הבנייה של האתר, ללא תשלום נוסף.",
   },
   {
     title: "6. בעלות על תכנים",
@@ -267,11 +269,11 @@ const HE_CLAUSES: { title: string; body: string }[] = [
 const EN_CLAUSES: { title: string; body: string }[] = [
   {
     title: "4. Term of the Agreement",
-    body: "This Agreement is for a term of 24 months from the date of signing. At the end of the term it will renew automatically for additional 12-month periods, unless either party notifies the other in writing of termination at least 30 days before the end of the term.",
+    body: "This engagement has no minimum commitment period. The service is provided on a monthly basis, and the Client may terminate the engagement at any time; termination takes effect at the end of the month already paid for. After 12 consecutive months of active subscription, ownership of the website transfers to the Client as set out in section 5.",
   },
   {
     title: "5. Ownership of the Website Files",
-    body: "The source code and build files of the website remain the property of the Service Provider throughout the entire engagement. At the end of the initial 24-month period, and after full payment of all amounts due, the files will be transferred to the Client's ownership upon the Client's written request.",
+    body: "Until the Client completes 12 consecutive months of active subscription, the source code and build files of the website remain the property of the Service Provider. Upon completion of 12 consecutive months of active subscription, and after full payment of all amounts due, the website becomes the full property of the Client, and the Client receives a ZIP archive containing the raw materials and build files of the website, at no additional charge.",
   },
   {
     title: "6. Ownership of Content",
