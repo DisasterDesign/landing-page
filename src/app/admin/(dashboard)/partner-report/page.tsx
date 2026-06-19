@@ -27,6 +27,7 @@ interface ReportPayload {
   snapshotAt: string;
   rows: PartnerRow[];
   totals: Totals;
+  averages: Totals;
   count: number;
 }
 
@@ -59,6 +60,7 @@ export default function PartnerReportPage() {
   }, [load]);
 
   const totals = data?.totals;
+  const averages = data?.averages;
   const rows = data?.rows ?? [];
 
   const snapshotLabel = data?.snapshotAt
@@ -91,11 +93,16 @@ export default function PartnerReportPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           label="לקוחות פעילים"
           value={data?.count ?? 0}
           format="int"
+        />
+        <SummaryCard
+          label="ממוצע הכנסה ללקוח"
+          value={averages?.amount ?? 0}
+          accent
         />
         <SummaryCard
           label="רווח אחרי עמלות / חודש"
@@ -190,6 +197,21 @@ export default function PartnerReportPage() {
                   <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink font-bold">
                     {fmtNum(totals?.partnerShare)}
                   </td>
+                </tr>
+                <tr className="bg-gray-800/40 border-t border-gray-700 text-gray-300">
+                  <td className="px-3 py-2.5" colSpan={3}>
+                    <span className="text-gray-400">ממוצע ללקוח</span>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono">{fmtNum(averages?.amount)}</td>
+                  <td className="px-3 py-2.5 font-mono text-gray-400 bg-gray-700/20">{fmtNum(averages?.vat)}</td>
+                  <td className="px-3 py-2.5 font-mono text-gray-400 bg-gray-700/20">{fmtNum(averages?.cardcomFee)}</td>
+                  <td className="px-3 py-2.5 font-mono bg-gray-700/20">
+                    <span className={(averages?.profit ?? 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                      {fmtNum(averages?.profit)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink">{fmtNum(averages?.partnerShare)}</td>
+                  <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink">{fmtNum(averages?.partnerShare)}</td>
                 </tr>
               </tfoot>
             </table>

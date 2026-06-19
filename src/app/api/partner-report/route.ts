@@ -83,10 +83,22 @@ export async function GET(_req: NextRequest) {
     { amount: 0, vat: 0, cardcomFee: 0, profit: 0, partnerShare: 0 }
   );
 
+  // Average per active client — how much an average client is worth across
+  // each figure (gross, VAT, fee, profit, each partner's share).
+  const n = rows.length;
+  const averages = {
+    amount: n > 0 ? totals.amount / n : 0,
+    vat: n > 0 ? totals.vat / n : 0,
+    cardcomFee: n > 0 ? totals.cardcomFee / n : 0,
+    profit: n > 0 ? totals.profit / n : 0,
+    partnerShare: n > 0 ? totals.partnerShare / n : 0,
+  };
+
   return NextResponse.json({
     snapshotAt: new Date().toISOString(),
     rows,
     totals,
+    averages,
     count: rows.length,
   });
 }
