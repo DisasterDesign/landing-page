@@ -23,7 +23,7 @@ function defaultUrl(
     case "TASK_COMMENTED":
       return ids.taskId ? `/admin/tasks/${ids.taskId}` : "/admin/tasks";
     case "CONTACT_RECEIVED":
-      return "/admin/contacts";
+      return ids.leadId ? `/admin/leads?focus=${ids.leadId}` : "/admin/leads";
     case "AGREEMENT_SIGNED":
       return "/admin/agreements";
     case "LEAD_FOLLOWUP":

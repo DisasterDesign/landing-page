@@ -150,14 +150,20 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       },
     });
 
-    // Mirror onto Client card if linked
-    if (agreement.clientId && paidAmount != null) {
+    // Mirror onto Client card if linked. monthlyAmount is derived from the
+    // agreement (not the charged amount) so it's set even when Cardcom omits
+    // Sum/Amount (paidAmount null); only the cumulative `amount` increment
+    // depends on a known paidAmount.
+    if (agreement.clientId) {
+      const grossMonthly = agreement.vatExempt
+        ? agreement.monthlyPrice
+        : withVat(agreement.monthlyPrice);
       await tx.client.update({
         where: { id: agreement.clientId },
         data: {
           paymentDate: paidAt,
-          // amount = total received from this client; add this transaction
-          amount: { increment: paidAmount },
+          ...(paidAmount != null ? { amount: { increment: paidAmount } } : {}),
+          ...(grossMonthly > 0 ? { monthlyAmount: grossMonthly } : {}),
         },
       });
     }
@@ -349,6 +355,8 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
         where: { id: agreement.clientId },
         data: {
           amount: { increment: amount },
+          // A recurring charge IS the gross monthly — keep monthlyAmount fresh.
+          ...(amount > 0 ? { monthlyAmount: amount } : {}),
           paymentDate: new Date(),
         },
       });

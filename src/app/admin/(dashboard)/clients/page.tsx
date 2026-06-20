@@ -16,7 +16,9 @@ interface Client {
   status: string;
   notes: string | null;
   partner: string;
-  amount: number | null;
+  amount: number | null;        // cumulative total received
+  monthlyAmount: number | null; // true recurring monthly (gross)
+  vatExempt: boolean;
   expense: number | null;
   cardcomFee: number | null;
   websiteUrl: string | null;
@@ -32,19 +34,30 @@ const SOURCE_LABEL: Record<string, string> = {
   import: "ייבוא",
 };
 
-type EditableField = "name" | "status" | "notes" | "amount" | "websiteUrl" | "startDate" | "paymentDate";
+type EditableField =
+  | "name"
+  | "status"
+  | "notes"
+  | "amount"
+  | "monthlyAmount"
+  | "websiteUrl"
+  | "startDate"
+  | "paymentDate";
 
 // Israeli VAT rate as of January 2025 (raised from 17%); still 18% in 2026.
 const VAT_RATE = 18;
 // CardCom merchant fee on every charged transaction.
 const CARDCOM_FEE_RATE = 0.02;
 
-const computeVat = (amount: number | null) => ((amount ?? 0) * VAT_RATE) / (100 + VAT_RATE);
-const computeCardcomFee = (amount: number | null) => (amount ?? 0) * CARDCOM_FEE_RATE;
-// Profit after VAT and CardCom merchant fee. Other expenses are tracked
-// separately on the per-client detail page and intentionally excluded here.
-const computeProfit = (c: Pick<Client, "amount">) =>
-  ((c.amount ?? 0) * 100) / (100 + VAT_RATE) - computeCardcomFee(c.amount);
+// All financial columns are computed from the MONTHLY figure (not the
+// cumulative `amount`) so they don't inflate as a client pays more months.
+const monthlyOf = (c: Pick<Client, "monthlyAmount">) => c.monthlyAmount ?? 0;
+const computeVat = (c: Pick<Client, "monthlyAmount" | "vatExempt">) =>
+  c.vatExempt ? 0 : (monthlyOf(c) * VAT_RATE) / (100 + VAT_RATE);
+const computeCardcomFee = (c: Pick<Client, "monthlyAmount">) => monthlyOf(c) * CARDCOM_FEE_RATE;
+// Profit after VAT and CardCom merchant fee.
+const computeProfit = (c: Pick<Client, "monthlyAmount" | "vatExempt">) =>
+  monthlyOf(c) - computeVat(c) - computeCardcomFee(c);
 
 interface EditingCell {
   id: string;
@@ -121,8 +134,8 @@ export default function ClientsPage() {
 
   const startEditing = (client: Client, field: EditableField) => {
     let value: string;
-    if (field === "amount") {
-      value = client.amount != null ? String(client.amount) : "";
+    if (field === "amount" || field === "monthlyAmount") {
+      value = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       value = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
     } else {
@@ -140,8 +153,8 @@ export default function ClientsPage() {
 
     // Check if value actually changed
     let oldValue: string;
-    if (field === "amount") {
-      oldValue = client.amount != null ? String(client.amount) : "";
+    if (field === "amount" || field === "monthlyAmount") {
+      oldValue = client[field] != null ? String(client[field]) : "";
     } else if (field === "startDate" || field === "paymentDate") {
       oldValue = client[field] ? new Date(client[field]!).toISOString().split("T")[0] : "";
     } else {
@@ -154,7 +167,7 @@ export default function ClientsPage() {
     }
 
     let patchValue: unknown = editValue;
-    if (field === "amount") {
+    if (field === "amount" || field === "monthlyAmount") {
       patchValue = editValue === "" ? null : parseFloat(editValue);
       if (editValue !== "" && isNaN(patchValue as number)) {
         toast.error("ערך לא תקין");
@@ -170,8 +183,8 @@ export default function ClientsPage() {
     setClients((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        if (field === "amount") {
-          return { ...c, amount: patchValue as number | null };
+        if (field === "amount" || field === "monthlyAmount") {
+          return { ...c, [field]: patchValue as number | null };
         }
         if (field === "startDate" || field === "paymentDate") {
           return { ...c, [field]: patchValue ? new Date(patchValue as string).toISOString() : null };
@@ -307,9 +320,10 @@ export default function ClientsPage() {
     }
   };
 
-  const totalAmount = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
-  const totalVat = clients.reduce((sum, c) => sum + computeVat(c.amount), 0);
-  const totalCardcom = clients.reduce((sum, c) => sum + computeCardcomFee(c.amount), 0);
+  const totalReceived = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
+  const totalMonthly = clients.reduce((sum, c) => sum + (c.monthlyAmount ?? 0), 0);
+  const totalVat = clients.reduce((sum, c) => sum + computeVat(c), 0);
+  const totalCardcom = clients.reduce((sum, c) => sum + computeCardcomFee(c), 0);
   const totalProfit = clients.reduce((sum, c) => sum + computeProfit(c), 0);
 
   const formatNum = (n: number | null) =>
@@ -392,7 +406,7 @@ export default function ClientsPage() {
       return (
         <input
           ref={inputRef}
-          type={field === "amount" ? "number" : "text"}
+          type={field === "amount" || field === "monthlyAmount" ? "number" : "text"}
           step="any"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -439,6 +453,8 @@ export default function ClientsPage() {
       display = statusDisplay(client.status);
     } else if (field === "amount") {
       display = formatNum(client.amount);
+    } else if (field === "monthlyAmount") {
+      display = formatNum(client.monthlyAmount);
     } else if (field === "startDate" || field === "paymentDate") {
       display = client[field] ? new Date(client[field]!).toLocaleDateString("he-IL") : "";
     } else {
@@ -498,10 +514,11 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">אתר</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סכום (כולל מע״מ ₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">חודשי (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 18% (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">עמלת CardCom 2% (₪)</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32 bg-gray-700/40">רווח אחרי מע״מ ו-CardCom (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32 bg-gray-700/40">רווח חודשי (₪)</th>
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">סך התקבולים (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך התחלה</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">תאריך תשלום</th>
               <th className="w-12 sticky left-0 bg-gray-800 z-10 border-l border-gray-700 md:static md:border-l-0"></th>
@@ -509,9 +526,10 @@ export default function ClientsPage() {
           </thead>
           <tbody>
             {clients.map((client) => {
-              const vat = client.amount != null ? computeVat(client.amount) : null;
-              const cardcomFee = client.amount != null ? computeCardcomFee(client.amount) : null;
-              const profit = client.amount != null ? computeProfit(client) : null;
+              const hasMonthly = client.monthlyAmount != null;
+              const vat = hasMonthly ? computeVat(client) : null;
+              const cardcomFee = hasMonthly ? computeCardcomFee(client) : null;
+              const profit = hasMonthly ? computeProfit(client) : null;
               const isSaving = savingIds.has(client.id);
 
               return (
@@ -554,7 +572,7 @@ export default function ClientsPage() {
                   </td>
                   <td className="px-1 py-0.5">{renderCell(client, "websiteUrl")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
-                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "amount")}</td>
+                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "monthlyAmount")}</td>
                   <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
                     {vat != null ? formatNum(vat) : <span className="text-gray-600">-</span>}
                   </td>
@@ -574,6 +592,7 @@ export default function ClientsPage() {
                       <span className="text-gray-600">-</span>
                     )}
                   </td>
+                  <td className="px-1 py-0.5 font-mono text-gray-400">{renderCell(client, "amount")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
                   <td className="px-1 py-0.5 sticky left-0 bg-gray-950 group-hover:bg-gray-800/50 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
@@ -598,7 +617,7 @@ export default function ClientsPage() {
                 <span className="text-gray-400">סה&quot;כ ({clients.length} לקוחות)</span>
               </td>
               <td className="px-3 py-2.5 font-mono text-white">
-                {formatNum(totalAmount)}
+                {formatNum(totalMonthly)}
               </td>
               <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
                 {formatNum(totalVat)}
@@ -615,6 +634,7 @@ export default function ClientsPage() {
                   {formatNum(totalProfit)}
                 </span>
               </td>
+              <td className="px-3 py-2.5 font-mono text-gray-400">{formatNum(totalReceived)}</td>
               <td colSpan={3}></td>
             </tr>
           </tfoot>

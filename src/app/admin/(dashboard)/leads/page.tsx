@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import AssigneePicker from "@/components/admin/AssigneePicker";
+import { confirmDanger } from "@/lib/confirm";
 
 type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "LOST" | "SPAM";
 type StatusFilter = "ALL" | Status;
@@ -59,11 +60,11 @@ const STATUS_LABEL: Record<Status, string> = {
 };
 
 const STATUS_BADGE: Record<Status, string> = {
-  NEW: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
-  IN_PROGRESS: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  CLOSED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  LOST: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  SPAM: "bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  NEW: "bg-pink-900/40 text-pink-300",
+  IN_PROGRESS: "bg-amber-900/40 text-amber-300",
+  CLOSED: "bg-green-900/40 text-green-300",
+  LOST: "bg-red-900/40 text-red-300",
+  SPAM: "bg-gray-800 text-gray-400",
 };
 
 const STATUS_ORDER: Record<Status, number> = {
@@ -617,7 +618,7 @@ function LeadRow({
             {lead.source === "FACEBOOK" && (
               <span
                 title="הגיע מפייסבוק"
-                className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shrink-0"
+                className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-blue-900/40 text-blue-300 shrink-0"
               >
                 FB
               </span>
@@ -797,6 +798,24 @@ function ExpandedPanel({
     }
   };
 
+  const deleteLead = async () => {
+    const ok = await confirmDanger({
+      title: "מחיקת פנייה",
+      message: "הפנייה תימחק לצמיתות. הפעולה אינה הפיכה.",
+      confirmLabel: "מחק",
+      dangerous: true,
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("נמחק");
+      onChange();
+    } catch {
+      toast.error("שגיאה במחיקה");
+    }
+  };
+
   // Save date + assignees atomically through the parent helper (which keeps
   // the optimistic UX). After the round-trip we reload local detail so the
   // notes/assignees panel reflects what the server saved.
@@ -912,6 +931,13 @@ function ExpandedPanel({
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={deleteLead}
+              className="text-[11px] px-2.5 py-1 rounded-full font-bold bg-gray-800 text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors mr-auto"
+            >
+              מחק פנייה
+            </button>
           </div>
         </div>
 
@@ -962,14 +988,14 @@ function ExpandedPanel({
               href={`https://wa.me/${detail.phone.replace(/[^0-9]/g, "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs px-3 py-1.5 rounded-full font-bold bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-full font-bold bg-green-900/40 text-green-300 hover:bg-green-900/60 transition-colors"
             >
               וואטסאפ
             </a>
           )}
           <a
             href={`mailto:${detail.email}`}
-            className="text-xs px-3 py-1.5 rounded-full font-bold bg-cyan-100 text-cyan-800 hover:bg-cyan-200 dark:bg-cyan-900 dark:text-cyan-200 transition-colors"
+            className="text-xs px-3 py-1.5 rounded-full font-bold bg-cyan-900/40 text-cyan-300 hover:bg-cyan-900/60 transition-colors"
           >
             אימייל
           </a>

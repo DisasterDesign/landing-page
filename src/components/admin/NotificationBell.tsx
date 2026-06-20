@@ -29,7 +29,7 @@ function targetUrlFor(n: NotificationItem): string | null {
     case "TASK_COMMENTED":
       return n.task?.id ? `/admin/tasks/${n.task.id}` : "/admin/tasks";
     case "CONTACT_RECEIVED":
-      return "/admin/contacts";
+      return n.leadId ? `/admin/leads?focus=${n.leadId}` : "/admin/leads";
     case "AGREEMENT_SIGNED":
       return "/admin/agreements";
     case "LEAD_FOLLOWUP":

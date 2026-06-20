@@ -19,6 +19,18 @@ interface MyTask {
   dueDate: string | null;
 }
 
+interface BusinessKpis {
+  activeClients: number;
+  mrr: number; // monthly recurring (gross), from partner-report totals.amount
+  monthlyProfit: number;
+  partnerShare: number;
+  openLeads: number;
+  sellerPending: number;
+}
+
+const CLIENT_GOAL = 100; // strategy.md target by Aug 2026
+const fmt = (n: number) => Math.round(n).toLocaleString("he-IL");
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     activeTasks: 0,
@@ -26,6 +38,7 @@ export default function AdminDashboardPage() {
     dueThisWeek: 0,
     newMessages: 0,
   });
+  const [kpis, setKpis] = useState<BusinessKpis | null>(null);
   const [myTasks, setMyTasks] = useState<MyTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<Set<string>>(new Set());
@@ -67,9 +80,12 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     async function fetchAll() {
       try {
-        const [statsRes, tasksRes] = await Promise.all([
+        const [statsRes, tasksRes, reportRes, leadsRes, sellersRes] = await Promise.all([
           fetch("/api/dashboard/stats"),
           fetch("/api/dashboard/my-tasks"),
+          fetch("/api/partner-report", { cache: "no-store" }),
+          fetch("/api/leads", { cache: "no-store" }),
+          fetch("/api/sellers/commissions", { cache: "no-store" }),
         ]);
         if (statsRes.ok) {
           const data = await statsRes.json();
@@ -83,6 +99,20 @@ export default function AdminDashboardPage() {
         if (tasksRes.ok) {
           const data = await tasksRes.json();
           setMyTasks(data.tasks || []);
+        }
+        // Business KPIs — single source of truth is the partner report.
+        const report = reportRes.ok ? await reportRes.json() : null;
+        const leads = leadsRes.ok ? await leadsRes.json() : null;
+        const sellers = sellersRes.ok ? await sellersRes.json() : null;
+        if (report) {
+          setKpis({
+            activeClients: report.count ?? 0,
+            mrr: report.totals?.amount ?? 0,
+            monthlyProfit: report.totals?.profit ?? 0,
+            partnerShare: report.totals?.partnerShare ?? 0,
+            openLeads: leads?.stats?.openCount ?? 0,
+            sellerPending: sellers?.totalPending ?? 0,
+          });
         }
       } catch (err) {
         console.error("Failed to load dashboard:", err);
@@ -151,7 +181,43 @@ export default function AdminDashboardPage() {
         </Link>
       </div>
 
-      {/* Stat Cards */}
+      {/* Goal banner — active clients vs target (strategy.md) */}
+      {kpis && (
+        <div className="bg-gradient-to-l from-pink/10 to-cyan/5 border border-pink/20 rounded-2xl p-5">
+          <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <div className="text-xs text-gray-400 mb-1">לקוחות פעילים מול היעד</div>
+              <div className="text-3xl font-extrabold">
+                {fmt(kpis.activeClients)}
+                <span className="text-lg text-gray-500"> / {CLIENT_GOAL}</span>
+              </div>
+            </div>
+            <div className="text-sm text-gray-400">
+              {Math.round((kpis.activeClients / CLIENT_GOAL) * 100)}% ליעד אוגוסט 2026
+            </div>
+          </div>
+          <div className="h-2.5 rounded-full bg-gray-800 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-l from-pink to-cyan rounded-full transition-all"
+              style={{ width: `${Math.min(100, (kpis.activeClients / CLIENT_GOAL) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Business KPI row */}
+      {kpis && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <KpiCard label="MRR (חודשי)" value={`₪${fmt(kpis.mrr)}`} accent />
+          <KpiCard label="רווח חודשי" value={`₪${fmt(kpis.monthlyProfit)}`} />
+          <KpiCard label="חלק כל שותף" value={`₪${fmt(kpis.partnerShare)}`} />
+          <KpiCard label="לקוחות פעילים" value={fmt(kpis.activeClients)} />
+          <KpiCard label="לידים פתוחים" value={fmt(kpis.openLeads)} href="/admin/leads" />
+          <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/sellers" />
+        </div>
+      )}
+
+      {/* Task ops stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => (
           <div
@@ -249,4 +315,30 @@ export default function AdminDashboardPage() {
       <RevenueChart />
     </div>
   );
+}
+
+function KpiCard({
+  label,
+  value,
+  accent,
+  href,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  href?: string;
+}) {
+  const inner = (
+    <div
+      className={`rounded-2xl p-4 border h-full transition-colors ${
+        accent ? "bg-pink/10 border-pink/30" : "bg-gray-900 border-gray-700"
+      } ${href ? "hover:border-gray-500" : ""}`}
+    >
+      <div className="text-[11px] text-gray-400 mb-1 truncate">{label}</div>
+      <div className={`text-xl font-bold font-mono ${accent ? "text-pink" : "text-gray-100"}`}>
+        {value}
+      </div>
+    </div>
+  );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }

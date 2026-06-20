@@ -13,6 +13,7 @@ interface TeamMember {
 
 const roleLabels: Record<string, { label: string; color: string }> = {
   ADMIN: { label: "מנהל", color: "bg-pink/20 text-pink" },
+  SELLER: { label: "מוכר/ת", color: "bg-yellow-500/20 text-yellow-400" },
   MEMBER: { label: "חבר צוות", color: "bg-cyan/20 text-cyan" },
 };
 

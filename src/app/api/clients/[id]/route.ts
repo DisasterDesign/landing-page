@@ -73,6 +73,9 @@ export async function PATCH(
     if ("amount" in body)
       updateData.amount =
         body.amount !== null && body.amount !== "" ? parseFloat(body.amount) : null;
+    if ("monthlyAmount" in body)
+      updateData.monthlyAmount =
+        body.monthlyAmount !== null && body.monthlyAmount !== "" ? parseFloat(body.monthlyAmount) : null;
     if ("expense" in body)
       updateData.expense =
         body.expense !== null && body.expense !== "" ? parseFloat(body.expense) : null;

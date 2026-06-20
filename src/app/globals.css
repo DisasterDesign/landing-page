@@ -145,227 +145,71 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ==========================================================================
-   Light theme for the admin backend.
-   Scoped to the .admin-light wrapper on the admin root layout, so marketing
-   pages stay dark. Overrides the gray utility classes by remapping their
-   colors. Brand accents (pink/cyan/red/green/yellow) stay as-is.
+   Dark theme for the admin + seller backend.
+   Scoped to the .admin-dark wrapper. The admin is authored in DARK Tailwind
+   classes (bg-gray-900, text-white, bg-pink, text-cyan), so we mostly let them
+   render natively. Refined-brand palette: keep pink as the primary accent;
+   mute the electric cyan so small cyan text stays readable on dark.
    ========================================================================== */
 
-.admin-light {
-  background-color: #ffffff;
-  color: #111827;
-  cursor: auto; /* CustomCursor only renders on the marketing site; restore native cursor in admin */
+.admin-dark {
+  background-color: #0a0a0a;
+  color: #e7e7ea;
+  cursor: auto; /* CustomCursor only renders on the marketing site */
+  /* Muted cyan — #01FFFF is unreadable as small text on dark */
+  --color-cyan: #2dd4bf;
+  --color-cyan-dark: #14b8a6;
 }
 
-/* Surfaces */
-.admin-light .bg-black,
-.admin-light .bg-gray-950,
-.admin-light .bg-gray-900 { background-color: #ffffff !important; }
-.admin-light .bg-gray-900\/80,
-.admin-light .bg-gray-900\/90 { background-color: rgba(255, 255, 255, 0.92) !important; }
-.admin-light .bg-gray-800 { background-color: #f3f4f6 !important; }
-.admin-light .bg-gray-800\/80 { background-color: rgba(243, 244, 246, 0.85) !important; }
-.admin-light .bg-gray-800\/60 { background-color: rgba(243, 244, 246, 0.7) !important; }
-.admin-light .bg-gray-800\/50 { background-color: rgba(243, 244, 246, 0.6) !important; }
-.admin-light .bg-gray-800\/40 { background-color: rgba(243, 244, 246, 0.5) !important; }
-.admin-light .bg-gray-800\/30 { background-color: rgba(243, 244, 246, 0.4) !important; }
-.admin-light .bg-gray-700 { background-color: #e5e7eb !important; }
-.admin-light .bg-gray-700\/40,
-.admin-light .bg-gray-700\/30,
-.admin-light .bg-gray-700\/20 { background-color: rgba(229, 231, 235, 0.5) !important; }
+/* `@theme inline` bakes literal hex into the color utilities, so the
+   --color-cyan override above never reaches them. Override the cyan utilities
+   directly inside the admin so small cyan text/buttons stay readable on dark. */
+.admin-dark .text-cyan { color: #2dd4bf !important; }
+.admin-dark .hover\:text-cyan:hover,
+.admin-dark .hover\:text-cyan\/80:hover { color: #5eead4 !important; }
+.admin-dark .bg-cyan { background-color: #2dd4bf !important; }
+.admin-dark .hover\:bg-cyan:hover,
+.admin-dark .hover\:bg-cyan\/80:hover { background-color: #14b8a6 !important; }
+.admin-dark .border-cyan,
+.admin-dark .hover\:border-cyan:hover { border-color: #2dd4bf !important; }
 
-/* Hover surfaces */
-.admin-light .hover\:bg-gray-800:hover,
-.admin-light .hover\:bg-gray-800\/30:hover,
-.admin-light .hover\:bg-gray-800\/40:hover,
-.admin-light .hover\:bg-gray-800\/50:hover,
-.admin-light .hover\:bg-gray-800\/60:hover { background-color: #f3f4f6 !important; }
-.admin-light .hover\:bg-gray-700:hover { background-color: #e5e7eb !important; }
-.admin-light .group:hover .group-hover\:bg-gray-800\/50,
-.admin-light .group\/row:hover .group-hover\/row\:bg-gray-800 { background-color: #f3f4f6 !important; }
-.admin-light .active\:bg-gray-800:active { background-color: #f3f4f6 !important; }
+/* Page surface + a touch of elevation between the page and cards */
+.admin-dark .bg-gray-950 { background-color: #0a0a0a; }
 
-/* Borders */
-.admin-light .border-gray-950,
-.admin-light .border-gray-900,
-.admin-light .border-gray-800,
-.admin-light .border-gray-800\/50 { border-color: #e5e7eb !important; }
-.admin-light .border-gray-700,
-.admin-light .border-gray-700\/50 { border-color: #d1d5db !important; }
-.admin-light .border-gray-600 { border-color: #9ca3af !important; }
-
-/* Borders inside hover/group */
-.admin-light .hover\:border-gray-700:hover,
-.admin-light .hover\:border-gray-700\/50:hover { border-color: #9ca3af !important; }
-.admin-light .hover\:border-gray-600:hover { border-color: #6b7280 !important; }
-.admin-light .group:hover .group-hover\:border-gray-700\/50,
-.admin-light .group:hover .group-hover\:border-gray-600 { border-color: #9ca3af !important; }
-.admin-light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e5e7eb !important; }
-
-/* Text — invert near-white tones to dark */
-.admin-light .text-white { color: #111827 !important; }
-.admin-light .text-gray-100 { color: #1f2937 !important; }
-.admin-light .text-gray-200 { color: #1f2937 !important; }
-.admin-light .text-gray-300 { color: #374151 !important; }
-.admin-light .text-gray-400 { color: #4b5563 !important; }
-.admin-light .text-gray-500 { color: #6b7280 !important; }
-.admin-light .text-gray-600 { color: #9ca3af !important; }
-.admin-light .text-gray-700 { color: #d1d5db !important; }
-
-.admin-light .hover\:text-white:hover { color: #111827 !important; }
-.admin-light .hover\:text-gray-300:hover { color: #374151 !important; }
-
-/* Placeholders */
-.admin-light .placeholder-gray-500::placeholder,
-.admin-light .placeholder\:text-gray-500::placeholder { color: #9ca3af !important; }
-
-/* Inputs / selects / textareas — surfaces inside forms get a subtle bg */
-.admin-light input,
-.admin-light textarea,
-.admin-light select {
-  background-color: #ffffff;
-  color: #111827;
-  border-color: #d1d5db;
+/* Bare form controls (no explicit bg-* class) get a dark surface so they don't
+   default to white-on-dark. Inputs that set bg-gray-800/900 keep their class. */
+.admin-dark input,
+.admin-dark textarea,
+.admin-dark select {
+  background-color: #161616;
+  color: #f3f4f6;
+  border-color: #2a2a2a;
 }
-.admin-light input:focus,
-.admin-light textarea:focus,
-.admin-light select:focus {
+.admin-dark input:focus,
+.admin-dark textarea:focus,
+.admin-dark select:focus {
   border-color: var(--color-pink);
+  box-shadow: 0 0 0 3px rgba(229, 3, 162, 0.12);
 }
+/* Keep drawing surfaces (signature canvas) and toggle knobs white */
+.admin-dark canvas.bg-white { background-color: #ffffff; }
 
-/* Form fields that explicitly use bg-gray-800 — keep them slightly grey for
-   contrast against the page bg */
-.admin-light input.bg-gray-800,
-.admin-light textarea.bg-gray-800,
-.admin-light select.bg-gray-800 {
-  background-color: #f9fafb !important;
-}
+/* Inputs with an explicit bg-gray-800 keep a slightly lifted field bg */
+.admin-dark input.bg-gray-800,
+.admin-dark textarea.bg-gray-800,
+.admin-dark select.bg-gray-800 { background-color: #1c1c1c !important; }
 
-/* Sticky table cells often re-declare bg-gray-950 / bg-gray-800/50 — covered
-   by the surface rules above. Make sure sticky cells get a solid white bg
-   when they're stuck so they don't show content behind. */
-.admin-light .sticky.bg-gray-950 { background-color: #ffffff !important; }
-.admin-light .sticky.bg-gray-800 { background-color: #f3f4f6 !important; }
+/* Floating elements need a real shadow on dark to separate from the page */
+.admin-dark .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important; }
+.admin-dark .shadow-lg { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important; }
 
-/* The InstallPrompt and Modal use bg-gray-900 too — they live under
-   .admin-light when shown on admin pages, so they get inverted automatically.
-   Add a soft shadow so floating elements are visible against white. */
-.admin-light .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.18) !important; }
-.admin-light .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.12) !important; }
+/* Dark scrollbar inside the admin shell */
+.admin-dark ::-webkit-scrollbar-track { background: #141414; }
+.admin-dark ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+.admin-dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
 
-/* Backdrop overlays (drawer, modal) — keep them dark for separation */
-.admin-light .bg-black\/70,
-.admin-light .bg-black\/80 { background-color: rgba(17, 24, 39, 0.55) !important; }
-
-/* Toaster background should stay legible — react-hot-toast inlines styles
-   so we don't need to override here. */
-
-/* ===== Neutral palette for the admin: kill the pink/cyan accents ===== */
-.admin-light {
-  --color-pink: #111827;
-  --color-pink-light: #1f2937;
-  --color-pink-dark: #000000;
-  --color-cyan: #4b5563;
-  --color-cyan-dark: #374151;
-}
-
-/* Some Tailwind utilities are emitted with the literal hex baked in (older
-   builds, opacity utils). Override the resulting classes too. */
-.admin-light .bg-pink { background-color: #111827 !important; }
-.admin-light .bg-pink\/10 { background-color: rgba(17, 24, 39, 0.06) !important; }
-.admin-light .bg-pink\/15 { background-color: rgba(17, 24, 39, 0.08) !important; }
-.admin-light .bg-pink\/20 { background-color: rgba(17, 24, 39, 0.1) !important; }
-.admin-light .bg-pink\/30 { background-color: rgba(17, 24, 39, 0.15) !important; }
-
-.admin-light .hover\:bg-pink:hover { background-color: #1f2937 !important; }
-.admin-light .hover\:bg-pink-light:hover { background-color: #1f2937 !important; }
-.admin-light .hover\:bg-pink-dark:hover { background-color: #000000 !important; }
-
-.admin-light .text-pink { color: #111827 !important; }
-.admin-light .hover\:text-pink:hover { color: #111827 !important; }
-
-.admin-light .border-pink,
-.admin-light .border-pink\/30,
-.admin-light .border-pink\/50 { border-color: #111827 !important; }
-.admin-light .focus\:border-pink:focus { border-color: #111827 !important; }
-.admin-light .hover\:border-pink:hover { border-color: #111827 !important; }
-
-.admin-light .accent-pink { accent-color: #111827 !important; }
-
-.admin-light .bg-cyan { background-color: #4b5563 !important; }
-.admin-light .bg-cyan\/10 { background-color: rgba(75, 85, 99, 0.06) !important; }
-.admin-light .bg-cyan\/15 { background-color: rgba(75, 85, 99, 0.08) !important; }
-.admin-light .bg-cyan\/20 { background-color: rgba(75, 85, 99, 0.1) !important; }
-.admin-light .bg-cyan\/30 { background-color: rgba(75, 85, 99, 0.15) !important; }
-.admin-light .hover\:bg-cyan:hover { background-color: #374151 !important; }
-.admin-light .hover\:bg-cyan\/80:hover { background-color: #6b7280 !important; }
-
-.admin-light .text-cyan { color: #4b5563 !important; }
-.admin-light .hover\:text-cyan:hover { color: #111827 !important; }
-.admin-light .hover\:text-cyan\/80:hover { color: #111827 !important; }
-
-.admin-light .border-cyan,
-.admin-light .border-cyan\/30 { border-color: #4b5563 !important; }
-
-/* Glow shadows that used pink: tone them down */
-.admin-light .shadow-pink\/30,
-.admin-light .shadow-pink\/40 { box-shadow: 0 10px 15px -3px rgba(17, 24, 39, 0.18) !important; }
-.admin-light .shadow-cyan\/30 { box-shadow: 0 10px 15px -3px rgba(75, 85, 99, 0.18) !important; }
-
-/* ===== Contrast fixes: keep button/active-state text legible ===== */
-
-/* Primary buttons keep white text on dark bg (specificity 20 > 10 wins
-   over the global .text-white override). Same for nested spans/icons. */
-.admin-light .bg-pink.text-white,
-.admin-light .bg-pink .text-white,
-.admin-light .bg-pink-light.text-white,
-.admin-light .bg-pink-light .text-white,
-.admin-light .bg-pink-dark.text-white,
-.admin-light .bg-pink-dark .text-white { color: #ffffff !important; }
-
-/* Cyan FAB / secondary actions: force readable text + a darker bg */
-.admin-light .bg-cyan { background-color: #374151 !important; }
-.admin-light .bg-cyan.text-white,
-.admin-light .bg-cyan .text-white,
-.admin-light .bg-cyan.text-black,
-.admin-light .bg-cyan .text-black { color: #ffffff !important; }
-
-/* Active state pattern: bg-gray-900 + text-white together = real dark accent
-   (e.g. SEO sub-nav active tab). Without this both invert to white-on-white. */
-.admin-light .bg-gray-900.text-white {
-  background-color: #111827 !important;
-  color: #ffffff !important;
-}
-
-/* Notification bell unread badge */
-.admin-light .bg-pink.border-gray-900 {
-  background-color: #111827 !important;
-  color: #ffffff !important;
-  border-color: #ffffff !important;
-}
-
-/* Sidebar active nav item: was bg-pink/15 + text-pink */
-.admin-light .bg-pink\/15.text-pink {
-  background-color: #f3f4f6 !important;
-  color: #111827 !important;
-  font-weight: 700;
-}
-
-/* Agreements tier card when selected: border-pink + bg-pink/15 */
-.admin-light .border-pink.bg-pink\/15 {
-  background-color: #f3f4f6 !important;
-  border-color: #111827 !important;
-}
-.admin-light .border-pink.bg-pink\/15.text-white,
-.admin-light .border-pink.bg-pink\/15 .text-white {
-  color: #111827 !important;
-}
-
-/* Input focus visibility — subtle dark ring */
-.admin-light .focus\:border-pink:focus {
-  border-color: #111827 !important;
-  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08) !important;
-}
+/* Keyboard focus ring — brand pink, subtle */
+.admin-dark :focus-visible { outline-color: var(--color-pink); }
 
 @media (pointer: coarse) {
   body.js-custom-cursor { cursor: auto; }
@@ -400,10 +244,10 @@ h1, h2, h3, h4, h5, h6 {
    the admin shell, to small inline action buttons/links. Desktop visuals
    remain pixel-identical. */
 @media (pointer: coarse) {
-  .admin-light a.text-xs,
-  .admin-light button.text-xs,
-  .admin-light .text-xs > a,
-  .admin-light .text-xs > button {
+  .admin-dark a.text-xs,
+  .admin-dark button.text-xs,
+  .admin-dark .text-xs > a,
+  .admin-dark .text-xs > button {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -411,7 +255,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Inline checkboxes / status toggles get a generous touch area */
-  .admin-light input[type="checkbox"] {
+  .admin-dark input[type="checkbox"] {
     min-width: 22px;
     min-height: 22px;
   }

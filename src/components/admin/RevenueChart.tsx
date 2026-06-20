@@ -74,7 +74,7 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null;
   const data = payload[0].payload;
-  const profitColor = data.profit >= 0 ? "text-green-600" : "text-red-500";
+  const profitColor = data.profit >= 0 ? "text-green-400" : "text-red-400";
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-lg text-right" dir="rtl">
       <p className="text-gray-300 text-xs font-bold mb-1.5">{data.label}</p>
@@ -237,7 +237,7 @@ export default function RevenueChart() {
         <SummaryCard
           label="רווח נקי"
           value={`${formatCurrency(stats.totalProfit)} ₪`}
-          valueColor={stats.totalProfit >= 0 ? "text-green-600" : "text-red-500"}
+          valueColor={stats.totalProfit >= 0 ? "text-green-400" : "text-red-400"}
         />
         <SummaryCard
           label="חודש נוכחי"
@@ -257,11 +257,11 @@ export default function RevenueChart() {
       {hasAnyRevenue ? (
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={monthlyData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
             <XAxis
               dataKey="label"
               tick={{ fill: "#6b7280", fontSize: 11 }}
-              axisLine={{ stroke: "#e5e7eb" }}
+              axisLine={{ stroke: "#2a2a2a" }}
               tickLine={false}
             />
             <YAxis
@@ -279,7 +279,7 @@ export default function RevenueChart() {
               {monthlyData.map((entry, idx) => (
                 <Cell
                   key={idx}
-                  fill={entry.isCurrent ? "#111827" : "#9ca3af"}
+                  fill={entry.isCurrent ? "#E503A2" : "#4b5563"}
                 />
               ))}
             </Bar>
@@ -287,7 +287,7 @@ export default function RevenueChart() {
         </ResponsiveContainer>
       ) : (
         <div className="flex flex-col items-center justify-center h-[280px] text-gray-500 gap-2">
-          <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="w-10 h-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <p className="text-sm">אין הכנסות בחלון הזמן הזה</p>
@@ -325,7 +325,7 @@ function SummaryCard({
       <p className="text-gray-400 text-xs mb-1">{label}</p>
       <p className={`text-xl font-bold font-mono ${valueColor || "text-white"}`}>{value}</p>
       {delta && (
-        <p className={`text-xs mt-0.5 ${delta.positive ? "text-green-600" : "text-red-500"}`}>
+        <p className={`text-xs mt-0.5 ${delta.positive ? "text-green-400" : "text-red-400"}`}>
           {delta.text} מהחודש הקודם
         </p>
       )}

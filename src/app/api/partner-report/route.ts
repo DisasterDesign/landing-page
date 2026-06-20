@@ -46,6 +46,7 @@ export async function GET(_req: NextRequest) {
       number: true,
       name: true,
       amount: true,
+      monthlyAmount: true,
       paymentDate: true,
       vatExempt: true,
     },
@@ -53,7 +54,9 @@ export async function GET(_req: NextRequest) {
   });
 
   const rows: PartnerRow[] = clients.map((c) => {
-    const amount = c.amount ?? 0;
+    // Use the true MONTHLY (gross) figure — NOT Client.amount, which is the
+    // cumulative total received and would inflate the profit split over time.
+    const amount = c.monthlyAmount ?? c.amount ?? 0;
     // Foreign (zero-rated) clients: no VAT was collected, so none is backed out.
     const vat = c.vatExempt ? 0 : (amount * VAT_RATE) / (100 + VAT_RATE);
     const cardcomFee = amount * CARDCOM_FEE_RATE;

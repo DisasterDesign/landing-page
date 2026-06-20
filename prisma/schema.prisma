@@ -369,7 +369,12 @@ model Client {
   name         String
   status       String    @default("")
   notes        String?
+  // amount = CUMULATIVE total received from this client (incremented by the
+  // webhook on every charge). monthlyAmount = the true recurring MONTHLY
+  // (gross) — the figure to use for MRR and partner-report, so the profit
+  // split no longer inflates as a client pays more months.
   amount       Float?
+  monthlyAmount Float?
   expense      Float?
   cardcomFee   Float?
   websiteUrl   String?

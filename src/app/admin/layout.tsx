@@ -15,7 +15,7 @@ export default function AdminRootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`admin-light min-h-screen bg-white text-gray-900 ${heebo.className}`} dir="rtl">
+    <div className={`admin-dark min-h-screen bg-[#0a0a0a] text-gray-100 ${heebo.className}`} dir="rtl">
       {children}
     </div>
   );

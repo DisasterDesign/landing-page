@@ -528,15 +528,15 @@ export default function SeoPage() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="clicks-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#111827" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#111827" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#E503A2" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#E503A2" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="impr-grad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#9ca3af" stopOpacity={0.4} />
                     <stop offset="100%" stopColor="#9ca3af" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
                 <XAxis dataKey="date" stroke="#6b7280" tick={{ fontSize: 11 }} reversed />
                 <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} />
                 <Tooltip
@@ -559,7 +559,7 @@ export default function SeoPage() {
                 <Area
                   type="monotone"
                   dataKey="clicks"
-                  stroke="#111827"
+                  stroke="#E503A2"
                   fill="url(#clicks-grad)"
                   name="קליקים"
                   strokeWidth={2}
