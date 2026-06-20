@@ -34,7 +34,9 @@ export default function AdminLoginPage() {
 
         if (session?.user?.email) {
           toast.success("מתחבר...");
-          window.location.href = "/admin";
+          // Sellers get their own scoped area; everyone else the admin shell.
+          const role = (session.user as { role?: string }).role;
+          window.location.href = role === "SELLER" ? "/seller" : "/admin";
           return;
         }
       }
@@ -58,8 +60,8 @@ export default function AdminLoginPage() {
           <h1 className="text-2xl font-bold text-center mb-8">התחברות לניהול</h1>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm text-gray-400 mb-2">אימייל</label>
-              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors" placeholder="admin@fuzionwebz.com" dir="ltr" />
+              <label htmlFor="email" className="block text-sm text-gray-400 mb-2">אימייל או שם משתמש</label>
+              <input id="email" type="text" autoCapitalize="none" autoCorrect="off" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-transparent border-b-2 border-gray-600 focus:border-pink px-0 py-3 text-white placeholder-gray-500 outline-none transition-colors" placeholder="admin@fuzionwebz.com" dir="ltr" />
             </div>
             <div>
               <label htmlFor="password" className="block text-sm text-gray-400 mb-2">סיסמה</label>

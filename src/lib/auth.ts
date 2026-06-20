@@ -16,7 +16,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        // The field carries an email OR a username (admin-provisioned sellers
+        // sign in by username). Kept named "email" for the existing form.
+        email: { label: "Email or username", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
@@ -24,8 +26,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+        const identifier = (credentials.email as string).trim();
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: { equals: identifier, mode: "insensitive" } },
+              { username: { equals: identifier, mode: "insensitive" } },
+            ],
+          },
         });
 
         if (!user) {

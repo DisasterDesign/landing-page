@@ -8,7 +8,7 @@ import {
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
 import { withVat } from "@/lib/vat";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyAllAdmins, createNotification } from "@/lib/notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
 
 export const maxDuration = 60;
@@ -103,6 +103,8 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       phone: true,
       locale: true,
       vatExempt: true,
+      createdBy: true,
+      isSellerDeal: true,
     },
   });
   if (!agreement) {
@@ -166,6 +168,12 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     title: `תשלום התקבל — ${agreement.customerName}`,
     body: `סכום: ${paidAmount ?? "?"} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after payment failed:", e));
+
+  // If a SELLER created this agreement, record their first-month commission
+  // (idempotent: SellerCommission.agreementId is unique).
+  recordSellerCommission(agreement).catch((e) =>
+    console.error("record seller commission failed:", e)
+  );
 
   sendPaymentReceivedEmail({
     customerName: agreement.customerName,
@@ -242,6 +250,54 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       hasExistingRecurring: !!agreement.cardcomRecurringId,
     });
   }
+}
+
+/**
+ * When a SELLER-created agreement is paid, credit the seller their first-month
+ * commission (the monthly price the deal closed at). Idempotent via the unique
+ * agreementId on SellerCommission.
+ */
+async function recordSellerCommission(agreement: {
+  id: string;
+  createdBy: string;
+  customerName: string;
+  monthlyPrice: number;
+  isSellerDeal: boolean;
+}): Promise<void> {
+  // Eligibility is fixed at deal CREATION (isSellerDeal) so the commission is
+  // owed regardless of any later role change to the creator.
+  if (!agreement.isSellerDeal || !agreement.createdBy || agreement.monthlyPrice <= 0) {
+    return;
+  }
+
+  const existing = await prisma.sellerCommission.findUnique({
+    where: { agreementId: agreement.id },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  try {
+    await prisma.sellerCommission.create({
+      data: {
+        sellerId: agreement.createdBy,
+        agreementId: agreement.id,
+        clientName: agreement.customerName,
+        amount: agreement.monthlyPrice,
+      },
+    });
+  } catch (err) {
+    // Unique-violation race under a webhook retry → already recorded.
+    console.warn("seller commission already recorded:", err);
+    return;
+  }
+
+  await createNotification({
+    recipientId: agreement.createdBy,
+    type: "AGREEMENT_SIGNED",
+    title: `🎉 עסקה נסגרה! ${agreement.customerName}`,
+    body: `עמלה: ${agreement.monthlyPrice} ₪. אפשר לשלוח בריף לאלעד.`,
+    url: "/seller/sales",
+  });
 }
 
 async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {

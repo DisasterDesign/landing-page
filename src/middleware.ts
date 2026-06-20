@@ -89,6 +89,19 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Seller-scoped API: open to SELLER and ADMIN only. Must come BEFORE the
+  // ADMIN-only blanket gate below.
+  if (pathname.startsWith("/api/seller/")) {
+    if (!isLoggedIn) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "SELLER" && userRole !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+
   // Protect all other API routes
   if (pathname.startsWith("/api/")) {
     if (!isLoggedIn) {
@@ -98,6 +111,20 @@ export default auth((req) => {
     const userRole = (req.auth?.user as Record<string, unknown>)?.role;
     if (userRole !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+
+  // Protect /seller/* pages — SELLER and ADMIN only.
+  if (pathname.startsWith("/seller")) {
+    if (!isLoggedIn) {
+      const loginUrl = new URL("/admin/login", req.url);
+      loginUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "SELLER" && userRole !== "ADMIN") {
+      return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();
   }
@@ -112,6 +139,10 @@ export default auth((req) => {
     // Check admin role for admin pages
     const userRole = (req.auth?.user as Record<string, unknown>)?.role;
     if (userRole !== "ADMIN") {
+      // Sellers landing on /admin go to their own area instead of the public site.
+      if (userRole === "SELLER") {
+        return NextResponse.redirect(new URL("/seller", req.url));
+      }
       return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();
@@ -121,5 +152,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/:path*"],
+  matcher: ["/admin/:path*", "/seller/:path*", "/api/:path*"],
 };

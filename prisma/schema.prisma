@@ -11,6 +11,12 @@ datasource db {
 enum Role {
   ADMIN
   MEMBER
+  SELLER
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
 }
 
 enum ProjectStatus {
@@ -87,6 +93,9 @@ enum BlogPostStatus {
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
+  /// Optional login handle for admin-provisioned users (e.g. sellers) who
+  /// sign in by name instead of email. Case-insensitive at login.
+  username     String?   @unique
   name         String
   passwordHash String
   role         Role      @default(MEMBER)
@@ -107,6 +116,27 @@ model User {
   contactNotes  ContactNote[]
   clientNotes   ClientNote[] @relation("ClientNoteAuthor")
   assignedLeads ContactSubmission[] @relation("LeadAssignees")
+  commissions   SellerCommission[] @relation("SellerCommissions")
+}
+
+/// First-month commission earned by a seller when an agreement THEY created
+/// reaches a confirmed payment (paymentStatus = COMPLETED). One row per
+/// agreement (agreementId unique → idempotent against webhook retries).
+model SellerCommission {
+  id          String           @id @default(cuid())
+  sellerId    String
+  seller      User             @relation("SellerCommissions", fields: [sellerId], references: [id])
+  agreementId String           @unique
+  clientName  String
+  amount      Float            // first-month monthly price the deal closed at
+  status      CommissionStatus @default(PENDING)
+  paidAt      DateTime?
+  /// Task created when the seller submits the site brief to the admins.
+  briefTaskId String?
+  createdAt   DateTime         @default(now())
+
+  @@index([sellerId, status])
+  @@index([createdAt])
 }
 
 model Project {
@@ -390,6 +420,9 @@ model Agreement {
   // of services to a foreign resident). Both default to the Israeli case.
   locale             String          @default("he")   // "he" | "en"
   vatExempt          Boolean         @default(false)
+  // True when issued by a seller — captured at creation so the first-month
+  // commission is owed even if the creator's role changes before payment.
+  isSellerDeal       Boolean         @default(false)
   customerName    String
   businessName    String?
   idNumber        String?

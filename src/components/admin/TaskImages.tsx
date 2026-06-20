@@ -53,7 +53,8 @@ export function imageSkipMessage(name: string, reason: ImageSkipReason): string 
 
 export async function uploadTaskImage(
   taskId: string,
-  img: CompressedImage
+  img: CompressedImage,
+  uploadUrl?: string
 ): Promise<AttachmentMeta> {
   const formData = new FormData();
   formData.append(
@@ -65,7 +66,7 @@ export async function uploadTaskImage(
   formData.append("width", String(img.width));
   formData.append("height", String(img.height));
 
-  const res = await fetch(`/api/tasks/${taskId}/attachments`, {
+  const res = await fetch(uploadUrl ?? `/api/tasks/${taskId}/attachments`, {
     method: "POST",
     body: formData,
   });
