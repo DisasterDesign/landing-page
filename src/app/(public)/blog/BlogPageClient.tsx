@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 
-interface BlogPost {
+export interface BlogPost {
   id: string;
   title: string;
   slug: string;
@@ -22,15 +22,29 @@ interface Pagination {
   totalPages: number;
 }
 
-export default function BlogPageClient() {
-  const [posts, setPosts] = useState<BlogPost[]>([]);
+export default function BlogPageClient({
+  initialPosts = [],
+  initialCategories = [],
+}: {
+  initialPosts?: BlogPost[];
+  initialCategories?: string[];
+}) {
+  // Seed from the server-rendered first page so the initial HTML contains real
+  // <a> links to every post (crawlable) — not an empty client shell.
+  const [posts, setPosts] = useState<BlogPost[]>(initialPosts);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>(initialCategories);
+  // Skip the redundant fetch on first mount (defaults already came from SSR).
+  const skipFirstFetch = useRef(initialPosts.length > 0);
 
   useEffect(() => {
+    if (skipFirstFetch.current) {
+      skipFirstFetch.current = false;
+      return;
+    }
     async function fetchPosts() {
       setLoading(true);
       try {

@@ -1,33 +1,36 @@
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
-/** Always regenerate — the sitemap must reflect the latest published posts. */
-export const dynamic = "force-dynamic";
+/**
+ * Rebuild at most hourly (ISR) so new posts/fonts appear without regenerating
+ * on every crawl. Static-page lastModified values below are real per-page
+ * change dates (not the request time), so crawlers get a stable, trustworthy
+ * signal. Update a page's date here when its content actually changes.
+ */
+export const revalidate = 3600;
 
 const SITE_URL = "https://www.fuzionwebz.com";
 
-// Static pages with their priorities and change frequencies
+// Static pages with their real last-content-change date, priority and freq.
 const staticPages = [
-  { path: "", priority: 1.0, changeFrequency: "weekly" as const },
-  { path: "/about", priority: 0.7, changeFrequency: "monthly" as const },
-  { path: "/services", priority: 0.8, changeFrequency: "monthly" as const },
-  { path: "/contact", priority: 0.8, changeFrequency: "monthly" as const },
-  { path: "/faq", priority: 0.6, changeFrequency: "monthly" as const },
-  { path: "/portfolio", priority: 0.8, changeFrequency: "weekly" as const },
-  { path: "/blog", priority: 0.9, changeFrequency: "daily" as const },
-  { path: "/fonts", priority: 0.8, changeFrequency: "weekly" as const },
-  { path: "/privacy", priority: 0.2, changeFrequency: "yearly" as const },
-  { path: "/terms", priority: 0.2, changeFrequency: "yearly" as const },
-  { path: "/accessibility", priority: 0.2, changeFrequency: "yearly" as const },
+  { path: "", lastModified: "2026-06-21", priority: 1.0, changeFrequency: "weekly" as const },
+  { path: "/about", lastModified: "2026-05-07", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/services", lastModified: "2026-05-08", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/contact", lastModified: "2026-05-11", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/faq", lastModified: "2026-03-31", priority: 0.6, changeFrequency: "monthly" as const },
+  { path: "/portfolio", lastModified: "2026-05-07", priority: 0.8, changeFrequency: "weekly" as const },
+  { path: "/blog", lastModified: "2026-06-21", priority: 0.9, changeFrequency: "daily" as const },
+  { path: "/fonts", lastModified: "2026-03-31", priority: 0.8, changeFrequency: "weekly" as const },
+  { path: "/privacy", lastModified: "2026-05-07", priority: 0.2, changeFrequency: "yearly" as const },
+  { path: "/terms", lastModified: "2026-05-07", priority: 0.2, changeFrequency: "yearly" as const },
+  { path: "/accessibility", lastModified: "2026-05-11", priority: 0.2, changeFrequency: "yearly" as const },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date().toISOString();
-
-  // Static pages
-  const staticEntries = staticPages.map(({ path, priority, changeFrequency }) => ({
+  // Static pages — real per-page dates, NOT the request time.
+  const staticEntries = staticPages.map(({ path, lastModified, priority, changeFrequency }) => ({
     url: `${SITE_URL}${path}`,
-    lastModified: now,
+    lastModified,
     changeFrequency,
     priority,
   }));

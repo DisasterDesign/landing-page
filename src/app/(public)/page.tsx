@@ -5,8 +5,12 @@ import Services from "@/components/sections/Services";
 import Portfolio from "@/components/sections/Portfolio";
 import Pricing from "@/components/sections/Pricing";
 import Contact from "@/components/sections/Contact";
+import LatestPosts from "@/components/sections/LatestPosts";
 import Marquee from "@/components/animations/Marquee";
 import { LocalBusinessJsonLd, FAQJsonLd } from "@/components/seo/JsonLd";
+
+// ISR so the latest-posts section + internal links refresh when posts publish.
+export const revalidate = 3600;
 
 export default function Home() {
   return (
@@ -22,6 +26,7 @@ export default function Home() {
       <Marquee text="DESIGN • DEVELOP • DELIVER • REPEAT •" />
       <Portfolio />
       <Pricing />
+      <LatestPosts />
       <Marquee text="בואו נדבר • LET'S CREATE • בואו ניצור •" reverse />
       <Contact />
     </>
