@@ -112,6 +112,7 @@ function Heading({ section }: { section: ProposalSection }) {
 
 function Section({ section, token }: { section: ProposalSection; token: string }) {
   const isHero = section.id === "hero";
+  const maxW = isHero ? "max-w-3xl" : section.id === "showcase" ? "max-w-5xl" : "max-w-4xl";
 
   return (
     <section
@@ -119,7 +120,7 @@ function Section({ section, token }: { section: ProposalSection; token: string }
         isHero ? "min-h-screen" : "min-h-[92vh] py-24"
       }`}
     >
-      <motion.div {...reveal} className={`w-full ${isHero ? "max-w-3xl" : "max-w-4xl"} mx-auto`}>
+      <motion.div {...reveal} className={`w-full ${maxW} mx-auto`}>
         <div className={`${PANEL} ${isHero ? "p-10 md:p-14 text-center" : "p-7 md:p-12"}`}>
           {isHero ? <HeroBody section={section} /> : <Heading section={section} />}
 

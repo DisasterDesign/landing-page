@@ -42,11 +42,12 @@ export default function VideoCarousel() {
         {SHOWCASE.map((item, i) => (
           <div
             key={i}
-            className="snap-center shrink-0 w-[80%] sm:w-[460px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-sm"
+            className="snap-center shrink-0 w-[92%] sm:w-[760px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-md"
           >
             {item.src ? (
+              // #t=0.5 makes the browser show a real first frame instead of a black box
               <video
-                src={item.src}
+                src={`${item.src}#t=0.5`}
                 poster={item.poster}
                 controls
                 playsInline
