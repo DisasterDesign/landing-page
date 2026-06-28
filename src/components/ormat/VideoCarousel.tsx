@@ -43,7 +43,7 @@ export default function VideoCarousel() {
         {SHOWCASE.map((item, i) => (
           <div
             key={i}
-            className="snap-center shrink-0 w-[80%] sm:w-[460px] aspect-video rounded-2xl overflow-hidden border border-white/10 bg-white/[0.03]"
+            className="snap-center shrink-0 w-[80%] sm:w-[460px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-sm"
           >
             {item.src ? (
               <video
@@ -55,13 +55,13 @@ export default function VideoCarousel() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-pink/10 via-transparent to-cyan/10">
-                <div className="w-14 h-14 rounded-full border border-white/15 flex items-center justify-center text-white/50">
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-pink/5 via-transparent to-cyan/10">
+                <div className="w-14 h-14 rounded-full border border-black/10 flex items-center justify-center text-gray-400">
                   <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 </div>
-                <span className="text-sm text-white/45">{item.title}</span>
+                <span className="text-sm text-gray-500">{item.title}</span>
               </div>
             )}
           </div>
@@ -74,7 +74,7 @@ export default function VideoCarousel() {
             <span
               key={i}
               className={`h-1.5 rounded-full transition-all ${
-                i === active ? "w-6 bg-gradient-to-r from-pink to-cyan" : "w-1.5 bg-white/20"
+                i === active ? "w-6 bg-gradient-to-r from-pink to-cyan-dark" : "w-1.5 bg-black/15"
               }`}
             />
           ))}
@@ -85,7 +85,7 @@ export default function VideoCarousel() {
             onClick={() => go(-1)}
             disabled={active === 0}
             aria-label="הקודם"
-            className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center hover:border-pink disabled:opacity-30 transition-colors"
+            className="w-10 h-10 rounded-full border border-black/10 bg-white/70 flex items-center justify-center hover:border-pink disabled:opacity-30 transition-colors"
           >
             <span aria-hidden>→</span>
           </button>
@@ -94,7 +94,7 @@ export default function VideoCarousel() {
             onClick={() => go(1)}
             disabled={active === SHOWCASE.length - 1}
             aria-label="הבא"
-            className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center hover:border-cyan disabled:opacity-30 transition-colors"
+            className="w-10 h-10 rounded-full border border-black/10 bg-white/70 flex items-center justify-center hover:border-cyan-dark disabled:opacity-30 transition-colors"
           >
             <span aria-hidden>←</span>
           </button>

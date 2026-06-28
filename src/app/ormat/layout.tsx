@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function OrmatLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#050308" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#f7f8fa" }}>
       {children}
     </div>
   );

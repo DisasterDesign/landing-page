@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Signature + sign-off block for the Ormat proposal. Posts to the existing
- * public sign endpoint (/api/agreements/sign/[token]) — same flow as the
- * standard agreement, so the Cardcom first charge, webhook and audit trail all
- * work unchanged — but styled for the dark proposal page. On success it
- * redirects to Cardcom; if the URL isn't ready yet it retries the dedicated
- * payment endpoint with backoff (mirrors SignAgreementClient).
+ * Signature + sign-off block for the Ormat proposal (light theme). Posts to the
+ * existing public sign endpoint (/api/agreements/sign/[token]) — same flow as
+ * the standard agreement, so the Cardcom first charge, webhook and audit trail
+ * all work unchanged. On success it redirects to Cardcom; if the URL isn't
+ * ready yet it retries the dedicated payment endpoint with backoff.
  */
 export default function OrmatSignBlock({
   token,
@@ -187,28 +186,26 @@ export default function OrmatSignBlock({
 
   if (state === "preparing" || state === "failed") {
     return (
-      <div className="max-w-md mx-auto text-center bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl p-10 space-y-5">
-        <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl text-black">
+      <div className="max-w-md mx-auto text-center bg-white/85 border border-black/[0.06] rounded-2xl p-10 space-y-5 shadow-sm">
+        <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-pink to-cyan flex items-center justify-center text-3xl text-white">
           ✓
         </div>
-        <h3 className="text-2xl font-extrabold tracking-tight">ההצעה נחתמה בהצלחה</h3>
+        <h3 className="text-2xl font-extrabold tracking-tight text-gray-900">ההצעה נחתמה בהצלחה</h3>
         {state === "preparing" ? (
-          <div className="flex items-center justify-center gap-3 text-gray-300">
+          <div className="flex items-center justify-center gap-3 text-gray-600">
             <div className="w-5 h-5 border-2 border-pink border-t-transparent rounded-full animate-spin" />
             <span>מכין דף תשלום מאובטח…</span>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-300">נותר רק להשלים את התשלום הראשון. הלינק מוכן.</p>
+            <p className="text-sm text-gray-600">נותר רק להשלים את התשלום הראשון. הלינק מוכן.</p>
             {payError && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl px-3 py-2">
-                {payError}
-              </div>
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-3 py-2">{payError}</div>
             )}
             <button
               onClick={retry}
               disabled={retrying}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan text-black font-bold px-8 py-3 rounded-full disabled:opacity-60"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-pink to-cyan-dark text-white font-bold px-8 py-3 rounded-full disabled:opacity-60"
             >
               {retrying ? "מנסה שוב…" : "מעבר לתשלום"} <span aria-hidden>←</span>
             </button>
@@ -219,43 +216,43 @@ export default function OrmatSignBlock({
   }
 
   const inputCls =
-    "w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink text-white";
+    "w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-pink text-gray-900 placeholder:text-gray-400";
 
   return (
-    <form onSubmit={submit} className="max-w-2xl mx-auto bg-white/5 border border-white/10 backdrop-blur-sm rounded-3xl p-6 md:p-8 space-y-5">
+    <form onSubmit={submit} className="max-w-2xl mx-auto space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">שם החותם *</label>
+          <label className="block text-xs text-gray-600 mb-1">שם החותם *</label>
           <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} required className={inputCls} />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">שם החברה</label>
+          <label className="block text-xs text-gray-600 mb-1">שם החברה</label>
           <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className={inputCls} />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">ח.פ. / מספר חברה</label>
+          <label className="block text-xs text-gray-600 mb-1">ח.פ. / מספר חברה</label>
           <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} className={inputCls} />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">טלפון *</label>
+          <label className="block text-xs text-gray-600 mb-1">טלפון *</label>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} required inputMode="tel" className={inputCls} />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-xs text-gray-400 mb-1">אימייל *</label>
+          <label className="block text-xs text-gray-600 mb-1">אימייל *</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputCls} />
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-xs text-gray-400">חתימה *</label>
-          <button type="button" onClick={clear} className="text-xs text-cyan hover:underline">
+          <label className="text-xs text-gray-600">חתימה *</label>
+          <button type="button" onClick={clear} className="text-xs text-pink hover:underline">
             נקה חתימה
           </button>
         </div>
         <canvas
           ref={canvasRef}
-          className="w-full bg-white rounded-xl border-2 border-dashed border-white/20 touch-none cursor-crosshair"
+          className="w-full bg-white rounded-xl border-2 border-dashed border-gray-300 touch-none cursor-crosshair"
           style={{ height: 160 }}
           onMouseDown={start}
           onMouseMove={move}
@@ -267,7 +264,7 @@ export default function OrmatSignBlock({
         />
       </div>
 
-      <label className="flex items-start gap-3 text-sm text-gray-300 cursor-pointer">
+      <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 w-4 h-4 accent-pink" />
         <span>
           קראתי את ההצעה במלואה ואני מסכים/ה לכל התנאים, לרבות התמורה ותנאי התשלום, ומסירת ההסכם בחתימה
@@ -276,13 +273,13 @@ export default function OrmatSignBlock({
       </label>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-xl px-4 py-3">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
       )}
 
       <button
         type="submit"
         disabled={submitting || !hasSignature || !agreed}
-        className="w-full bg-gradient-to-r from-pink to-cyan text-black font-extrabold py-4 rounded-full hover:shadow-[0_0_40px_rgba(229,3,162,0.45)] disabled:opacity-40 disabled:cursor-not-allowed transition-shadow"
+        className="w-full bg-gradient-to-r from-pink to-cyan-dark text-white font-extrabold py-4 rounded-full hover:shadow-[0_10px_30px_-6px_rgba(229,3,162,0.5)] disabled:opacity-40 disabled:cursor-not-allowed transition-shadow"
       >
         {submitting ? "חותם…" : `אישור, חתימה ומעבר לתשלום · ${firstPaymentLabel}`}
       </button>
