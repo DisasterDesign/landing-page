@@ -45,10 +45,14 @@ export default function VideoCarousel() {
             className="snap-center shrink-0 w-[92%] sm:w-[760px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-md"
           >
             {item.src ? (
-              // #t=0.5 makes the browser show a real first frame instead of a black box
+              // Autoplay muted + loop so the showcase reels visibly play instead
+              // of sitting as black boxes; controls let the viewer unmute/expand.
               <video
-                src={`${item.src}#t=0.5`}
+                src={item.src}
                 poster={item.poster}
+                autoPlay
+                muted
+                loop
                 controls
                 playsInline
                 preload="metadata"
