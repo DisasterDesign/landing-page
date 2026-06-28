@@ -27,7 +27,7 @@ export default async function OrmatPage() {
           {agreement.status === "SIGNED" ? "✓" : "•"}
         </div>
         <h1 className="text-2xl font-extrabold">
-          {agreement.status === "SIGNED" ? "ההצעה כבר נחתמה — תודה!" : "ההצעה אינה פעילה"}
+          {agreement.status === "SIGNED" ? "ההצעה כבר נחתמה. תודה!" : "ההצעה אינה פעילה"}
         </h1>
         <p className="text-gray-500 mt-3 text-sm">
           לכל שאלה אנחנו כאן:{" "}

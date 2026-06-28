@@ -94,14 +94,7 @@ export default function OrmatProposalClient({ token }: { token: string }) {
   );
 }
 
-function StationTag({ children }: { children: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase text-[#0e7490]">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#0e7490]" />
-      {children}
-    </span>
-  );
-}
+// Clauses render as a formal numbered list — no playful section tags.
 
 function Heading({ section }: { section: ProposalSection }) {
   return (
@@ -111,7 +104,7 @@ function Heading({ section }: { section: ProposalSection }) {
         {section.title}
       </h2>
       {section.lead && (
-        <p className="text-base md:text-lg text-gray-600 max-w-2xl leading-relaxed pt-1">{section.lead}</p>
+        <p className="text-base md:text-lg text-gray-600 leading-relaxed pt-1">{section.lead}</p>
       )}
     </div>
   );
@@ -131,14 +124,16 @@ function Section({ section, token }: { section: ProposalSection; token: string }
           {isHero ? <HeroBody section={section} /> : <Heading section={section} />}
 
           {section.points && !isHero && (
-            <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-3">
+            <div className="mt-8 space-y-4">
               {section.points.map((p, i) => (
-                <li key={i} className="flex items-start gap-3 text-gray-700">
-                  <span className="mt-2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-pink to-cyan-dark shrink-0" />
-                  <span>{p}</span>
-                </li>
+                <div key={i} className="flex gap-3 md:gap-4 text-gray-700 leading-relaxed">
+                  <span className="shrink-0 font-bold text-pink tabular-nums pt-px">
+                    {section.clauseNo}.{i + 1}
+                  </span>
+                  <p>{p}</p>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
 
           {section.id === "showcase" && (
@@ -155,12 +150,6 @@ function Section({ section, token }: { section: ProposalSection; token: string }
               <OrmatSignBlock token={token} firstPaymentLabel={`${formatILS(ormatPricing.firstPaymentGross)} ₪`} />
             </div>
           )}
-
-          {!isHero && (
-            <div className="mt-7">
-              <StationTag>{section.station}</StationTag>
-            </div>
-          )}
         </div>
       </motion.div>
     </section>
@@ -174,9 +163,12 @@ function HeroBody({ section }: { section: ProposalSection }) {
       <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.06] text-gray-900">
         {section.title}
       </h1>
+      <div className="mt-4 text-sm text-gray-500">
+        הצעה מס׳ {ormatMeta.proposalNumber} · {ormatMeta.date}
+      </div>
       <p className="mt-7 text-base md:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">{section.lead}</p>
       <div className="mt-11 flex flex-col items-center gap-3 text-gray-500">
-        <span className="text-xs tracking-[0.3em] uppercase">גללו כדי לקרוא את ההצעה</span>
+        <span className="text-xs tracking-[0.3em] uppercase">גללו לעיון בהסכם</span>
         <svg className="w-5 h-5 animate-bounce text-pink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
         </svg>
