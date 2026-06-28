@@ -97,6 +97,9 @@ export async function PATCH(
         date: new Date().toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
         locale,
         vatExempt: merged.vatExempt,
+        // Preserve custom-proposal rendering (e.g. Ormat) on admin edits;
+        // null for all standard tier agreements → unchanged path.
+        customBodyHtml: merged.customBodyHtml ?? undefined,
       });
     }
 

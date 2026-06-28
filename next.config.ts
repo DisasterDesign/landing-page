@@ -9,6 +9,23 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  // Serve the Ormat proposal at the root of its dedicated subdomain
+  // (ormat.fuzionwebz.com) while the page itself lives at /ormat. Only the
+  // bare host root is rewritten — /api, /_next, /payment/* resolve normally on
+  // the subdomain, so the sign + Cardcom flow keeps working unchanged.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/",
+          has: [{ type: "host", value: "ormat.fuzionwebz.com" }],
+          destination: "/ormat",
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       {
@@ -35,6 +52,13 @@ const nextConfig: NextConfig = {
             ].join("; "),
           },
         ],
+      },
+      {
+        // Private client pitch — keep the Ormat subdomain out of search
+        // engines. Most-restrictive directive wins over the global index tag.
+        source: "/:path*",
+        has: [{ type: "host", value: "ormat.fuzionwebz.com" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
     ];
   },

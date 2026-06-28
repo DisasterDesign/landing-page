@@ -43,6 +43,14 @@ export interface AgreementData {
   locale?: AgreementLocale;
   /** Zero-rate VAT (export of services to a foreign resident). */
   vatExempt?: boolean;
+  /**
+   * One-off custom proposals (e.g. video production) supply their own legal
+   * body as trusted HTML. When present, renderAgreement renders a document
+   * built around this body (brand header + parties + signatures + audit) and
+   * ignores the website-tier sections entirely. Standard agreements leave this
+   * undefined and render exactly as before.
+   */
+  customBodyHtml?: string;
 }
 
 const TIER_META: Record<AgreementTier, { label: string; labelEn: string; price: number }> = {
@@ -397,10 +405,149 @@ function moneyFormatter(locale: AgreementLocale): (n: number) => string {
   return (n: number) => n.toLocaleString(tag, { maximumFractionDigits: 0 });
 }
 
+const DOC_STYLE = `
+  body { font-family: 'Heebo', Arial, sans-serif; color: #111; max-width: 820px; margin: 0 auto; padding: 32px; line-height: 1.7; }
+  .brand-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 2px solid #111; margin-bottom: 24px; }
+  .brand-logo img { width: 64px; height: 64px; display: block; }
+  .brand-name { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
+  h1 { font-size: 22px; text-align: center; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #111; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 24px; font-size: 14px; }
+  table.parties { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  table.parties th, table.parties td { border: 1px solid #ccc; padding: 8px 10px; font-size: 13px; }
+  table.parties th { background: #f3f4f6; width: 35%; }
+  table.milestones { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  table.milestones th, table.milestones td { border: 1px solid #ccc; padding: 7px 9px; }
+  table.milestones th { background: #f3f4f6; }
+  li { margin-bottom: 4px; font-size: 14px; }
+  p { margin: 8px 0; font-size: 14px; }
+  .price-box { background: #f9fafb; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin: 8px 0; font-size: 15px; }
+  .clause { margin-bottom: 14px; }
+  .signature-table { width: 100%; border-collapse: collapse; margin-top: 32px; }
+  .signature-table td { border: 1px solid #ccc; padding: 16px; vertical-align: top; width: 50%; font-size: 13px; }
+  .signature-label { color: #666; font-size: 12px; margin-bottom: 6px; }
+  .audit-trail { margin-top: 24px; padding: 12px; background: #f9fafb; font-size: 11px; color: #555; line-height: 1.5; }
+  .audit-trail strong { color: #111; }
+  .footer-note { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 10px; color: #888; text-align: center; }
+  @media print { body { padding: 12px; max-width: 100%; } .audit-trail, .signature-table { page-break-inside: avoid; } }
+`;
+
+/**
+ * Renders a signed document for a one-off custom proposal (data.customBodyHtml).
+ * Reuses the standard brand header, parties table, signature block and audit
+ * trail, but the legal body is the caller-supplied (trusted) HTML rather than
+ * the website-tier sections. The body is expected to use the same class names
+ * (h2, p, ul/li, .price-box, table.milestones) so it inherits this document's
+ * styling.
+ */
+function renderCustomAgreement(data: AgreementData): string {
+  const locale: AgreementLocale = data.locale === "en" ? "en" : "he";
+  const t = STRINGS[locale];
+
+  const customer = escapeHtml(data.customerName);
+  const business = escapeHtml(data.businessName || "-");
+  const idNumber = escapeHtml(data.idNumber || "-");
+  const phone = escapeHtml(data.phone);
+  const email = escapeHtml(data.email);
+  const date = escapeHtml(data.date);
+
+  const signatureImg = data.signatureData
+    ? `<img src="${escapeHtml(data.signatureData)}" alt="${t.signatureAlt}" style="max-width:240px;max-height:90px;display:block;" />`
+    : `<div style="height:90px;border-bottom:1px solid #999;"></div>`;
+
+  const signedAt = data.signedAt ? escapeHtml(data.signedAt) : null;
+  const signedIp = data.signedIp ? escapeHtml(data.signedIp) : null;
+  const signedUA = data.signedUserAgent
+    ? escapeHtml(data.signedUserAgent.length > 120 ? data.signedUserAgent.slice(0, 117) + "..." : data.signedUserAgent)
+    : null;
+
+  const auditBorder = `border-${t.auditBorderSide}: 3px solid #111;`;
+  const docTitle = locale === "en"
+    ? "Production & Services Proposal — Fuzion Webz"
+    : "הצעה והסכם הפקת תוכן — Fuzion Webz";
+
+  return `<!doctype html>
+<html lang="${t.htmlLang}" dir="${t.dir}">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(docTitle)}</title>
+<style>${DOC_STYLE}
+  body { text-align: ${t.align}; }
+  table.parties th, table.parties td { text-align: ${t.align}; }
+</style>
+</head>
+<body>
+
+<div class="brand-header">
+  <div class="brand-meta" style="font-size:11px;color:#666;text-align:${t.align};line-height:1.5;">
+    ${locale === "he" ? "סטודיו לעיצוב, פיתוח והפקת תוכן" : "Design, development & content production studio"}<br/>
+    info@fuzionwebz.com<br/>
+    www.fuzionwebz.com
+  </div>
+  <div class="brand-logo">
+    ${getLogoDataUrl() ? `<img src="${getLogoDataUrl()}" alt="Fuzion Webz" />` : `<div class="brand-name">Fuzion Webz</div>`}
+  </div>
+</div>
+
+<h1>${escapeHtml(docTitle)}</h1>
+<p class="subtitle">${escapeHtml(t.subtitleNoTier(date))}</p>
+
+<h2>${escapeHtml(t.partiesHeading)}</h2>
+<table class="parties">
+  <tr><th>${escapeHtml(t.provider)}</th><td>Fuzion Webz</td></tr>
+  <tr><th>${escapeHtml(t.customerLabel)}</th><td>${customer}</td></tr>
+  <tr><th>${escapeHtml(t.businessLabel)}</th><td>${business}</td></tr>
+  <tr><th>${escapeHtml(t.idLabel)}</th><td>${idNumber}</td></tr>
+  <tr><th>${escapeHtml(t.phoneLabel)}</th><td>${phone}</td></tr>
+  <tr><th>${escapeHtml(t.emailLabel)}</th><td>${email}</td></tr>
+</table>
+
+${data.customBodyHtml}
+
+<h2>${escapeHtml(t.signaturesHeading)}</h2>
+<table class="signature-table">
+  <tr>
+    <td>
+      <div class="signature-label">${escapeHtml(t.customerSignatureLabel(data.customerName))}</div>
+      ${signatureImg}
+      <div style="margin-top: 6px; font-size: 12px; color: #666;">${escapeHtml(t.dateLabel)}: ${date}</div>
+    </td>
+    <td>
+      <div class="signature-label">${escapeHtml(t.providerSignatureLabel)}</div>
+      ${getLogoDataUrl()
+        ? `<img src="${getLogoDataUrl()}" alt="Fuzion Webz" style="max-height:80px; display:block;" />`
+        : `<div style="height: 80px; display: flex; align-items: end; font-style: italic; color: #555;">Fuzion Webz</div>`}
+      <div style="margin-top: 6px; font-size: 12px; color: #666;">Fuzion Webz, ${escapeHtml(t.dateLabel)}: ${date}</div>
+    </td>
+  </tr>
+</table>
+
+${signedAt || signedIp || signedUA ? `
+<div class="audit-trail" style="${auditBorder}">
+  <strong>${escapeHtml(t.auditHeading)}</strong><br/>
+  ${signedAt ? `${escapeHtml(t.auditSignedAt(signedAt))}<br/>` : ""}
+  ${signedIp ? `${escapeHtml(t.auditIp(signedIp))}<br/>` : ""}
+  ${signedUA ? `${escapeHtml(t.auditUa(signedUA))}<br/>` : ""}
+  ${escapeHtml(t.auditVersion(AGREEMENT_DOCUMENT_VERSION))}
+</div>` : ""}
+
+<div class="footer-note">
+  ${escapeHtml(t.footerNote(AGREEMENT_DOCUMENT_VERSION))}
+</div>
+
+</body>
+</html>`;
+}
+
 export function renderAgreement(
   tier: AgreementTier | null | undefined,
   data: AgreementData
 ): string {
+  // One-off custom proposals carry their own legal body — render the
+  // proposal document and skip the website-tier template entirely.
+  if (data.customBodyHtml) {
+    return renderCustomAgreement(data);
+  }
   const locale: AgreementLocale = data.locale === "en" ? "en" : "he";
   const vatExempt = !!data.vatExempt;
   const t = STRINGS[locale];

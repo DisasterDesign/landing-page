@@ -120,6 +120,8 @@ export async function POST(
       signedUserAgent: signedUserAgent ?? undefined,
       locale,
       vatExempt: existing.vatExempt,
+      // One-off custom proposals (e.g. Ormat video) render their own legal body.
+      customBodyHtml: existing.customBodyHtml ?? undefined,
     });
 
     const linkedClientId = await ensureClientForAgreement({
