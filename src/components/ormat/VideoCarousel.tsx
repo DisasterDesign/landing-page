@@ -17,8 +17,14 @@ export interface ShowcaseItem {
 }
 
 const SHOWCASE: ShowcaseItem[] = [
-  { title: "סימולציית תלת ממד", src: "https://auxio.b-cdn.net/terra_max_explode_03_05.mp4", poster: "/ormat/showcase/terra_max.jpg" },
-  { title: "אנימציית מוצר תלת ממד", src: "https://auxio.b-cdn.net/Nice_MultiACD_online_nar_update_1.4.mp4", poster: "/ormat/showcase/multiacd.jpg" },
+  { title: "אנימציית מוצר תלת ממד", src: "/ormat/showcase/terra.mp4", poster: "/ormat/showcase/terra.jpg" },
+  { title: "מוטיון גרפיקס", src: "/ormat/showcase/aquila-1.mp4", poster: "/ormat/showcase/aquila-1.jpg" },
+  { title: "סרטון מותג", src: "/ormat/showcase/commbox-ai.mp4", poster: "/ormat/showcase/commbox-ai.jpg" },
+  { title: "אנימציה תלת ממד", src: "/ormat/showcase/multiacd.mp4", poster: "/ormat/showcase/multiacd.jpg" },
+  { title: "מוטיון גרפיקס", src: "/ormat/showcase/aquila-2.mp4", poster: "/ormat/showcase/aquila-2.jpg" },
+  { title: "סרטון מוצר", src: "/ormat/showcase/microsoft.mp4", poster: "/ormat/showcase/microsoft.jpg" },
+  { title: "מוטיון גרפיקס", src: "/ormat/showcase/aquila-3.mp4", poster: "/ormat/showcase/aquila-3.jpg" },
+  { title: "commbox", src: "/ormat/showcase/commbox-daily.mp4", poster: "/ormat/showcase/commbox-daily.jpg" },
 ];
 
 export default function VideoCarousel() {
@@ -45,14 +51,18 @@ export default function VideoCarousel() {
             className="snap-center shrink-0 w-[92%] sm:w-[760px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-md"
           >
             {item.src ? (
-              // Poster shows the work instantly; the (large) source streams only
-              // on play, so the page stays light and never sits as a black box.
+              // Compressed, web-optimized, self-hosted clips: autoplay muted on
+              // loop (the browser only plays the visible card); poster shows
+              // instantly, controls let the viewer unmute / go fullscreen.
               <video
                 src={item.src}
                 poster={item.poster}
+                autoPlay
+                muted
+                loop
                 controls
                 playsInline
-                preload="none"
+                preload="metadata"
                 className="w-full h-full object-cover"
               />
             ) : (
