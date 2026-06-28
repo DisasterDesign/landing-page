@@ -17,9 +17,8 @@ export interface ShowcaseItem {
 }
 
 const SHOWCASE: ShowcaseItem[] = [
-  { title: "דוגמה 1 — נוסיף בקרוב" },
-  { title: "דוגמה 2 — נוסיף בקרוב" },
-  { title: "דוגמה 3 — נוסיף בקרוב" },
+  { title: "אנימציית מוצר תלת ממד", src: "https://auxio.b-cdn.net/Nice_MultiACD_online_nar_update_1.4.mp4" },
+  { title: "סימולציית תלת ממד", src: "https://auxio.b-cdn.net/terra_max_explode_03_05.mp4" },
 ];
 
 export default function VideoCarousel() {

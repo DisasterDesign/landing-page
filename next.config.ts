@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
               "font-src 'self' data:",
               "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com",
               "frame-src 'self'",
-              "media-src 'self'",
+              "media-src 'self' https://auxio.b-cdn.net",
               "object-src 'none'",
               "base-uri 'self'",
             ].join("; "),
