@@ -17,8 +17,8 @@ export interface ShowcaseItem {
 }
 
 const SHOWCASE: ShowcaseItem[] = [
-  { title: "אנימציית מוצר תלת ממד", src: "https://auxio.b-cdn.net/Nice_MultiACD_online_nar_update_1.4.mp4" },
-  { title: "סימולציית תלת ממד", src: "https://auxio.b-cdn.net/terra_max_explode_03_05.mp4" },
+  { title: "סימולציית תלת ממד", src: "https://auxio.b-cdn.net/terra_max_explode_03_05.mp4", poster: "/ormat/showcase/terra_max.jpg" },
+  { title: "אנימציית מוצר תלת ממד", src: "https://auxio.b-cdn.net/Nice_MultiACD_online_nar_update_1.4.mp4", poster: "/ormat/showcase/multiacd.jpg" },
 ];
 
 export default function VideoCarousel() {
@@ -45,17 +45,14 @@ export default function VideoCarousel() {
             className="snap-center shrink-0 w-[92%] sm:w-[760px] aspect-video rounded-2xl overflow-hidden border border-black/[0.06] bg-white/70 shadow-md"
           >
             {item.src ? (
-              // Autoplay muted + loop so the showcase reels visibly play instead
-              // of sitting as black boxes; controls let the viewer unmute/expand.
+              // Poster shows the work instantly; the (large) source streams only
+              // on play, so the page stays light and never sits as a black box.
               <video
                 src={item.src}
                 poster={item.poster}
-                autoPlay
-                muted
-                loop
                 controls
                 playsInline
-                preload="metadata"
+                preload="none"
                 className="w-full h-full object-cover"
               />
             ) : (
