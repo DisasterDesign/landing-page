@@ -437,6 +437,10 @@ model Agreement {
   signedAt        DateTime?
   signatureData   String?
   content         String
+  // One-off custom proposals (e.g. video production) carry their own legal
+  // body HTML; renderAgreement slots it in instead of the website-tier
+  // template. Null for all standard subscription agreements.
+  customBodyHtml  String?
   signToken       String          @unique @default(cuid())
   createdBy       String
   createdAt       DateTime        @default(now())
