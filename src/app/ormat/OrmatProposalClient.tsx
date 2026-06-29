@@ -177,38 +177,56 @@ function HeroBody({ section }: { section: ProposalSection }) {
 }
 
 function Milestones() {
+  const p = ormatPricing;
+  const savings = p.oldNetTotal - p.netTotal;
   return (
     <div className="mt-8">
-      <div className="text-[11px] text-gray-500 mb-3 text-left">מחירים לפני מע״מ · המחיר בהצעה המקורית מסומן בקו</div>
-      <div className="space-y-3">
-        {ormatPricing.stages.map((s) => {
-          const cut = s.oldNet !== s.newNet;
-          return (
-            <div
-              key={s.n}
-              className="flex items-center gap-4 bg-white/80 border border-black/[0.06] rounded-2xl px-5 py-4 shadow-sm"
-            >
-              <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-pink to-cyan-dark text-white font-extrabold flex items-center justify-center">
-                {s.n}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm md:text-base text-gray-800">{s.title}</div>
-                {s.nonRefundable && <div className="text-[11px] text-pink mt-0.5 font-medium">מקדמה · אינה מוחזרת</div>}
-              </div>
-              <div className="text-left shrink-0 flex items-baseline gap-2 tabular-nums">
-                {cut && <span className="text-sm text-gray-400 line-through">{formatILS(s.oldNet)}</span>}
-                <span className="font-bold text-gray-900">{formatILS(s.newNet)} ₪</span>
-              </div>
-            </div>
-          );
-        })}
+      <div className="rounded-2xl border border-black/[0.06] bg-white/80 shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[480px] text-right border-collapse">
+          <thead>
+            <tr className="text-[11px] md:text-xs text-gray-500 border-b border-black/[0.08]">
+              <th className="px-4 md:px-5 py-3 font-medium">שלב</th>
+              <th className="px-3 md:px-4 py-3 font-medium text-center whitespace-nowrap">הצעה מקורית · 3 דקות</th>
+              <th className="px-3 md:px-4 py-3 font-medium text-center whitespace-nowrap">הצעה מעודכנת · עד דקה</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.stages.map((s) => {
+              const cut = s.oldNet !== s.newNet;
+              return (
+                <tr key={s.n} className="border-b border-black/[0.04]">
+                  <td className="px-4 md:px-5 py-4 align-top">
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-pink to-cyan-dark text-white text-xs font-bold flex items-center justify-center">
+                        {s.n}
+                      </span>
+                      <span className="text-sm md:text-base text-gray-800">{s.title}</span>
+                    </div>
+                    {s.nonRefundable && <div className="text-[11px] text-pink mt-1 font-medium pr-10">מקדמה · אינה מוחזרת</div>}
+                  </td>
+                  <td className={`px-3 md:px-4 py-4 text-center tabular-nums whitespace-nowrap text-gray-500 ${cut ? "line-through" : ""}`}>
+                    {formatILS(s.oldNet)} ₪
+                  </td>
+                  <td className={`px-3 md:px-4 py-4 text-center tabular-nums whitespace-nowrap font-bold ${cut ? "text-pink" : "text-gray-900"}`}>
+                    {formatILS(s.newNet)} ₪
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="bg-black/[0.02]">
+              <td className="px-4 md:px-5 py-4 font-semibold text-gray-900">סך הכל לפני מע״מ</td>
+              <td className="px-3 md:px-4 py-4 text-center tabular-nums whitespace-nowrap text-gray-500 line-through">
+                {formatILS(p.oldNetTotal)} ₪
+              </td>
+              <td className="px-3 md:px-4 py-4 text-center tabular-nums whitespace-nowrap text-lg font-extrabold text-gray-900">
+                {formatILS(p.netTotal)} ₪
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div className="flex items-center gap-4 px-5 pt-4 mt-1 border-t border-black/[0.06]">
-        <div className="flex-1 text-sm md:text-base font-semibold text-gray-900">סך הכל לפני מע״מ</div>
-        <div className="text-left shrink-0 flex items-baseline gap-2 tabular-nums">
-          <span className="text-sm text-gray-400 line-through">{formatILS(ormatPricing.oldNetTotal)}</span>
-          <span className="text-lg font-extrabold text-gray-900">{formatILS(ormatPricing.netTotal)} ₪</span>
-        </div>
+      <div className="mt-3 text-[12px] text-gray-600">
+        ההצעה המעודכנת חוסכת <span className="font-bold text-gray-900">{formatILS(savings)} ₪</span> לעומת ההצעה המקורית. כל המחירים לפני מע״מ.
       </div>
     </div>
   );
