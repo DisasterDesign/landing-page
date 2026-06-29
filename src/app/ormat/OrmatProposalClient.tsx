@@ -15,8 +15,6 @@ import OrmatSignBlock from "@/components/ormat/OrmatSignBlock";
 
 const OrmatScene = dynamic(() => import("@/components/ormat/OrmatScene"), { ssr: false });
 
-const gross = (net: number) => Math.round(net * (1 + ormatPricing.vatRate / 100));
-
 const reveal = {
   initial: { opacity: 0, y: 26 },
   whileInView: { opacity: 1, y: 0 },
@@ -180,25 +178,38 @@ function HeroBody({ section }: { section: ProposalSection }) {
 
 function Milestones() {
   return (
-    <div className="mt-10 space-y-3">
-      {ormatPricing.milestones.map((m) => (
-        <div
-          key={m.n}
-          className="flex items-center gap-4 bg-white/80 border border-black/[0.06] rounded-2xl px-5 py-4 shadow-sm"
-        >
-          <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-pink to-cyan-dark text-white font-extrabold flex items-center justify-center">
-            {m.n}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm md:text-base text-gray-800">{m.deliverable}</div>
-            {m.nonRefundable && <div className="text-[11px] text-pink mt-0.5 font-medium">מקדמה · אינה מוחזרת</div>}
-          </div>
-          <div className="text-left shrink-0">
-            <div className="font-bold tabular-nums text-gray-900">{formatILS(gross(m.net))} ₪</div>
-            <div className="text-[11px] text-gray-500 tabular-nums">{m.pct}% · {formatILS(m.net)} ₪ + מע״מ</div>
-          </div>
+    <div className="mt-8">
+      <div className="text-[11px] text-gray-500 mb-3 text-left">מחירים לפני מע״מ · המחיר בהצעה המקורית מסומן בקו</div>
+      <div className="space-y-3">
+        {ormatPricing.stages.map((s) => {
+          const cut = s.oldNet !== s.newNet;
+          return (
+            <div
+              key={s.n}
+              className="flex items-center gap-4 bg-white/80 border border-black/[0.06] rounded-2xl px-5 py-4 shadow-sm"
+            >
+              <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-pink to-cyan-dark text-white font-extrabold flex items-center justify-center">
+                {s.n}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm md:text-base text-gray-800">{s.title}</div>
+                {s.nonRefundable && <div className="text-[11px] text-pink mt-0.5 font-medium">מקדמה · אינה מוחזרת</div>}
+              </div>
+              <div className="text-left shrink-0 flex items-baseline gap-2 tabular-nums">
+                {cut && <span className="text-sm text-gray-400 line-through">{formatILS(s.oldNet)}</span>}
+                <span className="font-bold text-gray-900">{formatILS(s.newNet)} ₪</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-4 px-5 pt-4 mt-1 border-t border-black/[0.06]">
+        <div className="flex-1 text-sm md:text-base font-semibold text-gray-900">סך הכל לפני מע״מ</div>
+        <div className="text-left shrink-0 flex items-baseline gap-2 tabular-nums">
+          <span className="text-sm text-gray-400 line-through">{formatILS(ormatPricing.oldNetTotal)}</span>
+          <span className="text-lg font-extrabold text-gray-900">{formatILS(ormatPricing.netTotal)} ₪</span>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
@@ -209,21 +220,27 @@ function PriceSummary() {
   return (
     <div className="mt-10 max-w-xl">
       <div className="bg-white/85 border border-black/[0.06] rounded-3xl p-7 md:p-9 space-y-4 shadow-sm">
-        <Row label="סך הפרויקט (לפני מע״מ)" value={`${formatILS(p.netTotal)} ₪`} />
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 text-sm">סך הפרויקט (לפני מע״מ)</span>
+          <span className="tabular-nums flex items-baseline gap-2">
+            <span className="text-sm text-gray-400 line-through">{formatILS(p.oldNetTotal)} ₪</span>
+            <span className="font-semibold text-gray-800">{formatILS(p.netTotal)} ₪</span>
+          </span>
+        </div>
         <Row label={`מע״מ ${p.vatRate}%`} value={`${formatILS(vatAmount)} ₪`} />
         <div className="h-px bg-black/10" />
         <Row label="סה״כ כולל מע״מ" value={`${formatILS(p.grossTotal)} ₪`} strong />
         <div className="mt-2 rounded-2xl bg-gradient-to-r from-pink/10 to-cyan/10 border border-black/[0.05] px-5 py-4 flex items-center justify-between">
           <div>
-            <div className="text-xs text-gray-700">תשלום ראשון — נגבה כעת</div>
-            <div className="text-[11px] text-gray-500">{p.milestones[0].pct}% · עם החתימה</div>
+            <div className="text-xs text-gray-700">תשלום ראשון · נגבה כעת</div>
+            <div className="text-[11px] text-gray-500">שלב המודלינג · עם החתימה</div>
           </div>
           <div className="text-2xl md:text-3xl font-extrabold tabular-nums text-gray-900">
             {formatILS(p.firstPaymentGross)} <span className="text-base text-gray-500">₪</span>
           </div>
         </div>
         <p className="text-[11px] text-gray-500 pt-1">
-          תשלומים 2 עד 4 נגבים בכל אבן דרך בנפרד. ניתן לעצור את העבודה אחרי כל תשלום.
+          יתר השלבים נגבים בכל אבן דרך בנפרד. ניתן לעצור את העבודה לאחר כל שלב.
         </p>
       </div>
     </div>
