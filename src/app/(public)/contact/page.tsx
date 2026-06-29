@@ -42,7 +42,7 @@ const CONTACT_INFO = [
   },
   {
     title: "וואטסאפ",
-    value: "שלחו לנו הודעה",
+    value: "054-713-6666",
     href: `https://wa.me/${WHATSAPP_NUMBER}`,
     icon: (
       <svg viewBox="0 0 24 24" className="w-8 h-8 fill-current">
