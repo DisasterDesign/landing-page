@@ -17,6 +17,12 @@ export interface ShowcaseItem {
 }
 
 const SHOWCASE: ShowcaseItem[] = [
+  // Realistic 3D product / architectural renders — shown first.
+  { title: "הדמיית מוצר · מכשיר עיסוי", src: "/ormat/showcase/product-massage.mp4", poster: "/ormat/showcase/product-massage.jpg" },
+  { title: "אנימציית מוצר · קוסמטיקה", src: "/ormat/showcase/product-cosmetics.mp4", poster: "/ormat/showcase/product-cosmetics.jpg" },
+  { title: "הדמיה אדריכלית · מטבח", src: "/ormat/showcase/arch-kitchen.mp4", poster: "/ormat/showcase/arch-kitchen.jpg" },
+  { title: "אנימציה תלת ממד · טכנולוגיה", src: "/ormat/showcase/tech-chip.mp4", poster: "/ormat/showcase/tech-chip.jpg" },
+  { title: "הדמיית מוצר · מיקסר", src: "/ormat/showcase/product-mixer.mp4", poster: "/ormat/showcase/product-mixer.jpg" },
   { title: "אנימציית מוצר תלת ממד", src: "/ormat/showcase/terra.mp4", poster: "/ormat/showcase/terra.jpg" },
   { title: "מוטיון גרפיקס", src: "/ormat/showcase/aquila-1.mp4", poster: "/ormat/showcase/aquila-1.jpg" },
   { title: "סרטון מותג", src: "/ormat/showcase/commbox-ai.mp4", poster: "/ormat/showcase/commbox-ai.jpg" },
