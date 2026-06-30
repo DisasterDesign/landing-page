@@ -56,14 +56,15 @@ async function main() {
   const data = {
     tier: null,
     monthlyPrice: 0,
-    oneTimeFee: ormatPricing.firstPaymentNet, // 22,500 net → 26,550 gross at first charge
+    oneTimeFee: ormatPricing.firstPaymentNet, // 14,000 net → 16,520 gross at first charge
     locale: "he",
     vatExempt: false,
+    // Contracting party is רבינוביץ׳ הפקות (Ormat is the end client / film subject).
     customerName: ormatMeta.clientName,
     businessName: ormatMeta.clientLegalName,
     idNumber: null,
     phone: "0500000000",
-    email: "info@ormat.com",
+    email: "placeholder@example.com",
     status: "SENT" as const,
     content: placeholderContent,
     customBodyHtml: ormatLegalBodyHtml,
@@ -73,12 +74,15 @@ async function main() {
   const agreement = await prisma.agreement.upsert({
     where: { signToken: ORMAT_PROPOSAL_TOKEN },
     update: {
-      // Refresh the terms + price on re-run, but never overwrite signer data.
+      // Refresh terms/price/party on re-run. Only runs while still SENT (bails
+      // above once SIGNED), so real signer data is never overwritten.
       oneTimeFee: data.oneTimeFee,
       monthlyPrice: data.monthlyPrice,
       customBodyHtml: data.customBodyHtml,
       content: data.content,
+      customerName: data.customerName,
       businessName: data.businessName,
+      email: data.email,
       status: data.status,
     },
     create: {

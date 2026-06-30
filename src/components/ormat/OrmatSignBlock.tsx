@@ -22,7 +22,7 @@ export default function OrmatSignBlock({
   const [hasSignature, setHasSignature] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
-  const [businessName, setBusinessName] = useState("Ormat Technologies");
+  const [businessName, setBusinessName] = useState("רבינוביץ׳ הפקות");
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");

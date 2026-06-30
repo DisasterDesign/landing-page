@@ -52,8 +52,8 @@ export const ormatPricing = {
 export const ormatMeta = {
   proposalNumber: "FZ-ORA-001",
   date: "29.6.2026",
-  clientName: "Ormat",
-  clientLegalName: "Ormat Technologies",
+  clientName: "רבינוביץ׳ הפקות",
+  clientLegalName: "רבינוביץ׳ הפקות",
   validityDays: 14,
   workWindow: "31.8.2026",
   hours: "ראשון עד חמישי · 9:00 עד 17:00",
@@ -96,9 +96,9 @@ export interface ProposalSection {
 export const ormatSections: ProposalSection[] = [
   {
     id: "hero",
-    kicker: "Fuzion Webz · עבור Ormat",
+    kicker: "Fuzion Webz · עבור רבינוביץ׳ הפקות",
     title: "הצעה והסכם להפקת סרט טכנולוגי",
-    lead: "מסמך זה מהווה הצעת מחיר והסכם התקשרות מחייב בין Fuzion Webz (להלן: הספק) לבין Ormat (להלן: המזמין), להפקת סרט טכנולוגי תלת ממדי ולהקמת דף הצגה דיגיטלי. החתימה הדיגיטלית שבסיומו מהווה אישור של ההצעה ושל מלוא התנאים המפורטים בו, ומובילה לביצוע התשלום הראשון.",
+    lead: "מסמך זה מהווה הצעת מחיר והסכם התקשרות מחייב בין Fuzion Webz (להלן: הספק) לבין רבינוביץ׳ הפקות (להלן: המזמין), להפקת סרט טכנולוגי תלת ממדי ולהקמת דף הצגה דיגיטלי. החתימה הדיגיטלית שבסיומו מהווה אישור של ההצעה ושל מלוא התנאים המפורטים בו, ומובילה לביצוע התשלום הראשון.",
   },
   {
     id: "about",
@@ -210,7 +210,7 @@ export const ormatSections: ProposalSection[] = [
 export const ormatLegalBodyHtml = `
 <h2>1. רקע ומטרת הפרויקט</h2>
 <div class="clause">
-  <p>נותן השירות (Fuzion Webz) יפיק עבור המזמין (Ormat) סרט טכנולוגי באורך של עד דקה הממחיש את טכנולוגיית ה-Ormat Energy Converter, וכן דף הצגה דיגיטלי ייעודי המשמש למסירת ההצעה, חתימה ותשלום. מסמך זה מהווה את ההצעה ואת ההסכם המחייב בין הצדדים.</p>
+  <p>נותן השירות (Fuzion Webz) יפיק עבור המזמין (רבינוביץ׳ הפקות) סרט טכנולוגי באורך של עד דקה הממחיש את טכנולוגיית ה-Ormat Energy Converter, וכן דף הצגה דיגיטלי ייעודי המשמש למסירת ההצעה, חתימה ותשלום. מסמך זה מהווה את ההצעה ואת ההסכם המחייב בין הצדדים.</p>
 </div>
 
 <h2>2. תכולת העבודה</h2>

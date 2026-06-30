@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "הצעה ל-Ormat · Fuzion Webz",
-  description: "סרט טכנולוגי 3D והצגה דיגיטלית — הצעה של Fuzion Webz עבור Ormat.",
+  title: "הצעה לרבינוביץ׳ הפקות · Fuzion Webz",
+  description: "סרט טכנולוגי 3D והצגה דיגיטלית — הצעה של Fuzion Webz עבור רבינוביץ׳ הפקות.",
   // Private client pitch — keep it out of search engines.
   robots: { index: false, follow: false, nocache: true },
   alternates: { canonical: "https://ormat.fuzionwebz.com" },
