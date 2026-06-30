@@ -17,7 +17,9 @@ export interface ShowcaseItem {
 }
 
 const SHOWCASE: ShowcaseItem[] = [
-  // Realistic 3D product / architectural renders — shown first.
+  // Realistic 3D renders — shown first. Lead clip is the energy-infrastructure
+  // explainer (full-HD, on-theme for Ormat).
+  { title: "הדמיה תלת ממד · מערכת אנרגיה", src: "/ormat/showcase/energy-system.mp4", poster: "/ormat/showcase/energy-system.jpg" },
   { title: "הדמיית מוצר · מכשיר עיסוי", src: "/ormat/showcase/product-massage.mp4", poster: "/ormat/showcase/product-massage.jpg" },
   { title: "אנימציית מוצר · קוסמטיקה", src: "/ormat/showcase/product-cosmetics.mp4", poster: "/ormat/showcase/product-cosmetics.jpg" },
   { title: "הדמיה אדריכלית · מטבח", src: "/ormat/showcase/arch-kitchen.mp4", poster: "/ormat/showcase/arch-kitchen.jpg" },
