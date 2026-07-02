@@ -110,12 +110,21 @@ export default function SellerSidebar({ userName }: { userName: string }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-white truncate">{userName}</p>
-              <button
-                onClick={() => signOut({ callbackUrl: "/admin/login" })}
-                className="text-xs text-gray-400 hover:text-pink transition-colors"
-              >
-                התנתק
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/seller/password"
+                  className="text-xs text-gray-400 hover:text-pink transition-colors"
+                >
+                  החלף סיסמה
+                </Link>
+                <span className="text-gray-700">·</span>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/admin/login" })}
+                  className="text-xs text-gray-400 hover:text-pink transition-colors"
+                >
+                  התנתק
+                </button>
+              </div>
             </div>
           </div>
         </div>

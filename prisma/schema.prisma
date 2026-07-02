@@ -98,6 +98,9 @@ model User {
   username     String?   @unique
   name         String
   passwordHash String
+  /// True while the user is still on the admin-issued starting password;
+  /// cleared when they set their own via the change-password flow.
+  mustChangePassword Boolean @default(false)
   role         Role      @default(MEMBER)
   avatarUrl    String?
   createdAt    DateTime  @default(now())

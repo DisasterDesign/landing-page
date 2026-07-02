@@ -21,14 +21,16 @@ const fmt = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 
 export default function SellerDashboard() {
   const [summary, setSummary] = useState<CommissionSummary | null>(null);
   const [openDeals, setOpenDeals] = useState(0);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [cRes, aRes] = await Promise.all([
+        const [cRes, aRes, meRes] = await Promise.all([
           fetch("/api/seller/commissions", { cache: "no-store" }),
           fetch("/api/seller/agreements", { cache: "no-store" }),
+          fetch("/api/seller/me", { cache: "no-store" }),
         ]);
         if (cRes.ok) setSummary((await cRes.json()).summary);
         if (aRes.ok) {
@@ -37,6 +39,9 @@ export default function SellerDashboard() {
           setOpenDeals(
             data.filter((a) => a.paymentStatus === "PENDING" || a.paymentStatus === "SENT").length
           );
+        }
+        if (meRes.ok) {
+          setMustChangePassword((await meRes.json()).mustChangePassword ?? false);
         }
       } catch {
         toast.error("שגיאה בטעינת הנתונים");
@@ -48,6 +53,18 @@ export default function SellerDashboard() {
 
   return (
     <div dir="rtl" className="space-y-6">
+      {mustChangePassword && (
+        <Link
+          href="/seller/password"
+          className="block bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 hover:bg-amber-500/25 transition-colors"
+        >
+          <span className="font-bold text-amber-400">🔑 את/ה עדיין על סיסמת ההתחלה</span>
+          <span className="text-sm text-amber-300/80 mr-2">
+            לחצו כאן לבחירת סיסמה אישית חדשה
+          </span>
+        </Link>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-white">שלום 👋</h1>
         <p className="text-sm text-gray-400 mt-1">

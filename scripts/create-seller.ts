@@ -42,12 +42,12 @@ async function main() {
   if (existing) {
     const updated = await prisma.user.update({
       where: { id: existing.id },
-      data: { name, username, passwordHash, role: "SELLER" },
+      data: { name, username, passwordHash, role: "SELLER", mustChangePassword: true },
     });
     console.log(`Updated seller: ${updated.name} (username=${updated.username}, id=${updated.id})`);
   } else {
     const created = await prisma.user.create({
-      data: { name, username, email, passwordHash, role: "SELLER" },
+      data: { name, username, email, passwordHash, role: "SELLER", mustChangePassword: true },
     });
     console.log(`Created seller: ${created.name} (username=${created.username}, id=${created.id})`);
   }
