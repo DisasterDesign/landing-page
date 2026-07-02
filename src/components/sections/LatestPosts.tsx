@@ -39,10 +39,10 @@ export default async function LatestPosts() {
   if (posts.length === 0) return null;
 
   return (
-    <section className="bg-black py-20 md:py-28 px-6" dir="rtl">
+    <section className="bg-white py-20 md:py-28 px-6" dir="rtl">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-end justify-between gap-4 flex-wrap mb-10">
-          <h2 className="text-[clamp(1.8rem,5vw,3rem)] font-extrabold text-white">
+          <h2 className="text-[clamp(1.8rem,5vw,3rem)] font-extrabold text-black">
             מהבלוג
           </h2>
           <Link
@@ -58,7 +58,7 @@ export default async function LatestPosts() {
             <Link
               key={post.id}
               href={`/blog/${post.slug}`}
-              className="group block rounded-2xl border border-white/10 bg-white/5 overflow-hidden transition-colors hover:border-pink/50"
+              className="group block rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden transition-all duration-300 hover:border-gray-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.12)]"
             >
               <div className="aspect-video overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -75,11 +75,11 @@ export default async function LatestPosts() {
                     {post.category}
                   </span>
                 )}
-                <h3 className="text-lg font-bold text-white mt-1.5 mb-2 transition-colors group-hover:text-pink">
+                <h3 className="text-lg font-bold text-black mt-1.5 mb-2 transition-colors group-hover:text-pink">
                   {post.title}
                 </h3>
                 {post.excerpt && (
-                  <p className="text-gray-400 text-sm line-clamp-2">{post.excerpt}</p>
+                  <p className="text-gray-600 text-sm line-clamp-2">{post.excerpt}</p>
                 )}
                 {post.publishedAt && (
                   <p className="text-gray-500 text-xs mt-3">
