@@ -36,12 +36,14 @@ export default function CustomCursor() {
     const handleMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const cursorType = target.closest("[data-cursor]")?.getAttribute("data-cursor");
-      if (cursorType === "pointer" || target.closest("a, button")) {
-        setCursorVariant("pointer");
-      } else if (cursorType === "view") {
+      // Explicit data-cursor wins over the generic a/button fallback — otherwise
+      // data-cursor="view" on <a> cards silently resolves to the pointer dot.
+      if (cursorType === "view") {
         setCursorVariant("view");
       } else if (cursorType === "drag") {
         setCursorVariant("drag");
+      } else if (cursorType === "pointer" || target.closest("a, button")) {
+        setCursorVariant("pointer");
       } else {
         setCursorVariant("default");
       }
