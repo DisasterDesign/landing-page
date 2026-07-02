@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { useRef } from "react";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 
 interface Project {
@@ -15,7 +14,6 @@ interface Project {
 }
 
 const projects: Project[] = [
-  // 12 video projects, alternating original showcase work and new screencaptures
   { id: "titans", name: "Titans Global", description: "Global investment platform", gradient: "linear-gradient(135deg, #F37021, #ff6b6b)", url: "https://titans.global/", video: "/c-video/compressed/Titans.mp4", poster: "/c-video/posters/Titans.webp" },
   { id: "olamhamamtakim", name: "עולם הממתקים", description: "רשת חנויות ממתקים", gradient: "linear-gradient(135deg, #ff9a9e, #fecfef)", url: "https://olamhamamtakim.co.il/", video: "/c-video/compressed/olamhamamtakim.mp4", poster: "/c-video/posters/olamhamamtakim.webp" },
   { id: "aquatis", name: "Aquatis", description: "Water management platform", gradient: "linear-gradient(135deg, #11998e, #38ef7d)", url: "https://aquatis.ai/", video: "/c-video/compressed/Aquatis.mp4", poster: "/c-video/posters/Aquatis.webp" },
@@ -45,241 +43,108 @@ const projects: Project[] = [
   { id: "burger-yoni", name: "בורגר יוני 71", description: "המבורגרים כשרים ברמת השרון", gradient: "linear-gradient(135deg, #4a1a05, #a3541a)", url: "https://burger-yoni-71.pages.dev/" },
 ];
 
-const HOVER_DELAY = 380; // ms before lift triggers
-const LIFT_MS = 200;     // duration tile floats before swapping into selected slot
-
+/**
+ * Clean, uniform gallery: generous landscape cards in a calm 3-column grid.
+ * Poster by default; projects with a showcase video play it on hover
+ * (desktop). Every card opens the live site.
+ */
 export default function Portfolio() {
-  const [selectedId, setSelectedId] = useState(projects[0].id);
-  const [liftId, setLiftId] = useState<string | null>(null);
-  const [isTouch, setIsTouch] = useState(false);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const liftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
-  }, []);
-
-  const cancelHover = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-  };
-
-  const promoteTo = (id: string) => {
-    if (id === selectedId) return;
-    cancelHover();
-    if (liftTimerRef.current) clearTimeout(liftTimerRef.current);
-    setLiftId(id);
-    liftTimerRef.current = setTimeout(() => {
-      setSelectedId(id);
-      setLiftId(null);
-    }, LIFT_MS);
-  };
-
-  const handleEnter = (id: string) => {
-    if (isTouch || id === selectedId) return;
-    cancelHover();
-    hoverTimerRef.current = setTimeout(() => promoteTo(id), HOVER_DELAY);
-  };
-
-  const handleLeave = () => cancelHover();
-
-  const handleClick = (id: string, url: string) => {
-    if (id === selectedId) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    } else {
-      promoteTo(id);
-    }
-  };
-
   return (
     <section id="portfolio" className="relative bg-white py-24 md:py-32 px-6">
-      <div className="max-w-[1400px] mx-auto">
+      <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <div className="text-center mb-10">
-            <span dir="ltr" className="block text-xs uppercase tracking-[0.25em] text-gray-500 mb-3">
-              {projects.length} projects
-            </span>
+          <div className="text-center mb-14 md:mb-20">
             <h2
               className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-black w-full"
               data-text="העבודות שלנו"
             >
               העבודות שלנו
             </h2>
+            <p className="text-gray-600 text-base md:text-lg mt-4 max-w-xl mx-auto">
+              אתרים חיים שאנחנו בונים ומלווים — לחצו על כל עבודה לביקור באתר
+            </p>
           </div>
         </ScrollReveal>
 
-        <div
-          className="portfolio-grid"
-          style={{
-            display: "grid",
-            gap: "6px",
-            gridAutoFlow: "dense",
-            perspective: "1200px",
-            transformStyle: "preserve-3d",
-          }}
-        >
-          {projects.map((p) => {
-            const isSelected = p.id === selectedId;
-            const isLifting = p.id === liftId;
-            const isDimmed = liftId !== null && !isSelected && !isLifting;
-            return (
-              <motion.button
-                key={p.id}
-                layout
-                onMouseEnter={() => handleEnter(p.id)}
-                onMouseLeave={handleLeave}
-                onClick={() => handleClick(p.id, p.url)}
-                animate={{
-                  scale: isLifting ? 1.15 : isDimmed ? 0.97 : 1,
-                  z: isLifting ? 30 : 0,
-                  opacity: isDimmed ? 0.7 : 1,
-                }}
-                transition={{
-                  layout: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
-                  scale: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-                  z: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-                  opacity: { duration: 0.2 },
-                }}
-                style={{
-                  gridColumn: isSelected ? "span 2" : "span 1",
-                  gridRow: isSelected ? "span 2" : "span 1",
-                  borderRadius: isSelected ? 12 : 8,
-                  position: "relative",
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  background: p.gradient,
-                  zIndex: isLifting ? 30 : isSelected ? 5 : 1,
-                  willChange: "transform, opacity",
-                  aspectRatio: "1 / 1",
-                  border: "none",
-                  padding: 0,
-                  boxShadow: isLifting
-                    ? "0 24px 60px rgba(0,0,0,0.32)"
-                    : isSelected
-                      ? "0 10px 28px rgba(0,0,0,0.14)"
-                      : "0 2px 8px rgba(0,0,0,0.08)",
-                }}
-                aria-label={
-                  isSelected
-                    ? `${p.name} — open project`
-                    : `${p.name} — expand`
-                }
-                data-cursor="pointer"
-              >
-                {isSelected ? <SelectedTile project={p} /> : <SmallTile project={p} />}
-              </motion.button>
-            );
-          })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+          {projects.map((p, i) => (
+            <ScrollReveal key={p.id} delay={(i % 3) * 0.07}>
+              <ProjectCard project={p} />
+            </ScrollReveal>
+          ))}
         </div>
       </div>
-
-      <style jsx>{`
-        .portfolio-grid {
-          grid-template-columns: repeat(3, 1fr);
-        }
-        @media (min-width: 768px) {
-          .portfolio-grid {
-            grid-template-columns: repeat(4, 1fr);
-          }
-        }
-        @media (min-width: 1024px) {
-          .portfolio-grid {
-            grid-template-columns: repeat(5, 1fr);
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .portfolio-grid :global(button) {
-            transition: none !important;
-          }
-        }
-      `}</style>
     </section>
   );
 }
 
-function SelectedTile({ project }: { project: Project }) {
+function ProjectCard({ project }: { project: Project }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const play = () => videoRef.current?.play().catch(() => {});
+  const pause = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = 0;
+  };
+
   return (
-    <div className="absolute inset-0 group/sel">
-      {project.video ? (
-        <video
-          src={project.video}
-          poster={project.poster}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : project.poster ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={project.poster}
-          alt={project.name}
-          className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div className="absolute inset-0" style={{ background: project.gradient }} />
-      )}
+    <a
+      href={project.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={play}
+      onMouseLeave={pause}
+      className="group block rounded-3xl overflow-hidden border border-gray-200 bg-gray-50 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(0,0,0,0.14)] hover:border-gray-300"
+      data-cursor="pointer"
+    >
+      {/* Media */}
+      <div className="relative aspect-[16/10] overflow-hidden" style={{ background: project.gradient }}>
+        {project.poster ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={project.poster}
+            alt={project.name}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-white/90 text-2xl md:text-3xl font-extrabold tracking-tight px-6 text-center">
+              {project.name}
+            </span>
+          </div>
+        )}
 
-      {/* Bottom gradient for text legibility */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        {project.video && (
+          <video
+            ref={videoRef}
+            src={project.video}
+            muted
+            loop
+            playsInline
+            preload="none"
+            className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          />
+        )}
 
-      {/* Content */}
-      <div className="absolute inset-0 flex flex-col justify-end p-5 md:p-7 text-white text-right pointer-events-none">
-        <h3 className="text-lg md:text-2xl font-extrabold mb-1">{project.name}</h3>
-        <p className="text-xs md:text-sm text-white/85 mb-3">{project.description}</p>
+        {/* Visit pill */}
         <span
           dir="ltr"
-          className="text-[11px] md:text-xs font-bold tracking-[0.2em] uppercase inline-flex items-center gap-2 group-hover/sel:gap-3 transition-all w-fit"
+          className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-3 py-1.5 text-[11px] font-bold text-black opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300"
         >
-          VISIT SITE <span aria-hidden="true">→</span>
+          VISIT SITE <span aria-hidden="true">↗</span>
         </span>
       </div>
 
-      {/* Play button for video */}
-      {project.video && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center group-hover/sel:bg-white/25 transition-colors">
-            <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5 md:w-6 md:h-6" style={{ marginLeft: 4 }}>
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SmallTile({ project }: { project: Project }) {
-  return (
-    <div
-      className="absolute inset-0 group/sm"
-      style={{ background: project.gradient }}
-    >
-      {project.poster && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={project.poster}
-          alt={project.name}
-          className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
-        />
-      )}
-      {project.video && (
-        <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/30 backdrop-blur-sm border border-white/40 flex items-center justify-center pointer-events-none">
-          <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3" style={{ marginLeft: 1 }}>
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </div>
-      )}
-      {/* Name on hover (RTL bottom strip) */}
-      <div className="absolute inset-x-0 bottom-0 p-2 text-white text-[10px] md:text-[11px] font-bold opacity-0 group-hover/sm:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/65 to-transparent text-right pointer-events-none">
-        {project.name}
+      {/* Caption */}
+      <div className="px-5 py-4 text-right">
+        <h3 className="text-base md:text-lg font-extrabold text-black transition-colors group-hover:text-pink">
+          {project.name}
+        </h3>
+        <p className="text-gray-600 text-sm mt-0.5 line-clamp-1">{project.description}</p>
       </div>
-    </div>
+    </a>
   );
 }

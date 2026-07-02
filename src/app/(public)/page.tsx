@@ -19,13 +19,13 @@ export default function Home() {
       <LocalBusinessJsonLd />
       <FAQJsonLd />
       <Hero />
-      <ClientLogos />
       <Marquee text="FUZION WEBZ • עיצוב • פיתוח • חדשנות •" />
       <HowItWorks />
       <Marquee text="בניית אתרים • UX/UI • שיווק דיגיטלי •" reverse />
       <AboutUs />
       <Services />
       <Marquee text="DESIGN • DEVELOP • DELIVER • REPEAT •" />
+      <ClientLogos />
       <Portfolio />
       <Pricing />
       <LatestPosts />
