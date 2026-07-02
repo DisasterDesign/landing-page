@@ -5,6 +5,7 @@ import Services from "@/components/sections/Services";
 import Portfolio from "@/components/sections/Portfolio";
 import Pricing from "@/components/sections/Pricing";
 import Contact from "@/components/sections/Contact";
+import ClientLogos from "@/components/sections/ClientLogos";
 import LatestPosts from "@/components/sections/LatestPosts";
 import Marquee from "@/components/animations/Marquee";
 import { LocalBusinessJsonLd, FAQJsonLd } from "@/components/seo/JsonLd";
@@ -18,6 +19,7 @@ export default function Home() {
       <LocalBusinessJsonLd />
       <FAQJsonLd />
       <Hero />
+      <ClientLogos />
       <Marquee text="FUZION WEBZ • עיצוב • פיתוח • חדשנות •" />
       <HowItWorks />
       <Marquee text="בניית אתרים • UX/UI • שיווק דיגיטלי •" reverse />
