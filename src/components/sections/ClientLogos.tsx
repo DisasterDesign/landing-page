@@ -19,18 +19,18 @@ interface ClientMark {
   ltr?: boolean;
 }
 
-// Ordered by company size — biggest first.
+// Order set by Elad (biggest/flagship clients first).
 const CLIENTS: ClientMark[] = [
   { id: "solel-boneh", name: "סולל בונה", logo: "/logos/solel-boneh.svg" },
-  { id: "tissar", name: "טיסאר", sub: "מקורות" },
   { id: "of-jerusalem", name: "עוף ירושלים", logo: "/logos/of-jerusalem.png" },
-  { id: "higold", name: "HIGOLD", logo: "/logos/higold.svg", ltr: true },
   { id: "olamhamamtakim", name: "עולם הממתקים", logo: "/logos/olamhamamtakim.png" },
+  { id: "higold", name: "HIGOLD", logo: "/logos/higold.svg", ltr: true },
+  { id: "tissar", name: "טיסאר", sub: "מקורות" },
+  { id: "aquatis", name: "AQUATIS", logo: "/logos/aquatis.png", ltr: true },
+  { id: "inner-cosmos", name: "INNER COSMOS", logo: "/logos/inner-cosmos.png", ltr: true },
   { id: "emek-ayalon", name: "עמק איילון" },
   { id: "naot", name: "נאות", logo: "/logos/naot.svg" },
   { id: "titans", name: "TITANS", logo: "/logos/titans.svg", ltr: true },
-  { id: "aquatis", name: "AQUATIS", logo: "/logos/aquatis.png", ltr: true },
-  { id: "inner-cosmos", name: "INNER COSMOS", logo: "/logos/inner-cosmos.png", ltr: true },
   { id: "peony-lion", name: "PEONY LION", logo: "/logos/peony-lion.png", ltr: true },
   { id: "ams-law", name: "AMS LAW", logo: "/logos/ams-law.svg", ltr: true },
   { id: "jumarie", name: "JUMARIE", logo: "/logos/jumarie.svg", ltr: true },
