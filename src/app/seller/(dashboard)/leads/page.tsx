@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 type LeadStatus = "NEW" | "IN_PROGRESS" | "CLOSED" | "LOST" | "SPAM";
@@ -50,6 +51,7 @@ const agreementLink = (l: Lead) => {
 };
 
 export default function SellerLeadsPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [myId, setMyId] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,12 @@ export default function SellerLeadsPage() {
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error();
+      if (status === "CLOSED") {
+        // Deal closed → straight into contract creation, prefilled from the lead.
+        toast.success("הליד נסגר! מעביר ליצירת חוזה 🎉");
+        router.push(agreementLink(lead));
+        return;
+      }
       load();
     } catch {
       toast.error("שגיאה בעדכון סטטוס");
@@ -202,6 +210,15 @@ export default function SellerLeadsPage() {
                     >
                       וואטסאפ
                     </a>
+                  )}
+                  {lead.status !== "CLOSED" && lead.status !== "LOST" && (
+                    <button
+                      onClick={() => setStatus(lead, "CLOSED")}
+                      disabled={busyId === lead.id}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50"
+                    >
+                      🎉 סגור עסקה → חוזה
+                    </button>
                   )}
                   <Link
                     href={agreementLink(lead)}

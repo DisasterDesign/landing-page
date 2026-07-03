@@ -300,9 +300,9 @@ async function recordSellerCommission(agreement: {
   await createNotification({
     recipientId: agreement.createdBy,
     type: "AGREEMENT_SIGNED",
-    title: `🎉 עסקה נסגרה! ${agreement.customerName}`,
-    body: `עמלה: ${agreement.monthlyPrice} ₪. אפשר לשלוח בריף לאלעד.`,
-    url: "/seller/sales",
+    title: `🎉 העסקה שולמה! ${agreement.customerName}`,
+    body: `עמלה: ${agreement.monthlyPrice} ₪ נרשמה לך. לחץ למילוי דוח למפתח.`,
+    url: `/seller/report/${agreement.id}`,
   });
 }
 

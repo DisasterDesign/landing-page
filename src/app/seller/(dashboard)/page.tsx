@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import PushNotificationToggle from "@/components/admin/PushNotificationToggle";
 
 interface CommissionSummary {
   count: number;
@@ -13,7 +14,9 @@ interface CommissionSummary {
 
 interface AgreementLite {
   id: string;
+  customerName: string;
   paymentStatus: string;
+  commission: { briefTaskId: string | null } | null;
 }
 
 const fmt = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
@@ -22,6 +25,7 @@ export default function SellerDashboard() {
   const [summary, setSummary] = useState<CommissionSummary | null>(null);
   const [openDeals, setOpenDeals] = useState(0);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [pendingReports, setPendingReports] = useState<AgreementLite[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +42,10 @@ export default function SellerDashboard() {
           // "Open" = still actionable (awaiting payment), not failed/cancelled/paid.
           setOpenDeals(
             data.filter((a) => a.paymentStatus === "PENDING" || a.paymentStatus === "SENT").length
+          );
+          // Paid deals still waiting for the developer report
+          setPendingReports(
+            data.filter((a) => a.paymentStatus === "COMPLETED" && a.commission && !a.commission.briefTaskId)
           );
         }
         if (meRes.ok) {
@@ -64,6 +72,17 @@ export default function SellerDashboard() {
           </span>
         </Link>
       )}
+
+      {pendingReports.map((a) => (
+        <Link
+          key={a.id}
+          href={`/seller/report/${a.id}`}
+          className="block bg-pink/15 border border-pink/40 rounded-2xl p-4 hover:bg-pink/25 transition-colors"
+        >
+          <span className="font-bold text-pink">📋 העסקה עם {a.customerName} שולמה!</span>
+          <span className="text-sm text-pink/80 mr-2">לחצו כאן למילוי דוח למפתח — כדי שאלעד יתחיל לעבוד</span>
+        </Link>
+      ))}
 
       <div>
         <h1 className="text-2xl font-bold text-white">שלום 👋</h1>
@@ -98,6 +117,15 @@ export default function SellerDashboard() {
         >
           💰 העסקאות שלי
         </Link>
+      </div>
+
+      {/* Push notifications — get pinged on every new lead */}
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5">
+        <h2 className="text-base font-bold text-white mb-1">🔔 התראות על לידים חדשים</h2>
+        <p className="text-xs text-gray-400 mb-3">
+          הפעילו התראות במכשיר הזה כדי לקבל פוש ברגע שנכנס ליד חדש.
+        </p>
+        <PushNotificationToggle />
       </div>
     </div>
   );

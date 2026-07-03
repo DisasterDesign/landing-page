@@ -91,3 +91,24 @@ export async function notifyAllAdmins(
     )
   );
 }
+
+/**
+ * Helper: notify every seller (new-lead pings to their mobile). Pass a
+ * seller-scoped `url` (e.g. /seller/leads) — the default admin URLs are
+ * unreachable for the SELLER role.
+ */
+export async function notifyAllSellers(
+  input: Omit<CreateNotificationInput, "recipientId">,
+  actorId?: string
+): Promise<void> {
+  const sellers = await prisma.user.findMany({
+    where: { role: "SELLER" },
+    select: { id: true },
+  });
+
+  await Promise.all(
+    sellers.map((s) =>
+      createNotification({ ...input, recipientId: s.id }, actorId)
+    )
+  );
+}

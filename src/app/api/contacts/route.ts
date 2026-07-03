@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createContactSchema } from "@/lib/validations";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyAllAdmins, notifyAllSellers } from "@/lib/notifications";
 
 // POST - Public: create contact submission
 export async function POST(request: NextRequest) {
@@ -35,6 +35,16 @@ export async function POST(request: NextRequest) {
       type: "CONTACT_RECEIVED",
       title: `פנייה חדשה — ${contact.name}`,
       body: contact.message.slice(0, 120),
+      leadId: contact.id,
+    });
+
+    // Sellers work the lead pool — ping their phones with a seller-scoped URL.
+    await notifyAllSellers({
+      type: "CONTACT_RECEIVED",
+      title: `🔔 ליד חדש — ${contact.name}`,
+      body: contact.message.slice(0, 120),
+      leadId: contact.id,
+      url: "/seller/leads",
     });
 
     return NextResponse.json(contact, { status: 201 });

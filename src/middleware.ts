@@ -89,6 +89,19 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Push subscription endpoints: sellers get new-lead notifications on
+  // mobile, so they must be able to subscribe. SELLER and ADMIN only.
+  if (pathname.startsWith("/api/push/")) {
+    if (!isLoggedIn) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "SELLER" && userRole !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+
   // Seller-scoped API: open to SELLER and ADMIN only. Must come BEFORE the
   // ADMIN-only blanket gate below.
   if (pathname.startsWith("/api/seller/")) {

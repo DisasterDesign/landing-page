@@ -9,7 +9,7 @@ import {
   mapLeadFieldsToContact,
   type LeadDetail,
 } from "@/lib/facebook";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyAllAdmins, notifyAllSellers } from "@/lib/notifications";
 
 // ===== Subscription verification (Meta GET) =====
 export async function GET(req: NextRequest) {
@@ -103,6 +103,14 @@ async function processLead(
     type: "CONTACT_RECEIVED",
     title: `📘 ליד חדש מפייסבוק — ${mapped.name}`,
     body: lead.form_name ? `מטופס: ${lead.form_name}` : mapped.message.slice(0, 100),
+  });
+
+  // Sellers work the lead pool — ping their phones with a seller-scoped URL.
+  await notifyAllSellers({
+    type: "CONTACT_RECEIVED",
+    title: `🔔 ליד חדש מפייסבוק — ${mapped.name}`,
+    body: lead.form_name ? `מטופס: ${lead.form_name}` : mapped.message.slice(0, 100),
+    url: "/seller/leads",
   });
 }
 
