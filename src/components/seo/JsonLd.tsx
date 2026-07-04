@@ -18,6 +18,9 @@ export function OrganizationJsonLd() {
       "https://facebook.com/fuzionwebz",
       "https://linkedin.com/company/fuzionwebz",
       "https://tiktok.com/@fuzionwebz",
+      // Google Business Profile (Maps listing) — ties the site to the GBP
+      // entity so Search can reconcile them into one knowledge panel.
+      "https://maps.google.com/?cid=14182524145565495832",
     ],
     contactPoint: {
       "@type": "ContactPoint",
