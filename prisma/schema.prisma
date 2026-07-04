@@ -399,10 +399,54 @@ model Client {
 
   agreements    Agreement[]
   clientNotes   ClientNote[]
+  expenses      Expense[]
 
   @@index([number])
   @@index([email])
   @@index([phone])
+}
+
+enum ExpenseCategory {
+  LLM_API       // Anthropic / OpenAI subscriptions & credits
+  SERVERS       // Hetzner etc.
+  HOSTING       // Vercel / Cloudflare paid plans
+  DOMAINS       // registrations & renewals
+  SAAS          // Resend, Magnific, tools
+  PAYMENTS      // Cardcom packages
+  ADVERTISING   // Meta ads etc.
+  PROFESSIONAL  // רו"ח, עו"ד
+  OTHER
+}
+
+enum ExpenseFrequency {
+  MONTHLY
+  YEARLY
+  ONE_TIME
+}
+
+// A single business expense line. clientId null = studio-level overhead;
+// set = directly attributable to that client's project (e.g. HIGOLD's
+// Hetzner server). `amount` is in the ORIGINAL billing currency — ILS
+// normalization happens at read time via src/lib/finance.ts rates.
+model Expense {
+  id        String           @id @default(cuid())
+  name      String
+  vendor    String
+  category  ExpenseCategory  @default(OTHER)
+  isFixed   Boolean          @default(true) // fixed vs variable (usage-based)
+  amount    Float
+  currency  String           @default("ILS") // ILS | USD | EUR
+  frequency ExpenseFrequency @default(MONTHLY)
+  clientId  String?
+  client    Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  notes     String?
+  active    Boolean          @default(true)
+  startedAt DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([clientId])
+  @@index([active])
 }
 
 model ClientNote {

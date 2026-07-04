@@ -134,6 +134,38 @@ export const createClientNoteSchema = z.object({
   body: z.string().min(1, "תוכן הפתק חובה").max(5000),
 });
 
+// ==================
+// EXPENSES
+// ==================
+
+export const expenseCategoryEnum = z.enum([
+  "LLM_API",
+  "SERVERS",
+  "HOSTING",
+  "DOMAINS",
+  "SAAS",
+  "PAYMENTS",
+  "ADVERTISING",
+  "PROFESSIONAL",
+  "OTHER",
+]);
+
+export const createExpenseSchema = z.object({
+  name: z.string().min(1, "שם ההוצאה חובה").max(200),
+  vendor: z.string().min(1, "ספק חובה").max(200),
+  category: expenseCategoryEnum.default("OTHER"),
+  isFixed: z.boolean().default(true),
+  amount: z.number().min(0),
+  currency: z.enum(["ILS", "USD", "EUR"]).default("ILS"),
+  frequency: z.enum(["MONTHLY", "YEARLY", "ONE_TIME"]).default("MONTHLY"),
+  clientId: z.string().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  active: z.boolean().default(true),
+  startedAt: z.string().nullable().optional(),
+});
+
+export const updateExpenseSchema = createExpenseSchema.partial();
+
 export const bulkClientUrlsSchema = z.object({
   updates: z
     .array(
