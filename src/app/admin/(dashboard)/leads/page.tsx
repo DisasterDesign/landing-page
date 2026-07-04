@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
-import AssigneePicker from "@/components/admin/AssigneePicker";
 import { confirmDanger } from "@/lib/confirm";
 
 type Status = "NEW" | "IN_PROGRESS" | "CLOSED" | "LOST" | "SPAM";
@@ -181,7 +180,7 @@ export default function LeadsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [users, setUsers] = useState<UserLite[]>([]);
+  const [meId, setMeId] = useState<string | null>(null);
   const focusHandledRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
@@ -206,7 +205,7 @@ export default function LeadsPage() {
   }, [search]);
 
   const setQuickFollowUp = useCallback(
-    async (leadId: string, date: string | null, assigneeIds?: string[]) => {
+    async (leadId: string, date: string | null) => {
       // Optimistic: flip the chip immediately so it feels instant.
       setLeads((prev) =>
         prev.map((l) =>
@@ -217,7 +216,6 @@ export default function LeadsPage() {
       );
       try {
         const body: Record<string, unknown> = { nextFollowUpAt: date };
-        if (assigneeIds !== undefined) body.assigneeIds = assigneeIds;
         const res = await fetch(`/api/leads/${leadId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -261,24 +259,17 @@ export default function LeadsPage() {
     load();
   }, [load]);
 
-  // Load the admin roster once — used by the assignee picker inside expanded
-  // panels. Cheap call, kept outside the polling lifecycle.
+  // Who am I? Needed for the self-claim button ("קח לטיפול") — a user can
+  // only take/release a lead for themselves, never assign someone else.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/users", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : []))
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (cancelled) return;
-        const list = Array.isArray(json) ? json : json.users || [];
-        setUsers(
-          list.map((u: { id: string; name: string }) => ({
-            id: u.id,
-            name: u.name,
-          }))
-        );
+        if (!cancelled && json?.user?.id) setMeId(json.user.id);
       })
       .catch(() => {
-        /* silent — picker shows fallback message */
+        /* silent — claim button stays disabled */
       });
     return () => {
       cancelled = true;
@@ -462,7 +453,7 @@ export default function LeadsPage() {
                   onToggle={handleToggle}
                   onSetFollowUp={setQuickFollowUp}
                   onChange={load}
-                  users={users}
+                  meId={meId}
                 />
               );
             })}
@@ -502,19 +493,15 @@ function CategoryTable({
   onToggle,
   onSetFollowUp,
   onChange,
-  users,
+  meId,
 }: {
   category: Category;
   leads: Lead[];
   expandedId: string | null;
   onToggle: (id: string) => void;
-  onSetFollowUp: (
-    id: string,
-    date: string | null,
-    assigneeIds?: string[]
-  ) => Promise<void>;
+  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
   onChange: () => void;
-  users: UserLite[];
+  meId: string | null;
 }) {
   return (
     <section>
@@ -558,7 +545,7 @@ function CategoryTable({
                 onToggle={onToggle}
                 onSetFollowUp={onSetFollowUp}
                 onChange={onChange}
-                users={users}
+                meId={meId}
               />
             ))}
           </tbody>
@@ -574,18 +561,14 @@ function LeadRow({
   onToggle,
   onSetFollowUp,
   onChange,
-  users,
+  meId,
 }: {
   lead: Lead;
   expanded: boolean;
   onToggle: (id: string) => void;
-  onSetFollowUp: (
-    id: string,
-    date: string | null,
-    assigneeIds?: string[]
-  ) => Promise<void>;
+  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
   onChange: () => void;
-  users: UserLite[];
+  meId: string | null;
 }) {
   const due = dueChip(lead.nextFollowUpAt);
   return (
@@ -631,6 +614,11 @@ function LeadRow({
           >
             {STATUS_LABEL[lead.status]}
           </span>
+          {lead.assignees.length > 0 && (
+            <div className="text-[10px] text-gray-500 mt-1 truncate">
+              👤 {lead.assignees.map((a) => a.name).join(", ")}
+            </div>
+          )}
         </td>
         <td className="px-3 py-3 align-top">
           <div className="text-xs text-gray-400 truncate" title={lead.email}>
@@ -704,7 +692,7 @@ function LeadRow({
           <td colSpan={6} className="p-4">
             <ExpandedPanel
               leadId={lead.id}
-              users={users}
+              meId={meId}
               onSetFollowUp={onSetFollowUp}
               onChange={onChange}
             />
@@ -717,27 +705,23 @@ function LeadRow({
 
 function ExpandedPanel({
   leadId,
-  users,
+  meId,
   onSetFollowUp,
   onChange,
 }: {
   leadId: string;
-  users: UserLite[];
-  onSetFollowUp: (
-    id: string,
-    date: string | null,
-    assigneeIds?: string[]
-  ) => Promise<void>;
+  meId: string | null;
+  onSetFollowUp: (id: string, date: string | null) => Promise<void>;
   onChange: () => void;
 }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<LeadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [noteBody, setNoteBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
   const [statusSaving, setStatusSaving] = useState<Status | null>(null);
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [assigneeSaving, setAssigneeSaving] = useState(false);
+  const [claimSaving, setClaimSaving] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -748,7 +732,6 @@ function ExpandedPanel({
       setFollowUpDate(
         json.nextFollowUpAt ? json.nextFollowUpAt.slice(0, 10) : ""
       );
-      setAssigneeIds((json.assignees ?? []).map((a) => a.id));
     } catch {
       toast.error("שגיאה בטעינת הליד");
     } finally {
@@ -816,34 +799,57 @@ function ExpandedPanel({
     }
   };
 
-  // Save date + assignees atomically through the parent helper (which keeps
-  // the optimistic UX). After the round-trip we reload local detail so the
-  // notes/assignees panel reflects what the server saved.
-  const saveFollowUp = async (date: string | null, ids: string[]) => {
+  // Save the follow-up date through the parent helper (optimistic UX),
+  // then reload local detail so the panel reflects what the server saved.
+  const saveFollowUp = async (date: string | null) => {
     setFollowUpDate(date || "");
-    await onSetFollowUp(leadId, date, ids);
+    await onSetFollowUp(leadId, date);
     reload();
   };
 
-  // Save only the assignees (no notification fires unless the date changed).
-  const saveAssignees = async (ids: string[]) => {
-    const previous = assigneeIds;
-    setAssigneeIds(ids);
-    setAssigneeSaving(true);
+  // Self-claim / release — mirrors the seller flow. Claiming also bumps a
+  // NEW lead into IN_PROGRESS so the status follows the process.
+  const claim = async (take: boolean) => {
+    setClaimSaving(true);
     try {
       const res = await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assigneeIds: ids }),
+        body: JSON.stringify({
+          action: take ? "claim" : "release",
+          ...(take && detail?.status === "NEW" ? { status: "IN_PROGRESS" } : {}),
+        }),
       });
       if (!res.ok) throw new Error();
+      toast.success(take ? "הליד בטיפול שלך" : "הטיפול שוחרר");
       await reload();
       onChange();
     } catch {
-      toast.error("שמירת האחראים נכשלה");
-      setAssigneeIds(previous);
+      toast.error("הפעולה נכשלה");
     } finally {
-      setAssigneeSaving(false);
+      setClaimSaving(false);
+    }
+  };
+
+  // Close the deal → jump straight to contract creation, prefilled.
+  const closeToContract = async () => {
+    setStatusSaving("CLOSED");
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CLOSED" }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("הליד נסגר! מעביר ליצירת חוזה 🎉");
+      const p = new URLSearchParams({ new: "1" });
+      if (detail?.name) p.set("name", detail.name);
+      if (detail?.phone) p.set("phone", detail.phone);
+      if (detail?.email) p.set("email", detail.email);
+      router.push(`/admin/agreements?${p.toString()}`);
+    } catch {
+      toast.error("עדכון הסטטוס נכשל");
+      setStatusSaving(null);
     }
   };
 
@@ -909,8 +915,56 @@ function ExpandedPanel({
           </p>
         </div>
 
+        {/* The lead's journey: take it → work it → close to contract. */}
         <div>
-          <p className="text-xs text-gray-500 mb-1.5">שינוי סטטוס</p>
+          <p className="text-xs text-gray-500 mb-1.5">
+            טיפול
+            {detail.assignees.length > 0 && (
+              <span className="text-gray-400">
+                {" "}
+                — בטיפול של {detail.assignees.map((a) => a.name).join(", ")}
+              </span>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {meId && detail.assignees.some((a) => a.id === meId) ? (
+              <button
+                type="button"
+                onClick={() => claim(false)}
+                disabled={claimSaving}
+                className="text-xs px-3.5 py-1.5 rounded-full font-bold bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                {claimSaving ? "…" : "שחרר טיפול"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => claim(true)}
+                disabled={claimSaving || !meId}
+                className="text-xs px-3.5 py-1.5 rounded-full font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+              >
+                {claimSaving ? "…" : "✋ קח לטיפול"}
+              </button>
+            )}
+            {detail.status !== "CLOSED" && (
+              <button
+                type="button"
+                onClick={closeToContract}
+                disabled={statusSaving !== null}
+                className="text-xs px-3.5 py-1.5 rounded-full font-bold bg-green-500/20 text-green-300 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+              >
+                🎉 סגור עסקה → חוזה
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-500 mt-1.5">
+            הטיפול הוא אישי — כל אחד לוקח לעצמו בלבד. מי שמטפל מקבל התראה
+            כשנקבע תאריך מעקב.
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">שינוי סטטוס ידני</p>
           <div className="flex flex-wrap gap-1.5">
             {(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"] as Status[]).map((s) => {
               const active = detail.status === s;
@@ -942,24 +996,6 @@ function ExpandedPanel({
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs text-gray-500">אחראים למעקב</label>
-            {assigneeSaving && (
-              <span className="text-[10px] text-gray-500">שומר…</span>
-            )}
-          </div>
-          <AssigneePicker
-            users={users}
-            selectedIds={assigneeIds}
-            onChange={saveAssignees}
-            disabled={assigneeSaving}
-          />
-          <p className="text-[10px] text-gray-500 mt-1.5">
-            כל אחראי שמסומן יקבל התראה ברגע שיוקצה תאריך מעקב חדש.
-          </p>
-        </div>
-
-        <div>
           <label className="block text-xs text-gray-500 mb-1.5">
             תאריך מעקב הבא
           </label>
@@ -967,13 +1003,13 @@ function ExpandedPanel({
             <input
               type="date"
               value={followUpDate}
-              onChange={(e) => saveFollowUp(e.target.value || null, assigneeIds)}
+              onChange={(e) => saveFollowUp(e.target.value || null)}
               className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-pink"
             />
             {followUpDate && (
               <button
                 type="button"
-                onClick={() => saveFollowUp(null, assigneeIds)}
+                onClick={() => saveFollowUp(null)}
                 className="text-xs text-gray-500 hover:text-white px-2"
               >
                 נקה

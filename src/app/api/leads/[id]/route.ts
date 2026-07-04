@@ -9,7 +9,10 @@ const patchSchema = z.object({
   status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
   nextFollowUpAt: z.string().nullable().optional(), // ISO date or null
   isRead: z.boolean().optional(),
-  assigneeIds: z.array(z.string()).optional(),
+  // Self-claim only: a user may take or release a lead for THEMSELVES.
+  // Assigning other users is deliberately impossible (same rule as the
+  // seller API) — the lead's holder is whoever pressed "קח לטיפול".
+  action: z.enum(["claim", "release"]).optional(),
 });
 
 export async function GET(
@@ -97,10 +100,12 @@ export async function PATCH(
         ? new Date(parsed.data.nextFollowUpAt)
         : null;
     }
-    if (parsed.data.assigneeIds !== undefined) {
-      data.assignees = {
-        set: parsed.data.assigneeIds.map((id) => ({ id })),
-      };
+    // Additive/idempotent connect-disconnect of the caller only — concurrent
+    // claims by other users are never clobbered.
+    if (parsed.data.action === "claim") {
+      data.assignees = { connect: { id: session.user.id } };
+    } else if (parsed.data.action === "release") {
+      data.assignees = { disconnect: { id: session.user.id } };
     }
 
     const lead = await prisma.contactSubmission.update({

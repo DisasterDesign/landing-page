@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
@@ -160,6 +161,26 @@ export default function AgreementsPage() {
     fetchList();
     fetchClients();
   }, [fetchList, fetchClients]);
+
+  // Deep-link from the leads screen ("סגור עסקה → חוזה"): ?new=1&name=..&
+  // phone=..&email=.. opens the create form prefilled with the lead's details.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    setCreateOpen(true);
+    const name = searchParams.get("name");
+    const phone = searchParams.get("phone");
+    const email = searchParams.get("email");
+    const business = searchParams.get("business");
+    if (name) setCustomerName(name);
+    if (phone) setPhone(phone);
+    if (email) setEmail(email);
+    if (business) setBusinessName(business);
+    // Strip the query so a refresh doesn't re-open / re-fill the form.
+    router.replace("/admin/agreements", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const resetForm = () => {
     setTierChoice("ADVANCED");
