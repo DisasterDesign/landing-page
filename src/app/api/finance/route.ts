@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import {
   monthlyIls,
   toIls,
+  jobFinance,
   VAT_RATE,
   CARDCOM_FEE_RATE,
 } from "@/lib/finance";
@@ -28,7 +29,11 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [clients, expenses] = await Promise.all([
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const [clients, expenses, paidJobsThisMonth, outstandingJobs] = await Promise.all([
     prisma.client.findMany({
       where: { status: "בוצע", partner: "fuzion" },
       select: {
@@ -44,6 +49,16 @@ export async function GET() {
     prisma.expense.findMany({
       include: { client: { select: { id: true, name: true, number: true } } },
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
+    }),
+    // One-off jobs whose payment landed THIS month → this month's one-off income
+    prisma.clientJob.findMany({
+      where: { status: "PAID", paidAt: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true, vatIncluded: true, cardcomFee: true, client: { select: { name: true } } },
+    }),
+    // Still-owed one-off jobs (for context on the board)
+    prisma.clientJob.findMany({
+      where: { status: "PENDING" },
+      select: { amount: true, vatIncluded: true, cardcomFee: true },
     }),
   ]);
 
@@ -109,7 +124,13 @@ export async function GET() {
   const totalVat = perClient.reduce((s, c) => s + c.vat, 0);
   const totalCardcomFee = perClient.reduce((s, c) => s + c.cardcomFee, 0);
   const grossProfit = totalMrr - totalVat - totalCardcomFee;
-  const netProfit = grossProfit - totalExpensesMonthly;
+
+  // One-off job income received this month (net profit basis) — real cash that
+  // belongs to this month and enters the partner split.
+  const oneOffIncomeThisMonth = paidJobsThisMonth.reduce((s, j) => s + jobFinance(j).profit, 0);
+  const oneOffOutstanding = outstandingJobs.reduce((s, j) => s + jobFinance(j).gross, 0);
+
+  const netProfit = grossProfit + oneOffIncomeThisMonth - totalExpensesMonthly;
 
   return NextResponse.json({
     snapshotAt: new Date().toISOString(),
@@ -121,9 +142,12 @@ export async function GET() {
       fixedMonthly,
       variableMonthly,
       totalExpensesMonthly,
+      oneOffIncomeThisMonth,
+      oneOffOutstanding,
       netProfit,
-      // Current transfer model (gross, before expenses) vs true economics
-      partnerShareBeforeExpenses: grossProfit / 2,
+      // Current transfer model (gross MRR, before expenses) vs true economics.
+      // The "after expenses" partner share now also reflects one-off income.
+      partnerShareBeforeExpenses: (grossProfit + oneOffIncomeThisMonth) / 2,
       partnerShareAfterExpenses: netProfit / 2,
       clientCount: perClient.length,
     },

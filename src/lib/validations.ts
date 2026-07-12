@@ -166,6 +166,39 @@ export const createExpenseSchema = z.object({
 
 export const updateExpenseSchema = createExpenseSchema.partial();
 
+// ==================
+// ONE-OFF JOBS
+// ==================
+
+export const createJobSchema = z.object({
+  // Attach to an existing client OR create a lightweight one by name.
+  clientId: z.string().nullable().optional(),
+  clientName: z.string().max(200).nullable().optional(),
+  title: z.string().min(1, "תיאור העבודה חובה").max(200),
+  amount: z.number().min(0),
+  vatIncluded: z.boolean().default(false),
+  cardcomFee: z.boolean().default(false),
+  closedAt: z.string().min(1, "תאריך סגירה חובה"),
+  paymentTermsDays: z.number().int().min(0).max(365).default(60),
+  paidAt: z.string().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+}).refine((d) => d.clientId || (d.clientName && d.clientName.trim()), {
+  message: "יש לבחור לקוח או להזין שם לקוח חדש",
+  path: ["clientId"],
+});
+
+export const updateJobSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  amount: z.number().min(0).optional(),
+  vatIncluded: z.boolean().optional(),
+  cardcomFee: z.boolean().optional(),
+  closedAt: z.string().optional(),
+  paymentTermsDays: z.number().int().min(0).max(365).optional(),
+  paidAt: z.string().nullable().optional(),
+  status: z.enum(["PENDING", "PAID"]).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
 export const bulkClientUrlsSchema = z.object({
   updates: z
     .array(

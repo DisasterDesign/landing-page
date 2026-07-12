@@ -48,6 +48,8 @@ interface FinancePayload {
     fixedMonthly: number;
     variableMonthly: number;
     totalExpensesMonthly: number;
+    oneOffIncomeThisMonth: number;
+    oneOffOutstanding: number;
     netProfit: number;
     partnerShareBeforeExpenses: number;
     partnerShareAfterExpenses: number;
@@ -252,6 +254,18 @@ export default function FinancePage() {
           <Card small label="חלק שותף לפני הוצאות (המודל הנוכחי)" value={bl?.partnerShareBeforeExpenses} />
           <Card small label="חלק שותף אחרי הוצאות (התמונה האמיתית)" value={bl?.partnerShareAfterExpenses} highlight />
         </div>
+        {((bl?.oneOffIncomeThisMonth ?? 0) > 0 || (bl?.oneOffOutstanding ?? 0) > 0) && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card small label="הכנסה חד-פעמית שהתקבלה החודש (נטו)" value={bl?.oneOffIncomeThisMonth} />
+            <Card small label="עבודות חד-פעמיות שחייבים לנו" value={bl?.oneOffOutstanding} />
+            <a
+              href="/admin/jobs"
+              className="md:col-span-2 flex items-center justify-center rounded-2xl border border-gray-700 bg-gray-900 hover:border-pink text-sm text-gray-300 hover:text-white transition-colors p-4"
+            >
+              נהל עבודות חד-פעמיות ← כלול ברווח הנקי ובחלוקת השותפים
+            </a>
+          </div>
+        )}
         {data && data.unknownAmounts.length > 0 && (
           <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 text-sm text-amber-300">
             <span className="font-bold">⚠️ הוצאות עם סכום לא ידוע (לא נכללות בשורה התחתונה): </span>

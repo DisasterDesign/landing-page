@@ -400,10 +400,43 @@ model Client {
   agreements    Agreement[]
   clientNotes   ClientNote[]
   expenses      Expense[]
+  jobs          ClientJob[]
 
   @@index([number])
   @@index([email])
   @@index([phone])
+}
+
+enum JobStatus {
+  PENDING // billed / closed, awaiting payment
+  PAID
+}
+
+// A one-off billable job for clients who pay per project (not a monthly
+// subscription) — e.g. Solel Boneh: landing page, video. `amount` is the
+// NET (pre-VAT) figure by default; VAT is added on top for the invoice, and
+// the net IS the profit basis. Payment terms default to שוטף+60 (paid ~60
+// days after the end of the month the job closed). Income lands in the month
+// `paidAt` falls in — see src/lib/finance.ts jobFinance().
+model ClientJob {
+  id               String    @id @default(cuid())
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title            String
+  amount           Float     // net (pre-VAT) unless vatIncluded=true
+  vatIncluded      Boolean   @default(false)
+  cardcomFee       Boolean   @default(false) // false = bank transfer, no 2% fee
+  status           JobStatus @default(PENDING)
+  closedAt         DateTime  // when the job was closed/billed (billing month)
+  paymentTermsDays Int       @default(60) // שוטף+60
+  paidAt           DateTime? // when payment actually received; null = outstanding
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@index([paidAt])
 }
 
 enum ExpenseCategory {
