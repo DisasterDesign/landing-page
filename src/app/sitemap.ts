@@ -2,12 +2,15 @@ import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Rebuild at most hourly (ISR) so new posts/fonts appear without regenerating
- * on every crawl. Static-page lastModified values below are real per-page
- * change dates (not the request time), so crawlers get a stable, trustworthy
- * signal. Update a page's date here when its content actually changes.
+ * Generated fresh on every request. ISR (revalidate=3600) proved unreliable
+ * here in production — the cached copy was observed 59h stale (age: 214521,
+ * x-vercel-cache: HIT), which kept newly-published posts out of the sitemap
+ * and served outdated lastmod values to crawlers. Sitemap traffic is only
+ * crawlers, so one DB query per hit is negligible. Static-page lastModified
+ * values below are real per-page change dates (not the request time) —
+ * update a page's date here when its content actually changes.
  */
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 const SITE_URL = "https://www.fuzionwebz.com";
 
