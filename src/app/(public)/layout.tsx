@@ -11,11 +11,13 @@ import CookieConsent from "@/components/shared/CookieConsent";
 import AccessibilityWidget from "@/components/shared/AccessibilityWidget";
 import { OrganizationJsonLd, WebSiteJsonLd, LocalBusinessJsonLd } from "@/components/seo/JsonLd";
 import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
+import MetaPixel from "@/components/seo/MetaPixel";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <GoogleAnalytics />
+      <MetaPixel />
       <OrganizationJsonLd />
       <LocalBusinessJsonLd />
       <WebSiteJsonLd />

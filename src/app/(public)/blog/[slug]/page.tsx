@@ -57,7 +57,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!post) return { title: "מאמר לא נמצא" };
 
   return {
-    title: post.metaTitle || `${post.title} | ${SITE_NAME}`,
+    // Bare title only — the root layout's `%s | Fuzion Webz` template appends
+    // the brand. Appending it here too produced "| Fuzion Webz | Fuzion Webz"
+    // on posts without a metaTitle.
+    title: post.metaTitle || post.title,
     description: post.metaDesc || post.excerpt || undefined,
     alternates: {
       canonical: `${SITE_URL}/blog/${post.slug}`,
@@ -80,7 +83,9 @@ export default async function BlogPostPage({ params }: Props) {
   const post = await getPost(slug);
   if (!post) {
     const target = await findRedirectTarget(slug);
-    if (target) permanentRedirect(`/blog/${target}`);
+    // encodeURIComponent — the Location header must be ASCII; a raw Hebrew
+    // slug in the redirect target produced a 500 on every legacy URL.
+    if (target) permanentRedirect(`/blog/${encodeURIComponent(target)}`);
     notFound();
   }
 

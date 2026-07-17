@@ -24,10 +24,11 @@ export const metadata: Metadata = {
 
 async function getInitialPosts(): Promise<BlogPost[]> {
   try {
+    // ALL published posts — the index is the main internal-linking surface;
+    // capping it (was take:12) left most posts crawlable only via the sitemap.
     const posts = await prisma.blogPost.findMany({
       where: { published: true },
       orderBy: { publishedAt: "desc" },
-      take: 12,
       select: {
         id: true,
         title: true,

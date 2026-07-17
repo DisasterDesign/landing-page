@@ -8,7 +8,7 @@ import Contact from "@/components/sections/Contact";
 import ClientLogos from "@/components/sections/ClientLogos";
 import LatestPosts from "@/components/sections/LatestPosts";
 import Marquee from "@/components/animations/Marquee";
-import { LocalBusinessJsonLd, FAQJsonLd } from "@/components/seo/JsonLd";
+import { FAQJsonLd } from "@/components/seo/JsonLd";
 
 // ISR so the latest-posts section + internal links refresh when posts publish.
 export const revalidate = 3600;
@@ -16,7 +16,8 @@ export const revalidate = 3600;
 export default function Home() {
   return (
     <>
-      <LocalBusinessJsonLd />
+      {/* LocalBusinessJsonLd is rendered once by the (public) layout — do not
+          duplicate here (the home page emitted two identical blocks). */}
       <FAQJsonLd />
       <Hero />
       <Marquee text="FUZION WEBZ • עיצוב • פיתוח • חדשנות •" />
