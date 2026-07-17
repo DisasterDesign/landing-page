@@ -4,9 +4,10 @@ import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { prisma } from "@/lib/prisma";
 import BlogPageClient, { type BlogPost } from "./BlogPageClient";
 
-// ISR — the first page of posts is rendered on the server (real <a> links in
-// the initial HTML for crawlers) and refreshed at most hourly.
-export const revalidate = 3600;
+// force-dynamic — SSR per request so the index always reflects the DB
+// (cover images, freshly published posts). ISR (revalidate) proved unreliable
+// in prod here (the sitemap went 59h stale), and a blog index must stay fresh.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "בלוג — טיפים ומדריכים לעיצוב אתרים",
