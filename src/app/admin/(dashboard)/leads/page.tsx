@@ -177,7 +177,9 @@ export default function LeadsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  // Default to the NEW bucket — that's what needs action on entry. "הכל"
+  // is one click away for when you want the full history.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("NEW");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
@@ -234,30 +236,56 @@ export default function LeadsPage() {
     [load]
   );
 
-  const syncFromFacebook = useCallback(async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/integrations/facebook/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "sync failed");
-      toast.success(
-        `סנכרון הושלם: ${json.created} חדשים, ${json.updated} עודכנו, ${json.skipped} דולגו (מתוך ${json.total})`,
-        { duration: 8000 }
-      );
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "שגיאה בסנכרון");
-    } finally {
-      setSyncing(false);
-    }
-  }, [load]);
+  // `silent` is used by the automatic sync on page entry: it skips the verbose
+  // success toast (which would pop on every visit) and only speaks up when the
+  // sync actually brought new leads, or when it failed — so the counts on
+  // screen can be trusted without pressing the button.
+  const syncFromFacebook = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+      setSyncing(true);
+      try {
+        const res = await fetch("/api/integrations/facebook/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "sync failed");
+        if (!silent) {
+          toast.success(
+            `סנכרון הושלם: ${json.created} חדשים, ${json.updated} עודכנו, ${json.skipped} דולגו (מתוך ${json.total})`,
+            { duration: 8000 }
+          );
+        } else if (json.created > 0) {
+          toast.success(`${json.created} לידים חדשים מפייסבוק`, { duration: 4000 });
+        }
+        await load();
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "שגיאה בסנכרון",
+          silent ? { duration: 3000 } : undefined
+        );
+      } finally {
+        setSyncing(false);
+      }
+    },
+    [load]
+  );
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Pull from Facebook automatically once per page load, so the counts are
+  // already current on entry instead of waiting for a manual button press.
+  // The ref guard keeps StrictMode's double-invoke (and search-triggered
+  // re-renders) from firing a second sync.
+  const autoSyncedRef = useRef(false);
+  useEffect(() => {
+    if (autoSyncedRef.current) return;
+    autoSyncedRef.current = true;
+    syncFromFacebook({ silent: true });
+  }, [syncFromFacebook]);
 
   // Who am I? Needed for the self-claim button ("קח לטיפול") — a user can
   // only take/release a lead for themselves, never assign someone else.
@@ -350,7 +378,7 @@ export default function LeadsPage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="text-2xl font-bold">לידים — מעקב</h2>
           <button
-            onClick={syncFromFacebook}
+            onClick={() => syncFromFacebook()}
             disabled={syncing}
             className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-300 hover:border-pink disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
