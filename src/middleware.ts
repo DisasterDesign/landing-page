@@ -64,8 +64,9 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // Allow public Cardcom payment webhook (server-to-server, no auth header)
-  if (pathname === "/api/payments/webhook") {
+  // Allow public Cardcom payment webhooks (server-to-server, no auth header).
+  // recurring-webhook validates its own shared Secret from the payload.
+  if (pathname === "/api/payments/webhook" || pathname === "/api/payments/recurring-webhook") {
     return NextResponse.next();
   }
 

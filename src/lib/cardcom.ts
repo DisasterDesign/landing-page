@@ -525,3 +525,123 @@ export async function createRecurringOrderNTV(
 
   return { recurringId, accountId };
 }
+
+// ---------------------------------------------------------------------------
+// Pull APIs — reading recurring state and charge history back from Cardcom.
+// Verified live (2026-07-19): these v11 endpoints are GET-only (POST → 405)
+// and take their JSON in the request BODY. undici/fetch refuses GET+body, so
+// they go through a raw https.request. The regular v11 credential pair
+// (CARDCOM_API_NAME/PASSWORD) authenticates them — BillGold creds not needed.
+// ---------------------------------------------------------------------------
+
+function formatDateCompact(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}${mm}${d.getFullYear()}`;
+}
+
+async function cardcomGetWithBody<T>(path: string, payload: object): Promise<T> {
+  const { request } = await import("node:https");
+  const body = JSON.stringify(payload);
+  return new Promise<T>((resolve, reject) => {
+    const req = request(
+      {
+        host: "secure.cardcom.solutions",
+        path,
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          if (!res.statusCode || res.statusCode >= 400) {
+            reject(new CardcomError(`Cardcom ${path} HTTP ${res.statusCode}: ${data.slice(0, 300)}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(data) as T);
+          } catch {
+            reject(new CardcomError(`Cardcom ${path} returned non-JSON: ${data.slice(0, 300)}`));
+          }
+        });
+      }
+    );
+    req.on("error", (e) => reject(new CardcomError(`Cardcom ${path} request failed: ${String(e)}`)));
+    req.write(body);
+    req.end();
+  });
+}
+
+/** One row of a recurring order's charge history — Cardcom's debtors data.
+ *  Field typos (ResposeCode) are Cardcom's own; do not "fix" them. */
+export interface RecurringHistoryRow {
+  RecurringId: number;
+  Status: string; // SUCCESSFUL | DEBTAUTOBILLING | LOSTDEBT | PAYBYOTHERE | ONHOLD | PENDINGFORPROCESSING
+  ResposeCode?: number; // credit-company decline code for failed attempts
+  BillingAttempts?: number;
+  TranzactionId?: number; // InternalDealNumber of the actual charge
+  SumToBill?: number;
+  DocumentNumber?: number;
+  CreateDate?: string; // when the charge row was created = billing date
+  LastDate?: string; // last status update
+  ReturnValue?: string; // our agreementId, echoed back
+}
+
+export async function getRecurringPaymentHistory(input: {
+  accountId: number;
+  fromDate: Date;
+  toDate: Date;
+}): Promise<RecurringHistoryRow[]> {
+  const cfg = getCardcomConfig();
+  if (!cfg) throw new CardcomError("Cardcom credentials not configured");
+  const res = await cardcomGetWithBody<{
+    ResponseCode: number;
+    Description?: string;
+    RecurringPaymentHistory?: RecurringHistoryRow[];
+  }>("/api/v11/RecuringPayments/GetRecurringPaymentHistory", {
+    ApiUserName: cfg.apiName,
+    ApiPassword: cfg.apiPassword,
+    AccountId: input.accountId,
+    // NOT formatDateDDMMYYYY (that one is DD/MM/YYYY for the NTV interface) —
+    // this endpoint rejects separators: "must be in format DDMMYYYY".
+    FromDate: formatDateCompact(input.fromDate),
+    ToDate: formatDateCompact(input.toDate),
+  });
+  if (res.ResponseCode !== 0) {
+    throw new CardcomError(`GetRecurringPaymentHistory failed: ${res.ResponseCode} ${res.Description ?? ""}`);
+  }
+  return res.RecurringPaymentHistory ?? [];
+}
+
+/** Live state of a recurring order: is it actually active, when does it bill
+ *  next, how many charges ran. The fields the DB has no source for today. */
+export interface RecurringState {
+  RecurringId: number;
+  IsActive: boolean;
+  NextDateToBill?: string;
+  NumOfPaymentsAlreadyCharged?: number;
+  ReturnValue?: string; // our agreementId
+  FlexItem?: { Price?: number };
+}
+
+export async function getRecurringPaymentState(accountId: number): Promise<RecurringState[]> {
+  const cfg = getCardcomConfig();
+  if (!cfg) throw new CardcomError("Cardcom credentials not configured");
+  const res = await cardcomGetWithBody<{
+    ResponseCode: number;
+    Description?: string;
+    UpdateList?: RecurringState[];
+  }>("/api/v11/RecuringPayments/GetRecurringPayment", {
+    ApiUserName: cfg.apiName,
+    ApiPassword: cfg.apiPassword,
+    AccountId: accountId,
+  });
+  if (res.ResponseCode !== 0) {
+    throw new CardcomError(`GetRecurringPayment failed: ${res.ResponseCode} ${res.Description ?? ""}`);
+  }
+  return res.UpdateList ?? [];
+}

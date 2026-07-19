@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import {
   CATEGORY_LABELS,
@@ -238,6 +239,12 @@ export default function FinancePage() {
             והמשתנות. המרת מט״ח משוערת: $1 = ₪{USD_TO_ILS} · €1 = ₪{EUR_TO_ILS} (כולל עמלות המרה).
           </p>
         </div>
+        <Link
+          href="/admin/finance/debtors"
+          className="px-4 py-2 border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors text-sm font-medium"
+        >
+          דוח חייבים
+        </Link>
       </div>
 
       {/* ===== Bottom line ===== */}

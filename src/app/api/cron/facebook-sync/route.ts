@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import {
@@ -22,14 +23,7 @@ interface IntegrationResult {
 export async function GET(req: NextRequest) {
   // Vercel cron sends a special header. Also accept a CRON_SECRET bearer for
   // manual triggers from the local CLI.
-  const isVercelCron = req.headers.get("user-agent")?.includes("vercel-cron");
-  const auth = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || "";
-  const expected = cronSecret ? `Bearer ${cronSecret}` : null;
-  const isAuthorized =
-    isVercelCron || (expected !== null && auth === expected) || !expected;
-
-  if (!isAuthorized) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
