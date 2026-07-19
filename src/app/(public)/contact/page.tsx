@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import Card from "@/components/ui/Card";
 import Contact from "@/components/sections/Contact";
-import { SITE_NAME, SITE_URL, WHATSAPP_NUMBER } from "@/lib/constants";
+import { SITE_NAME, SITE_URL, WHATSAPP_NUMBER, ADDRESS_FULL } from "@/lib/constants";
 import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
@@ -103,12 +103,20 @@ export default function ContactPage() {
       {/* Contact Form */}
       <Contact />
 
-      {/* Map Placeholder */}
+      {/* Map */}
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
-            <div className="w-full h-80 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
-              <p className="text-gray-600 text-lg">מפה תתווסף בקרוב</p>
+            <p className="text-gray-700 text-lg mb-4 text-center">{ADDRESS_FULL}</p>
+            <div className="w-full h-80 rounded-2xl overflow-hidden border border-gray-200">
+              <iframe
+                title={`מפה — ${ADDRESS_FULL}`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(ADDRESS_FULL)}&output=embed&hl=iw`}
+                className="w-full h-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
             </div>
           </ScrollReveal>
         </div>

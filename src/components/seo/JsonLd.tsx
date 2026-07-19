@@ -1,4 +1,4 @@
-import { SITE_URL, SITE_NAME, FAQ_ITEMS, SERVICES, WHATSAPP_NUMBER } from "@/lib/constants";
+import { SITE_URL, SITE_NAME, FAQ_ITEMS, SERVICES, WHATSAPP_NUMBER, ADDRESS_STREET, ADDRESS_CITY } from "@/lib/constants";
 
 // Organization schema — for the root layout or homepage
 export function OrganizationJsonLd() {
@@ -11,6 +11,8 @@ export function OrganizationJsonLd() {
     description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים",
     address: {
       "@type": "PostalAddress",
+      streetAddress: ADDRESS_STREET,
+      addressLocality: ADDRESS_CITY,
       addressCountry: "IL",
     },
     sameAs: [
@@ -50,6 +52,8 @@ export function LocalBusinessJsonLd() {
     telephone: `+${WHATSAPP_NUMBER}`,
     address: {
       "@type": "PostalAddress",
+      streetAddress: ADDRESS_STREET,
+      addressLocality: ADDRESS_CITY,
       addressCountry: "IL",
     },
     priceRange: "₪₪",

@@ -14,6 +14,13 @@ export const SITE_DESCRIPTION = "סטודיו לעיצוב ובניית אתרי
 export const WHATSAPP_NUMBER = "972547136666";
 export const WHATSAPP_MESSAGE = "היי, אשמח לשמוע עוד על השירותים שלכם!";
 
+// Office address — drives the contact-page map and the LocalBusiness JSON-LD.
+// Keep in sync with the Google Business Profile (NAP consistency matters for
+// local SEO: the same name/address/phone everywhere).
+export const ADDRESS_STREET = "נוח מוזס 2";
+export const ADDRESS_CITY = "ראשון לציון";
+export const ADDRESS_FULL = `${ADDRESS_STREET}, ${ADDRESS_CITY}`;
+
 export const NAV_ITEMS: NavItem[] = [
   { label: "ראשי", href: "/" },
   { label: "שירותים", href: "/#services" },

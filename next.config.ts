@@ -45,7 +45,8 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com",
-              "frame-src 'self'",
+              // Google Maps embed on /contact needs its frame origin allowed.
+              "frame-src 'self' https://www.google.com",
               "media-src 'self' https://auxio.b-cdn.net",
               "object-src 'none'",
               "base-uri 'self'",
