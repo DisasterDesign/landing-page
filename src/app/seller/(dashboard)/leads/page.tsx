@@ -19,6 +19,13 @@ interface Lead {
   source: string | null;
   createdAt: string;
   assignees: { id: string; name: string }[];
+  myNotesCount: number;
+}
+
+interface LeadNote {
+  id: string;
+  body: string;
+  createdAt: string;
 }
 
 const STATUS_LABEL: Record<LeadStatus, string> = {
@@ -115,6 +122,78 @@ export default function SellerLeadsPage() {
       toast.error("שגיאה בעדכון סטטוס");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // ---- personal numbered notes ("פתקים") per lead --------------------
+  const [openNotes, setOpenNotes] = useState<Set<string>>(new Set());
+  const [notesByLead, setNotesByLead] = useState<Record<string, LeadNote[]>>({});
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
+  const [noteBusy, setNoteBusy] = useState<string | null>(null);
+
+  const toggleNotes = async (leadId: string) => {
+    setOpenNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+    if (!notesByLead[leadId]) {
+      try {
+        const res = await fetch(`/api/seller/leads/${leadId}/notes`, { cache: "no-store" });
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        setNotesByLead((prev) => ({ ...prev, [leadId]: json.notes ?? [] }));
+      } catch {
+        toast.error("שגיאה בטעינת הפתקים");
+      }
+    }
+  };
+
+  const addNote = async (leadId: string) => {
+    const body = (noteDraft[leadId] ?? "").trim();
+    if (!body) return;
+    setNoteBusy(leadId);
+    try {
+      const res = await fetch(`/api/seller/leads/${leadId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setNotesByLead((prev) => ({ ...prev, [leadId]: [...(prev[leadId] ?? []), json.note] }));
+      setNoteDraft((prev) => ({ ...prev, [leadId]: "" }));
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, myNotesCount: l.myNotesCount + 1 } : l))
+      );
+    } catch {
+      toast.error("שגיאה בשמירת הפתק");
+    } finally {
+      setNoteBusy(null);
+    }
+  };
+
+  const deleteNote = async (leadId: string, noteId: string) => {
+    setNoteBusy(leadId);
+    try {
+      const res = await fetch(`/api/seller/leads/${leadId}/notes?noteId=${noteId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error();
+      setNotesByLead((prev) => ({
+        ...prev,
+        [leadId]: (prev[leadId] ?? []).filter((n) => n.id !== noteId),
+      }));
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId ? { ...l, myNotesCount: Math.max(0, l.myNotesCount - 1) } : l
+        )
+      );
+    } catch {
+      toast.error("שגיאה במחיקה");
+    } finally {
+      setNoteBusy(null);
     }
   };
 
@@ -235,7 +314,75 @@ export default function SellerLeadsPage() {
                       סמן כאבוד
                     </button>
                   )}
+                  <button
+                    onClick={() => toggleNotes(lead.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      openNotes.has(lead.id) || lead.myNotesCount > 0
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-gray-800 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    📝 פתקים{lead.myNotesCount > 0 ? ` (${lead.myNotesCount})` : ""}
+                  </button>
                 </div>
+
+                {openNotes.has(lead.id) && (
+                  <div className="border-t border-gray-800 pt-3 space-y-2">
+                    {(notesByLead[lead.id] ?? []).length === 0 ? (
+                      <p className="text-xs text-gray-600">
+                        אין פתקים עדיין — כתוב לעצמך מה קרה בשיחה ומה הצעד הבא.
+                      </p>
+                    ) : (
+                      <ol className="space-y-1.5">
+                        {(notesByLead[lead.id] ?? []).map((n, i) => (
+                          <li key={n.id} className="flex items-start gap-2 text-xs bg-gray-800/60 rounded-xl px-3 py-2">
+                            <span className="shrink-0 font-mono font-bold text-amber-400">{i + 1}.</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-200 whitespace-pre-wrap break-words">{n.body}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">
+                                {new Date(n.createdAt).toLocaleString("he-IL", {
+                                  day: "numeric",
+                                  month: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => deleteNote(lead.id, n.id)}
+                              disabled={noteBusy === lead.id}
+                              className="shrink-0 text-gray-600 hover:text-red-400 transition-colors p-1 -m-1"
+                              aria-label={`מחק פתק ${i + 1}`}
+                            >
+                              ✕
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        value={noteDraft[lead.id] ?? ""}
+                        onChange={(e) => setNoteDraft((prev) => ({ ...prev, [lead.id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            addNote(lead.id);
+                          }
+                        }}
+                        placeholder="פתק חדש... (למשל: התקשרתי, לא ענו, לחזור מחר ב-10)"
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50 placeholder:text-gray-600"
+                      />
+                      <button
+                        onClick={() => addNote(lead.id)}
+                        disabled={noteBusy === lead.id || !(noteDraft[lead.id] ?? "").trim()}
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-40"
+                      >
+                        הוסף
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

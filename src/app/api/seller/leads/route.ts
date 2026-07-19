@@ -39,12 +39,17 @@ export async function GET(request: NextRequest) {
         source: true,
         createdAt: true,
         assignees: { select: { id: true, name: true } },
+        // Count only the CALLER's notes — the numbered log is personal, and
+        // the badge should say "you have 3 notes here", not "someone does".
+        _count: { select: { notes: { where: { authorId: session.user.id } } } },
       },
       orderBy: { createdAt: "desc" },
       take: 300,
     });
 
-    return NextResponse.json({ leads });
+    return NextResponse.json({
+      leads: leads.map(({ _count, ...l }) => ({ ...l, myNotesCount: _count.notes })),
+    });
   } catch (error) {
     console.error("Error listing seller leads:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
