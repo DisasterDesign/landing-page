@@ -21,9 +21,16 @@ export async function GET(req: NextRequest) {
 
     const sortField = ALLOWED_SORT.has(sort) ? sort : "clicks";
 
-    const where: Prisma.SeoQueryWhereInput = page2only
-      ? { position: { gte: 11, lte: 20 } }
-      : {};
+    // Rows are unique per (query, windowStart) — without pinning the latest
+    // window, every synced week would add a duplicate of every query.
+    const latest = await prisma.seoQuery.aggregate({ _max: { windowStart: true } });
+
+    const where: Prisma.SeoQueryWhereInput = {
+      ...(latest._max.windowStart ? { windowStart: latest._max.windowStart } : {}),
+      // "Opportunities": high-value climb range — bottom of page 1 through
+      // page 2 (8-20). Pushing 12→6 takes weeks; 50→6 takes a year.
+      ...(page2only ? { position: { gte: 8, lte: 20 } } : {}),
+    };
 
     const queries = await prisma.seoQuery.findMany({
       where,

@@ -67,7 +67,8 @@ export default function KeywordsPage() {
   const filtered = useMemo(() => {
     let list = rows;
     if (page2only) {
-      list = list.filter((r) => r.position >= 11 && r.position <= 20);
+      // 8-20: bottom of page 1 through page 2 — the highest-ROI climb range.
+      list = list.filter((r) => r.position >= 8 && r.position <= 20);
     }
     return [...list].sort((a, b) => {
       const av = a[sortKey];
@@ -105,10 +106,18 @@ export default function KeywordsPage() {
             <input
               type="checkbox"
               checked={page2only}
-              onChange={(e) => setPage2only(e.target.checked)}
+              onChange={(e) => {
+                setPage2only(e.target.checked);
+                // An opportunity = lots of eyeballs almost on page 1 — rank
+                // the list by potential, not by the clicks it already gets.
+                if (e.target.checked) {
+                  setSortKey("impressions");
+                  setSortDir("desc");
+                }
+              }}
               className="w-4 h-4 accent-pink"
             />
-            רק הזדמנויות (עמוד 2)
+            הזדמנויות (מיקום 8-20)
           </label>
           <button
             onClick={handleExport}
