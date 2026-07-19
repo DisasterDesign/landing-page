@@ -8,6 +8,7 @@ import {
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
 import { withVat } from "@/lib/vat";
+import { applyPaymentToProduct } from "@/lib/client-products";
 import { notifyAllAdmins, createNotification } from "@/lib/notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
 
@@ -150,10 +151,13 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       },
     });
 
-    // Mirror onto Client card if linked. monthlyAmount is derived from the
-    // agreement (not the charged amount) so it's set even when Cardcom omits
-    // Sum/Amount (paidAmount null); only the cumulative `amount` increment
-    // depends on a known paidAmount.
+    // Mirror onto Client card if linked. The gross monthly is derived from
+    // the agreement (not the charged amount) so it's known even when Cardcom
+    // omits Sum/Amount; only the cumulative `amount` increment depends on a
+    // known paidAmount. The monthly figure is written onto the PRODUCT this
+    // agreement covers and the client rollup re-derived — writing it straight
+    // onto the client would overwrite a multi-product client's total with one
+    // product's price (מקורות ₪363 → ₪69 on Aquatis's next charge).
     if (agreement.clientId) {
       const grossMonthly = agreement.vatExempt
         ? agreement.monthlyPrice
@@ -163,9 +167,9 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         data: {
           paymentDate: paidAt,
           ...(paidAmount != null ? { amount: { increment: paidAmount } } : {}),
-          ...(grossMonthly > 0 ? { monthlyAmount: grossMonthly } : {}),
         },
       });
+      await applyPaymentToProduct(tx, agreement.clientId, agreement.id, grossMonthly, paidAt);
     }
   });
 
@@ -355,11 +359,13 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
         where: { id: agreement.clientId },
         data: {
           amount: { increment: amount },
-          // A recurring charge IS the gross monthly — keep monthlyAmount fresh.
-          ...(amount > 0 ? { monthlyAmount: amount } : {}),
           paymentDate: new Date(),
         },
       });
+      // A recurring charge IS the gross monthly — keep the PRODUCT fresh and
+      // re-derive the rollup (see the first-payment mirror for why not the
+      // client directly).
+      await applyPaymentToProduct(tx, agreement.clientId, agreement.id, amount, new Date());
     }
   });
 

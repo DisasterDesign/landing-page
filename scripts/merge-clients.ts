@@ -45,6 +45,15 @@ const GROUPS: Group[] = [
     productNames: { 33: "עמק איילון", 39: "אהוד תייר" },
     absorbNumbers: [39],
   },
+  // Confirmed by Elad 2026-07-19 (screenshot): these three rows are one
+  // paying customer — מקורות.
+  {
+    label: "מקורות",
+    survivorNumber: 44,
+    survivorName: "מקורות",
+    productNames: { 44: "Aquatis", 46: "Nadav Grinberg", 48: "יעקב גרינברג" },
+    absorbNumbers: [46, 48],
+  },
 ];
 
 async function mrrTotal() {
@@ -152,8 +161,10 @@ async function main() {
 
   const after = await mrrTotal();
   const afterCount = await prisma.client.count({ where: { archivedAt: null } });
+  // Status-aware, matching syncClientMonthly: only "בוצע" products bill, so
+  // only they may be compared against the client rollups.
   const products = await prisma.clientProduct.findMany({
-    where: { archivedAt: null, client: { archivedAt: null } },
+    where: { archivedAt: null, status: "בוצע", client: { archivedAt: null } },
     select: { monthlyAmount: true },
   });
   const productTotal = round2(products.reduce((s, p) => s + (p.monthlyAmount ?? 0), 0));

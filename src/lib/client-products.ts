@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma, PrismaClient } from "@prisma/client";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
  * Client.monthlyAmount is a denormalised rollup of the client's active
@@ -11,21 +14,76 @@ import { prisma } from "@/lib/prisma";
  * The trade is the usual denormalisation risk — drift. It is contained by
  * routing every product write through here, so there is exactly one writer.
  */
-export async function syncClientMonthly(clientId: string): Promise<number> {
-  const products = await prisma.clientProduct.findMany({
+export async function syncClientMonthly(clientId: string, db: Db = prisma): Promise<number> {
+  const products = await db.clientProduct.findMany({
     where: { clientId, archivedAt: null },
-    select: { monthlyAmount: true },
+    select: { monthlyAmount: true, status: true },
   });
 
-  // Round to agora — floats sum badly and this figure drives the profit split.
-  const total = Math.round(products.reduce((s, p) => s + (p.monthlyAmount ?? 0), 0) * 100) / 100;
+  // Only products marked "בוצע" bill. This mirrors the client-level rule the
+  // partner report has always applied (status "בוצע" filter): a project that
+  // has not started paying (ריק) or is mid-setup (חצי) carries its agreed
+  // amount for reference but contributes nothing to MRR until flipped. Without
+  // this, יוני's not-yet-billing admin system was counted as revenue.
+  const total =
+    Math.round(
+      products
+        .filter((p) => p.status === "בוצע")
+        .reduce((s, p) => s + (p.monthlyAmount ?? 0), 0) * 100
+    ) / 100;
 
-  await prisma.client.update({
+  await db.client.update({
     where: { id: clientId },
     data: { monthlyAmount: total },
   });
 
   return total;
+}
+
+/**
+ * A verified payment landed for an agreement — reflect it on the product that
+ * agreement covers, then re-derive the client rollup.
+ *
+ * Resolution order: the product explicitly linked to the agreement, else the
+ * client's only product. A multi-product client with no agreement link gets
+ * NO product write — guessing which of יוני's sites a charge belongs to would
+ * corrupt the per-product figures the rollup is built on.
+ *
+ * A product that takes a real charge is by definition billing, so it is also
+ * flipped to "בוצע" and stamped with its first payment date as startDate —
+ * this is what feeds the "MRR חדש לפי חודש" chart automatically from here on.
+ */
+export async function applyPaymentToProduct(
+  db: Db,
+  clientId: string,
+  agreementId: string,
+  grossMonthly: number,
+  paidAt: Date
+): Promise<void> {
+  if (grossMonthly <= 0) return;
+
+  const products = await db.clientProduct.findMany({
+    where: { clientId, archivedAt: null },
+    select: { id: true, agreementId: true, startDate: true },
+  });
+
+  const target =
+    products.find((p) => p.agreementId === agreementId) ??
+    (products.length === 1 ? products[0] : null);
+
+  if (target) {
+    await db.clientProduct.update({
+      where: { id: target.id },
+      data: {
+        monthlyAmount: grossMonthly,
+        status: "בוצע",
+        agreementId,
+        ...(target.startDate ? {} : { startDate: paidAt }),
+      },
+    });
+  }
+
+  await syncClientMonthly(clientId, db);
 }
 
 /** Shape the clients table and client card both render. */

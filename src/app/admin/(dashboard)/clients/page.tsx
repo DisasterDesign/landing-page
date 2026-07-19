@@ -39,7 +39,14 @@ interface Client {
   products: ClientProduct[];
 }
 
-type ProductField = "name" | "websiteUrl" | "monthlyAmount" | "lane";
+type ProductField =
+  | "name"
+  | "websiteUrl"
+  | "monthlyAmount"
+  | "lane"
+  | "status"
+  | "startDate"
+  | "paymentDate";
 
 const LANE_LABEL: Record<string, string> = { bet: "חנות", floor: "תדמית" };
 
@@ -296,8 +303,14 @@ export default function ClientsPage() {
   };
 
   const startProductEdit = (product: ClientProduct, field: ProductField) => {
-    const raw = product[field];
-    setProductValue(raw != null ? String(raw) : "");
+    let value: string;
+    if (field === "startDate" || field === "paymentDate") {
+      value = product[field] ? new Date(product[field]!).toISOString().split("T")[0] : "";
+    } else {
+      const raw = product[field];
+      value = raw != null ? String(raw) : "";
+    }
+    setProductValue(value);
     setEditingProduct({ id: product.id, field });
   };
 
@@ -311,22 +324,31 @@ export default function ClientsPage() {
     );
   };
 
-  const saveProductCell = async (clientId: string, product: ClientProduct) => {
+  const saveProductCell = async (clientId: string, product: ClientProduct, overrideValue?: string) => {
     if (!editingProduct) return;
     const { field } = editingProduct;
-    const oldValue = product[field] != null ? String(product[field]) : "";
+    const newValue = overrideValue ?? productValue;
+    let oldValue: string;
+    if (field === "startDate" || field === "paymentDate") {
+      oldValue = product[field] ? new Date(product[field]!).toISOString().split("T")[0] : "";
+    } else {
+      oldValue = product[field] != null ? String(product[field]) : "";
+    }
     setEditingProduct(null);
-    if (productValue === oldValue) return;
+    if (newValue === oldValue) return;
 
-    let value: unknown = productValue;
+    let value: unknown = newValue;
     if (field === "monthlyAmount") {
-      value = productValue === "" ? null : parseFloat(productValue);
-      if (productValue !== "" && isNaN(value as number)) {
+      value = newValue === "" ? null : parseFloat(newValue);
+      if (newValue !== "" && isNaN(value as number)) {
         toast.error("ערך לא תקין");
         return;
       }
     }
-    if (field === "name" && !String(productValue).trim()) {
+    if (field === "startDate" || field === "paymentDate") {
+      value = newValue || null;
+    }
+    if (field === "name" && !String(newValue).trim()) {
       toast.error("שם המוצר חובה");
       return;
     }
@@ -623,19 +645,51 @@ export default function ClientsPage() {
   const renderProductCell = (client: Client, product: ClientProduct, field: ProductField) => {
     const isEditing = editingProduct?.id === product.id && editingProduct?.field === field;
 
-    if (isEditing && field === "lane") {
+    if (isEditing && (field === "lane" || field === "status")) {
+      // Save on selection (like the client status select) — a blur-only save
+      // loses the pick when the browser closes the dropdown without a blur.
       return (
         <select
           ref={selectRef}
           value={productValue}
-          onChange={(e) => setProductValue(e.target.value)}
-          onBlur={() => saveProductCell(client.id, product)}
+          onChange={(e) => {
+            setProductValue(e.target.value);
+            saveProductCell(client.id, product, e.target.value);
+          }}
+          onBlur={() => setEditingProduct(null)}
           className="w-full bg-gray-700 text-white text-xs px-2 py-1 rounded border border-cyan/50 outline-none"
         >
-          <option value="">ריק</option>
-          <option value="bet">חנות</option>
-          <option value="floor">תדמית</option>
+          {field === "lane" ? (
+            <>
+              <option value="">ריק</option>
+              <option value="bet">חנות</option>
+              <option value="floor">תדמית</option>
+            </>
+          ) : (
+            <>
+              <option value="">ריק</option>
+              <option value="בוצע">✅ בוצע</option>
+              <option value="חצי">חצי</option>
+            </>
+          )}
         </select>
+      );
+    }
+
+    if (isEditing && (field === "startDate" || field === "paymentDate")) {
+      return (
+        <input
+          ref={inputRef}
+          type="date"
+          value={productValue}
+          onChange={(e) => setProductValue(e.target.value)}
+          onBlur={() => saveProductCell(client.id, product)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveProductCell(client.id, product);
+            else if (e.key === "Escape") setEditingProduct(null);
+          }}
+          className="w-full bg-gray-700 text-white text-xs px-2 py-1 rounded border border-cyan/50 outline-none"
+        />
       );
     }
 
@@ -686,12 +740,22 @@ export default function ClientsPage() {
     let display: string;
     if (field === "monthlyAmount") display = formatNum(product.monthlyAmount);
     else if (field === "lane") display = product.lane ? LANE_LABEL[product.lane] ?? "" : "";
+    else if (field === "status") display = statusDisplay(product.status);
+    else if (field === "startDate" || field === "paymentDate")
+      display = product[field] ? new Date(product[field]!).toLocaleDateString("he-IL") : "";
     else display = product[field] ?? "";
+
+    // Unpaid products are visually muted on the money cell so the table reads
+    // like the MRR does: this amount is agreed, not yet billing.
+    const muted = field === "monthlyAmount" && product.status !== "בוצע" && product.monthlyAmount != null;
 
     return (
       <div
         onClick={() => startProductEdit(product, field)}
-        className="cursor-pointer px-2 py-1 min-h-[28px] text-xs hover:bg-gray-700/50 rounded transition-colors"
+        className={`cursor-pointer px-2 py-1 min-h-[28px] text-xs hover:bg-gray-700/50 rounded transition-colors ${
+          muted ? "text-gray-500 line-through decoration-gray-600" : ""
+        }`}
+        title={muted ? "לא נספר ב-MRR — סטטוס המוצר אינו בוצע" : undefined}
       >
         {display || <span className="text-gray-600">-</span>}
       </div>
@@ -910,18 +974,25 @@ export default function ClientsPage() {
                             <div className="flex-1 min-w-0">
                               {renderProductCell(client, product, "name")}
                             </div>
+                            {/* Lane chip — click to edit. Lives beside the name
+                                because the status column now carries the
+                                product's own payment status. */}
+                            <div className="shrink-0 w-14">
+                              {renderProductCell(client, product, "lane")}
+                            </div>
                           </div>
                         </td>
                         <td className="px-1 py-0.5">{renderProductCell(client, product, "websiteUrl")}</td>
-                        {/* The lane (חנות / תדמית) lives here rather than in a
-                            column of its own: the status column is a client
-                            concept and products do not carry one. */}
-                        <td className="px-1 py-0.5">{renderProductCell(client, product, "lane")}</td>
+                        {/* Payment status per product (בוצע/חצי/ריק). Only
+                            בוצע products count in the client's MRR rollup. */}
+                        <td className="px-1 py-0.5">{renderProductCell(client, product, "status")}</td>
                         <td className="px-1 py-0.5 font-mono">
                           {renderProductCell(client, product, "monthlyAmount")}
                         </td>
                         <td className="px-3 py-1 bg-gray-700/10" colSpan={3}></td>
-                        <td className="px-3 py-1" colSpan={3}></td>
+                        <td className="px-3 py-1"></td>
+                        <td className="px-1 py-0.5">{renderProductCell(client, product, "startDate")}</td>
+                        <td className="px-1 py-0.5">{renderProductCell(client, product, "paymentDate")}</td>
                         <td className="px-1 py-0.5 sticky left-0 bg-gray-900/40 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
                           <button
                             onClick={() => deleteProduct(client, product)}

@@ -12,6 +12,14 @@ import {
   Cell,
 } from "recharts";
 
+interface ClientProduct {
+  name: string;
+  monthlyAmount: number | null;
+  status: string;
+  startDate: string | null;
+  createdAt: string;
+}
+
 interface Client {
   id: string;
   name: string;
@@ -20,6 +28,7 @@ interface Client {
   cardcomFee: number | null;
   startDate: string | null;
   createdAt: string;
+  products?: ClientProduct[];
 }
 
 interface MonthData {
@@ -95,6 +104,10 @@ export default function RevenueChart() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [windowMonths, setWindowMonths] = useState<6 | 12 | 24>(12);
+  // "received" = the original cumulative-by-cohort view. "newMrr" answers
+  // "which month did each product enter" — the monthly amounts of products
+  // whose startDate lands in that month (billing products only).
+  const [viewMode, setViewMode] = useState<"received" | "newMrr">("received");
 
   useEffect(() => {
     (async () => {
@@ -128,19 +141,37 @@ export default function RevenueChart() {
       monthMap.set(key, { revenue: 0, expenses: 0 });
     }
 
-    // Aggregate clients by their start date (fallback createdAt).
-    for (const c of clients) {
-      const dateStr = c.startDate ?? c.createdAt;
-      const d = new Date(dateStr);
-      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-      if (!monthMap.has(key)) continue; // outside window
-      const entry = monthMap.get(key)!;
-      const amount = c.amount ?? 0;
-      const cardcom = amount * CARDCOM_FEE_RATE;
-      const expense = c.expense ?? 0;
-      entry.revenue += amount;
-      entry.expenses += expense + cardcom;
-      monthMap.set(key, entry);
+    if (viewMode === "newMrr") {
+      // Each billing product is attributed to the month it entered. Product
+      // startDate wins; a product without one inherits the client's date so
+      // pre-migration data still lands somewhere sensible.
+      for (const c of clients) {
+        for (const p of c.products ?? []) {
+          if (p.status !== "בוצע") continue; // not billing → not new MRR
+          const dateStr = p.startDate ?? c.startDate ?? p.createdAt ?? c.createdAt;
+          const d = new Date(dateStr);
+          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          if (!monthMap.has(key)) continue;
+          const entry = monthMap.get(key)!;
+          entry.revenue += p.monthlyAmount ?? 0;
+          monthMap.set(key, entry);
+        }
+      }
+    } else {
+      // Aggregate clients by their start date (fallback createdAt).
+      for (const c of clients) {
+        const dateStr = c.startDate ?? c.createdAt;
+        const d = new Date(dateStr);
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        if (!monthMap.has(key)) continue; // outside window
+        const entry = monthMap.get(key)!;
+        const amount = c.amount ?? 0;
+        const cardcom = amount * CARDCOM_FEE_RATE;
+        const expense = c.expense ?? 0;
+        entry.revenue += amount;
+        entry.expenses += expense + cardcom;
+        monthMap.set(key, entry);
+      }
     }
 
     return Array.from(monthMap.entries()).map(([key, val]) => {
@@ -157,7 +188,7 @@ export default function RevenueChart() {
         isCurrent: key === currentKey,
       };
     });
-  }, [clients, windowMonths]);
+  }, [clients, windowMonths, viewMode]);
 
   // Summary stats from the visible window
   const stats = useMemo(() => {
@@ -202,10 +233,28 @@ export default function RevenueChart() {
     <div dir="rtl" className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
         <div>
-          <h3 className="text-lg font-bold text-white">הכנסות חודשיות</h3>
+          <h3 className="text-lg font-bold text-white">
+            {viewMode === "received" ? "הכנסות חודשיות" : "MRR חדש לפי חודש"}
+          </h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            הכנסה ברוטו לפי חודש (מס הכנסה לא כלול)
+            {viewMode === "received"
+              ? "הכנסה ברוטו לפי חודש (מס הכנסה לא כלול)"
+              : "סכום חודשי של מוצרים שנכנסו לתשלום באותו חודש"}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+        <div className="flex bg-gray-800 rounded-xl p-1 text-xs">
+          {([["received", "תקבולים"], ["newMrr", "MRR חדש"]] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-colors ${
+                viewMode === mode ? "bg-gray-900 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="flex bg-gray-800 rounded-xl p-1 text-xs">
           {[6, 12, 24].map((n) => (
@@ -221,6 +270,7 @@ export default function RevenueChart() {
               {n} חוד׳
             </button>
           ))}
+        </div>
         </div>
       </div>
 
