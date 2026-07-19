@@ -40,7 +40,10 @@ export async function GET(_req: NextRequest) {
   }
 
   const clients = await prisma.client.findMany({
-    where: { status: "בוצע" },
+    // Archived clients are excluded: merging a multi-site client moves its
+    // money onto the surviving row and archives the absorbed one, so counting
+    // archived rows here would double-count the profit split.
+    where: { status: "בוצע", archivedAt: null },
     select: {
       id: true,
       number: true,

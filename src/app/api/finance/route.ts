@@ -35,7 +35,7 @@ export async function GET() {
 
   const [clients, expenses, paidJobsThisMonth, outstandingJobs] = await Promise.all([
     prisma.client.findMany({
-      where: { status: "בוצע", partner: "fuzion" },
+      where: { status: "בוצע", partner: "fuzion", archivedAt: null },
       select: {
         id: true,
         number: true,

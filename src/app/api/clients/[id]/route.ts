@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
 
 export async function GET(
   _request: NextRequest,
@@ -35,6 +36,11 @@ export async function GET(
           include: {
             author: { select: { id: true, name: true, avatarUrl: true } },
           },
+        },
+        products: {
+          where: { archivedAt: null },
+          select: CLIENT_PRODUCT_SELECT,
+          orderBy: { createdAt: "asc" },
         },
       },
     });
@@ -73,9 +79,35 @@ export async function PATCH(
     if ("amount" in body)
       updateData.amount =
         body.amount !== null && body.amount !== "" ? parseFloat(body.amount) : null;
-    if ("monthlyAmount" in body)
-      updateData.monthlyAmount =
+    // monthlyAmount is a rollup of the client's products, so it must never be
+    // written straight onto the client — the next product edit would silently
+    // overwrite it and the partner report would drift. With a single product
+    // the intent is unambiguous, so route the edit there and re-roll. With
+    // several, refuse rather than guess which site the money belongs to.
+    let rolledMonthly: number | null = null;
+    if ("monthlyAmount" in body) {
+      const products = await prisma.clientProduct.findMany({
+        where: { clientId: id, archivedAt: null },
+        select: { id: true },
+      });
+      if (products.length > 1) {
+        return NextResponse.json(
+          { error: "ללקוח יש כמה מוצרים — ערוך את הסכום החודשי ברמת המוצר" },
+          { status: 409 }
+        );
+      }
+      const value =
         body.monthlyAmount !== null && body.monthlyAmount !== "" ? parseFloat(body.monthlyAmount) : null;
+      if (products.length === 1) {
+        await prisma.clientProduct.update({
+          where: { id: products[0].id },
+          data: { monthlyAmount: value },
+        });
+        rolledMonthly = await syncClientMonthly(id);
+      } else {
+        updateData.monthlyAmount = value;
+      }
+    }
     if ("expense" in body)
       updateData.expense =
         body.expense !== null && body.expense !== "" ? parseFloat(body.expense) : null;
@@ -108,7 +140,11 @@ export async function PATCH(
       data: updateData,
     });
 
-    return NextResponse.json(client);
+    // The rollup already wrote the authoritative figure; make sure the
+    // response carries it rather than the pre-update value.
+    return NextResponse.json(
+      rolledMonthly !== null ? { ...client, monthlyAmount: rolledMonthly } : client
+    );
   } catch (error) {
     console.error("Error updating client:", error);
     return NextResponse.json(

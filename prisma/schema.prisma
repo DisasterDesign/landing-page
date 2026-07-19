@@ -401,10 +401,45 @@ model Client {
   clientNotes   ClientNote[]
   expenses      Expense[]
   jobs          ClientJob[]
+  products      ClientProduct[]
 
   @@index([number])
   @@index([email])
   @@index([phone])
+}
+
+// A billable thing we run for a client: a website, a store, an admin system.
+// Client answers "who pays"; ClientProduct answers "for what". One client can
+// hold several (יוני runs a burger site, a shawarma site and an admin system),
+// which is why the recurring money lives here and NOT on Client — Client.
+// monthlyAmount is now a denormalised mirror of SUM(products.monthlyAmount)
+// kept in sync so legacy readers and the Cardcom webhook keep working.
+model ClientProduct {
+  id            String    @id @default(cuid())
+  clientId      String
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name          String
+  websiteUrl    String?
+  // Gross recurring for THIS product. Null = agreed but not billing yet
+  // (e.g. a system that is built but the client has not started paying for).
+  monthlyAmount Float?
+  // Strategy lane per PRODUCT, not per client — the bet/floor ratio is
+  // meaningless at client level once one client runs both a store and a
+  // brochure site. "bet" = e-commerce, "floor" = landing/brochure.
+  lane          String?
+  status        String    @default("")
+  startDate     DateTime?
+  paymentDate   DateTime?
+  // Optional link to the signed agreement that covers this product. Nullable
+  // because 15 of 27 live clients predate the agreement flow entirely.
+  agreementId   String?
+  notes         String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([archivedAt])
 }
 
 enum JobStatus {

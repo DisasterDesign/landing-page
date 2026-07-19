@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
@@ -8,6 +8,17 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { parseUrlPaste, type ParsedRow } from "@/lib/import-urls";
 import { confirmDanger } from "@/lib/confirm";
 import { tapMedium } from "@/lib/haptic";
+
+interface ClientProduct {
+  id: string;
+  name: string;
+  websiteUrl: string | null;
+  monthlyAmount: number | null;
+  lane: string | null;
+  status: string;
+  startDate: string | null;
+  paymentDate: string | null;
+}
 
 interface Client {
   id: string;
@@ -17,7 +28,7 @@ interface Client {
   notes: string | null;
   partner: string;
   amount: number | null;        // cumulative total received
-  monthlyAmount: number | null; // true recurring monthly (gross)
+  monthlyAmount: number | null; // rollup of the client's active products
   vatExempt: boolean;
   expense: number | null;
   cardcomFee: number | null;
@@ -25,7 +36,12 @@ interface Client {
   source: string | null;
   startDate: string | null;
   paymentDate: string | null;
+  products: ClientProduct[];
 }
+
+type ProductField = "name" | "websiteUrl" | "monthlyAmount" | "lane";
+
+const LANE_LABEL: Record<string, string> = { bet: "חנות", floor: "תדמית" };
 
 const SOURCE_LABEL: Record<string, string> = {
   agreement_signed: "מהסכם חתום",
@@ -91,6 +107,13 @@ export default function ClientsPage() {
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
+
+  // Multi-product clients: which parent rows are expanded, and which product
+  // cell is being edited (kept separate from the client-level editing state so
+  // a product edit can never write to the client row by mistake).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editingProduct, setEditingProduct] = useState<{ id: string; field: ProductField } | null>(null);
+  const [productValue, setProductValue] = useState("");
 
   // URL bulk import
   const [importOpen, setImportOpen] = useState(false);
@@ -259,6 +282,132 @@ export default function ClientsPage() {
       toast.success("נמחק");
     } catch {
       toast.error("שגיאה במחיקה");
+      fetchClients();
+    }
+  };
+
+  const toggleExpanded = (clientId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  };
+
+  const startProductEdit = (product: ClientProduct, field: ProductField) => {
+    const raw = product[field];
+    setProductValue(raw != null ? String(raw) : "");
+    setEditingProduct({ id: product.id, field });
+  };
+
+  // Every product write comes back with the client's recalculated rollup, so
+  // the parent row and the footer totals stay honest without a refetch.
+  const applyRollup = (clientId: string, monthlyAmount: number, products?: ClientProduct[]) => {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId ? { ...c, monthlyAmount, products: products ?? c.products } : c
+      )
+    );
+  };
+
+  const saveProductCell = async (clientId: string, product: ClientProduct) => {
+    if (!editingProduct) return;
+    const { field } = editingProduct;
+    const oldValue = product[field] != null ? String(product[field]) : "";
+    setEditingProduct(null);
+    if (productValue === oldValue) return;
+
+    let value: unknown = productValue;
+    if (field === "monthlyAmount") {
+      value = productValue === "" ? null : parseFloat(productValue);
+      if (productValue !== "" && isNaN(value as number)) {
+        toast.error("ערך לא תקין");
+        return;
+      }
+    }
+    if (field === "name" && !String(productValue).trim()) {
+      toast.error("שם המוצר חובה");
+      return;
+    }
+
+    setSavingIds((prev) => new Set(prev).add(clientId));
+    try {
+      const res = await fetch(`/api/clients/${clientId}/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number };
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === clientId
+            ? {
+                ...c,
+                monthlyAmount: json.monthlyAmount,
+                products: c.products.map((p) => (p.id === product.id ? json.product : p)),
+              }
+            : c
+        )
+      );
+      toast.success("נשמר", { duration: 1500, style: { fontSize: "13px" } });
+    } catch {
+      toast.error("שגיאה בשמירה");
+      fetchClients();
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clientId);
+        return next;
+      });
+    }
+  };
+
+  const addProduct = async (client: Client) => {
+    try {
+      const res = await fetch(`/api/clients/${client.id}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "מוצר חדש" }),
+      });
+      if (!res.ok) throw new Error("Failed to create");
+      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number };
+      applyRollup(client.id, json.monthlyAmount, [...client.products, json.product]);
+      setExpanded((prev) => new Set(prev).add(client.id));
+      toast.success("מוצר נוסף");
+      setTimeout(() => startProductEdit(json.product, "name"), 100);
+    } catch {
+      toast.error("שגיאה בהוספת מוצר");
+    }
+  };
+
+  const deleteProduct = async (client: Client, product: ClientProduct) => {
+    if (client.products.length <= 1) {
+      toast.error("לא ניתן להסיר את המוצר האחרון של הלקוח");
+      return;
+    }
+    const ok = await confirmDanger({
+      title: "הסרת מוצר",
+      message: `"${product.name}" יוסר מהלקוח ${client.name}. הסכום החודשי שלו ירד מה-MRR.`,
+      confirmLabel: "הסר",
+      dangerous: true,
+    });
+    if (!ok) return;
+
+    tapMedium();
+    try {
+      const res = await fetch(`/api/clients/${client.id}/products/${product.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      const json = (await res.json()) as { monthlyAmount: number };
+      applyRollup(
+        client.id,
+        json.monthlyAmount,
+        client.products.filter((p) => p.id !== product.id)
+      );
+      toast.success("המוצר הוסר");
+    } catch {
+      toast.error("שגיאה בהסרה");
       fetchClients();
     }
   };
@@ -471,6 +620,84 @@ export default function ClientsPage() {
     );
   };
 
+  const renderProductCell = (client: Client, product: ClientProduct, field: ProductField) => {
+    const isEditing = editingProduct?.id === product.id && editingProduct?.field === field;
+
+    if (isEditing && field === "lane") {
+      return (
+        <select
+          ref={selectRef}
+          value={productValue}
+          onChange={(e) => setProductValue(e.target.value)}
+          onBlur={() => saveProductCell(client.id, product)}
+          className="w-full bg-gray-700 text-white text-xs px-2 py-1 rounded border border-cyan/50 outline-none"
+        >
+          <option value="">ריק</option>
+          <option value="bet">חנות</option>
+          <option value="floor">תדמית</option>
+        </select>
+      );
+    }
+
+    if (isEditing) {
+      return (
+        <input
+          ref={inputRef}
+          type={field === "monthlyAmount" ? "number" : "text"}
+          step="any"
+          value={productValue}
+          onChange={(e) => setProductValue(e.target.value)}
+          onBlur={() => saveProductCell(client.id, product)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveProductCell(client.id, product);
+            else if (e.key === "Escape") setEditingProduct(null);
+          }}
+          className="w-full bg-gray-700 text-white text-xs px-2 py-1 rounded border border-cyan/50 outline-none"
+        />
+      );
+    }
+
+    if (field === "websiteUrl") {
+      const url = product.websiteUrl;
+      return (
+        <div className="flex items-center gap-1.5 min-h-[28px]">
+          {url ? (
+            <a
+              href={url.startsWith("http") ? url : `https://${url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-cyan hover:underline text-xs flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-700/30"
+              title={url}
+            >
+              פתח
+            </a>
+          ) : null}
+          <button
+            onClick={() => startProductEdit(product, "websiteUrl")}
+            className="cursor-pointer text-xs text-gray-500 hover:text-white px-1.5 py-1 rounded hover:bg-gray-700/50 transition-colors"
+            title="ערוך כתובת"
+          >
+            {url ? "✎" : "+ הוסף"}
+          </button>
+        </div>
+      );
+    }
+
+    let display: string;
+    if (field === "monthlyAmount") display = formatNum(product.monthlyAmount);
+    else if (field === "lane") display = product.lane ? LANE_LABEL[product.lane] ?? "" : "";
+    else display = product[field] ?? "";
+
+    return (
+      <div
+        onClick={() => startProductEdit(product, field)}
+        className="cursor-pointer px-2 py-1 min-h-[28px] text-xs hover:bg-gray-700/50 rounded transition-colors"
+      >
+        {display || <span className="text-gray-600">-</span>}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -513,7 +740,9 @@ export default function ClientsPage() {
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-12">#</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 min-w-[160px]">שם הלקוח</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-32">אתר</th>
-              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס</th>
+              {/* Client rows show status; product rows show the lane
+                  (חנות / תדמית) in the same column, hence the dual header. */}
+              <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">סטטוס / סוג</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28">חודשי (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">מע״מ 18% (₪)</th>
               <th className="text-right text-gray-400 font-medium px-3 py-2.5 w-28 bg-gray-700/40">עמלת CardCom 2% (₪)</th>
@@ -531,13 +760,19 @@ export default function ClientsPage() {
               const cardcomFee = hasMonthly ? computeCardcomFee(client) : null;
               const profit = hasMonthly ? computeProfit(client) : null;
               const isSaving = savingIds.has(client.id);
+              // A single-product client renders exactly as it always did. Only
+              // a client running several sites gets the expander, so the common
+              // case (25 of 27 today) stays a plain flat table.
+              const products = client.products ?? [];
+              const multi = products.length > 1;
+              const isOpen = expanded.has(client.id);
 
               return (
+                <Fragment key={client.id}>
                 <tr
-                  key={client.id}
                   className={`border-b border-gray-800 hover:bg-gray-800/50 group transition-colors ${
                     isSaving ? "opacity-70" : ""
-                  }`}
+                  } ${multi && isOpen ? "bg-gray-800/30" : ""}`}
                 >
                   <td className="px-3 py-1 text-gray-500 font-mono text-xs">
                     <Link
@@ -550,6 +785,28 @@ export default function ClientsPage() {
                   </td>
                   <td className="px-1 py-0.5">
                     <div className="flex items-center gap-1">
+                      {multi ? (
+                        <button
+                          onClick={() => toggleExpanded(client.id)}
+                          className="shrink-0 flex items-center gap-1 text-gray-400 hover:text-cyan p-1 rounded hover:bg-gray-700/50"
+                          title={isOpen ? "כווץ מוצרים" : "הצג מוצרים"}
+                          aria-expanded={isOpen}
+                          aria-label={`${isOpen ? "כווץ" : "הצג"} את ${products.length} המוצרים של ${client.name}`}
+                        >
+                          <svg
+                            className={`w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                          </svg>
+                          <span className="text-[10px] font-mono bg-cyan/15 text-cyan px-1.5 py-0.5 rounded">
+                            {products.length}
+                          </span>
+                        </button>
+                      ) : null}
                       <div className="flex-1 min-w-0">{renderCell(client, "name")}</div>
                       <Link
                         href={`/admin/clients/${client.id}`}
@@ -570,9 +827,31 @@ export default function ClientsPage() {
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-1 py-0.5">{renderCell(client, "websiteUrl")}</td>
+                  <td className="px-1 py-0.5">
+                    {multi ? (
+                      <button
+                        onClick={() => toggleExpanded(client.id)}
+                        className="text-xs text-gray-500 hover:text-cyan px-2 py-1.5 rounded hover:bg-gray-700/50"
+                      >
+                        {products.length} אתרים
+                      </button>
+                    ) : (
+                      renderCell(client, "websiteUrl")
+                    )}
+                  </td>
                   <td className="px-1 py-0.5">{renderCell(client, "status")}</td>
-                  <td className="px-1 py-0.5 font-mono">{renderCell(client, "monthlyAmount")}</td>
+                  {/* With several products the monthly figure is a rollup, so
+                      it is read-only here — editing happens on the product row
+                      that actually owns the money. */}
+                  <td className="px-1 py-0.5 font-mono">
+                    {multi ? (
+                      <div className="px-2 py-1.5 text-white" title="סכום כל המוצרים">
+                        {formatNum(client.monthlyAmount)}
+                      </div>
+                    ) : (
+                      renderCell(client, "monthlyAmount")
+                    )}
+                  </td>
                   <td className="px-3 py-1.5 font-mono text-gray-300 bg-gray-700/20">
                     {vat != null ? formatNum(vat) : <span className="text-gray-600">-</span>}
                   </td>
@@ -596,18 +875,69 @@ export default function ClientsPage() {
                   <td className="px-1 py-0.5">{renderCell(client, "startDate")}</td>
                   <td className="px-1 py-0.5">{renderCell(client, "paymentDate")}</td>
                   <td className="px-1 py-0.5 sticky left-0 bg-gray-950 group-hover:bg-gray-800/50 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
-                    <button
-                      onClick={() => deleteClient(client.id)}
-                      className="text-gray-500 hover:text-red-400 active:text-red-400 transition-colors p-2 -m-1"
-                      title="מחק"
-                      aria-label={`מחק את ${client.name || "לקוח"}`}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => addProduct(client)}
+                        className="text-gray-500 hover:text-cyan active:text-cyan transition-colors p-2 -m-1"
+                        title="הוסף מוצר"
+                        aria-label={`הוסף מוצר ל${client.name || "לקוח"}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => deleteClient(client.id)}
+                        className="text-gray-500 hover:text-red-400 active:text-red-400 transition-colors p-2 -m-1"
+                        title="מחק"
+                        aria-label={`מחק את ${client.name || "לקוח"}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
+
+                {multi && isOpen
+                  ? products.map((product) => (
+                      <tr key={product.id} className="border-b border-gray-800/60 bg-gray-900/40">
+                        <td className="px-3 py-1"></td>
+                        <td className="px-1 py-0.5">
+                          <div className="flex items-center gap-1.5 pr-6">
+                            <span className="text-gray-600 text-xs shrink-0">└</span>
+                            <div className="flex-1 min-w-0">
+                              {renderProductCell(client, product, "name")}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-1 py-0.5">{renderProductCell(client, product, "websiteUrl")}</td>
+                        {/* The lane (חנות / תדמית) lives here rather than in a
+                            column of its own: the status column is a client
+                            concept and products do not carry one. */}
+                        <td className="px-1 py-0.5">{renderProductCell(client, product, "lane")}</td>
+                        <td className="px-1 py-0.5 font-mono">
+                          {renderProductCell(client, product, "monthlyAmount")}
+                        </td>
+                        <td className="px-3 py-1 bg-gray-700/10" colSpan={3}></td>
+                        <td className="px-3 py-1" colSpan={3}></td>
+                        <td className="px-1 py-0.5 sticky left-0 bg-gray-900/40 z-10 border-l border-gray-800 md:static md:border-l-0 md:bg-transparent">
+                          <button
+                            onClick={() => deleteProduct(client, product)}
+                            className="text-gray-600 hover:text-red-400 transition-colors p-2 -m-1"
+                            title="הסר מוצר"
+                            aria-label={`הסר את ${product.name}`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  : null}
+                </Fragment>
               );
             })}
           </tbody>
