@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
@@ -73,8 +73,26 @@ export default function DebtorsPage() {
   const [terminalDebtors, setTerminalDebtors] = useState<TerminalDebtor[]>([]);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const autoRefreshed = useRef(false);
 
-  const fetchData = async () => {
+  const refreshFromCardcom = useCallback(async (silent = false) => {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/finance/debtors/refresh", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setTerminalDebtors(json.terminalDebtors ?? []);
+      setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+      if (!silent) toast.success("עודכן מול קארדקום");
+    } catch {
+      if (!silent) toast.error("שגיאה ברענון מול קארדקום");
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/finance/debtors");
       if (!res.ok) throw new Error();
@@ -83,16 +101,25 @@ export default function DebtorsPage() {
       setInactiveOrders(json.inactiveOrders ?? []);
       setTerminalDebtors(json.terminalDebtors ?? []);
       setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+
+      // Self-updating: a snapshot older than an hour silently re-pulls from
+      // Cardcom on entry, so the screen shows the debt as it is NOW rather
+      // than as it was at the 05:30 cron. Once per mount — not per re-render.
+      const updated = json.snapshotUpdatedAt ? new Date(json.snapshotUpdatedAt).getTime() : 0;
+      if (!autoRefreshed.current && Date.now() - updated > 60 * 60 * 1000) {
+        autoRefreshed.current = true;
+        refreshFromCardcom(true);
+      }
     } catch {
       toast.error("שגיאה בטעינת דוח חייבים");
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshFromCardcom]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -109,11 +136,34 @@ export default function DebtorsPage() {
   return (
     <PullToRefresh onRefresh={fetchData}>
       <div dir="rtl" className="p-4 md:p-6 max-w-5xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">דוח חייבים</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            מסונכרן מול קארדקום פעם ביום (05:30) + עדכונים בזמן אמת מה-webhook.
-          </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-white">דוח חייבים</h1>
+            <p className="text-sm text-gray-400 mt-1">
+              מתעדכן אוטומטית: סנכרון יומי (05:30), רענון בכניסה למסך כשהנתונים
+              בני יותר משעה, ועדכוני webhook בזמן אמת.
+            </p>
+          </div>
+          <button
+            onClick={() => refreshFromCardcom()}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-700 hover:border-cyan text-gray-300 hover:text-cyan rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            <svg
+              className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {refreshing ? "מרענן מול קארדקום..." : "רענן מול קארדקום"}
+          </button>
         </div>
 
         {clean ? (
