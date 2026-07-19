@@ -79,6 +79,11 @@ export const createAgreementSchema = z.object({
   phone: z.string().min(9, "טלפון לא תקין"),
   email: z.string().email("אימייל לא תקין"),
   clientId: z.string().optional(),
+  // Product coverage — which of the linked client's products this agreement
+  // pays for. productId links an existing product; newProductName creates one
+  // (status ריק until its first payment). Both require clientId.
+  productId: z.string().optional(),
+  newProductName: z.string().trim().min(1).max(120).optional(),
   // Foreign clients: English contract/page + zero-rate VAT. Driven by one
   // "foreign client" toggle in the admin UI; stored as two fields.
   locale: agreementLocaleEnum.optional().default("he"),

@@ -81,6 +81,21 @@ export async function applyPaymentToProduct(
         ...(target.startDate ? {} : { startDate: paidAt }),
       },
     });
+  } else if (products.length === 0) {
+    // A client auto-created at signing is born with no products. Without this
+    // branch the rollup below would pin its monthly at ₪0 right after its
+    // first real payment — the product IS what just got paid for.
+    const client = await db.client.findUnique({ where: { id: clientId }, select: { name: true } });
+    await db.clientProduct.create({
+      data: {
+        clientId,
+        name: client?.name || "מנוי",
+        monthlyAmount: grossMonthly,
+        status: "בוצע",
+        startDate: paidAt,
+        agreementId,
+      },
+    });
   }
 
   await syncClientMonthly(clientId, db);

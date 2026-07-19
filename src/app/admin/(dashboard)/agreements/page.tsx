@@ -90,6 +90,13 @@ const TIER_PRICE: Record<Tier, number> = {
 
 type TierChoice = Tier | "CUSTOM";
 
+interface ProductLite {
+  id: string;
+  name: string;
+  monthlyAmount: number | null;
+  agreementId: string | null;
+}
+
 interface ClientLite {
   id: string;
   number: number;
@@ -98,6 +105,7 @@ interface ClientLite {
   email: string | null;
   phone: string | null;
   idNumber: string | null;
+  products?: ProductLite[];
 }
 
 export default function AgreementsPage() {
@@ -118,6 +126,9 @@ export default function AgreementsPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [clientId, setClientId] = useState<string>("");
+  // Product coverage: "" = none, "new" = create a product, else a product id.
+  const [productChoice, setProductChoice] = useState<string>("");
+  const [newProductName, setNewProductName] = useState("");
   // Foreign client: English contract + English Cardcom page + zero-rate VAT.
   const [isForeign, setIsForeign] = useState(false);
 
@@ -194,14 +205,25 @@ export default function AgreementsPage() {
     setPhone("");
     setEmail("");
     setClientId("");
+    setProductChoice("");
+    setNewProductName("");
     setIsForeign(false);
   };
 
   const onPickClient = (id: string) => {
     setClientId(id);
-    if (!id) return;
+    setNewProductName("");
+    if (!id) {
+      setProductChoice("");
+      return;
+    }
     const c = clientsList.find((x) => x.id === id);
     if (!c) return;
+    // Sensible default for the product link: a single-product client almost
+    // always means "this agreement re-papers that product"; several products
+    // almost always mean a NEW project is being sold. Both stay overridable.
+    const prods = c.products ?? [];
+    setProductChoice(prods.length === 1 ? prods[0].id : "new");
     // Auto-fill empty fields from selected client (don't overwrite typed input)
     if (!customerName.trim()) setCustomerName(c.name);
     if (!businessName.trim() && c.businessName) setBusinessName(c.businessName);
@@ -269,6 +291,11 @@ export default function AgreementsPage() {
         setCreating(false);
         return;
       }
+      if (clientId && productChoice === "new" && !newProductName.trim()) {
+        toast.error("תן שם למוצר החדש (או בחר מוצר קיים)");
+        setCreating(false);
+        return;
+      }
 
       const res = await fetch("/api/agreements", {
         method: "POST",
@@ -286,6 +313,12 @@ export default function AgreementsPage() {
           locale: isForeign ? "en" : "he",
           vatExempt: isForeign,
           ...(clientId ? { clientId } : {}),
+          ...(clientId && productChoice && productChoice !== "new"
+            ? { productId: productChoice }
+            : {}),
+          ...(clientId && productChoice === "new" && newProductName.trim()
+            ? { newProductName: newProductName.trim() }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -907,6 +940,39 @@ export default function AgreementsPage() {
               בחירה תמלא אוטומטית פרטים ריקים מהלקוח. אם תשאיר ריק, בעת חתימה הלקוח ייווצר/יקושר אוטומטית לפי האימייל/טלפון.
             </p>
           </div>
+
+          {clientId ? (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">שיוך למוצר</label>
+              <select
+                value={productChoice}
+                onChange={(e) => setProductChoice(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
+              >
+                <option value="new">➕ מוצר חדש</option>
+                {(clientsList.find((c) => c.id === clientId)?.products ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.monthlyAmount != null ? ` · ₪${p.monthlyAmount}` : ""}
+                    {p.agreementId ? " · כבר מקושר להסכם" : ""}
+                  </option>
+                ))}
+                <option value="">— ללא שיוך —</option>
+              </select>
+              {productChoice === "new" ? (
+                <input
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  placeholder="שם המוצר החדש (למשל: חנות, מערכת ניהול)"
+                  className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
+                />
+              ) : null}
+              <p className="text-[11px] text-gray-500 mt-1">
+                כשהתשלום הראשון ייקלט, המוצר המשויך יסומן &quot;בוצע&quot; אוטומטית, יקבל
+                חודש כניסה, וה-MRR יתעדכן. בלי שיוך — תצטרך לסמן ידנית.
+              </p>
+            </div>
+          ) : null}
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">שם מלא *</label>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
+import { withVat } from "@/lib/vat";
 import type { AgreementStatus, AgreementTier } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -62,6 +63,8 @@ export async function POST(request: NextRequest) {
       phone,
       email,
       clientId,
+      productId,
+      newProductName,
       locale,
       vatExempt,
     } = parsed.data;
@@ -85,6 +88,28 @@ export async function POST(request: NextRequest) {
       vatExempt,
     });
 
+    // Product coverage is meaningless without a client to hang it on.
+    if ((productId || newProductName) && !clientId) {
+      return NextResponse.json(
+        { error: "שיוך למוצר דורש קישור ללקוח קיים" },
+        { status: 400 }
+      );
+    }
+    // Validate the picked product BEFORE creating the agreement, so a bad pick
+    // doesn't leave an orphan agreement behind.
+    if (clientId && productId) {
+      const product = await prisma.clientProduct.findUnique({
+        where: { id: productId },
+        select: { clientId: true, archivedAt: true },
+      });
+      if (!product || product.clientId !== clientId || product.archivedAt) {
+        return NextResponse.json(
+          { error: "המוצר שנבחר אינו שייך ללקוח" },
+          { status: 400 }
+        );
+      }
+    }
+
     const agreement = await prisma.agreement.create({
       data: {
         tier: tier ?? null,
@@ -104,6 +129,30 @@ export async function POST(request: NextRequest) {
         ...(clientId ? { clientId } : {}),
       },
     });
+
+    // Wire the agreement to the product it pays for. This is the link the
+    // Cardcom webhook resolves by — with it in place, the first verified
+    // payment flips the product to "בוצע", stamps its entry month and
+    // re-rolls the client's MRR without anyone touching the admin.
+    if (clientId && productId) {
+      await prisma.clientProduct.update({
+        where: { id: productId },
+        data: { agreementId: agreement.id },
+      });
+    } else if (clientId && newProductName) {
+      await prisma.clientProduct.create({
+        data: {
+          clientId,
+          name: newProductName,
+          // Reference figure only — status stays ריק (not counted in MRR)
+          // until the first payment verifies, matching the strike-through
+          // presentation in the clients table.
+          monthlyAmount: vatExempt ? monthlyPrice : withVat(monthlyPrice),
+          status: "",
+          agreementId: agreement.id,
+        },
+      });
+    }
 
     return NextResponse.json(agreement, { status: 201 });
   } catch (error) {
