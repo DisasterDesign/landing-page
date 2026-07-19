@@ -750,3 +750,13 @@ model FacebookIntegration {
 
   @@index([userId])
 }
+
+// Small generic key→JSON store. First use: the Cardcom terminal-wide debtors
+// snapshot the reconcile cron diffs between runs (alert on new/grown debt
+// only, not on every retry attempt — collection retries run several times a
+// week and would flood the notifications).
+model KeyValue {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

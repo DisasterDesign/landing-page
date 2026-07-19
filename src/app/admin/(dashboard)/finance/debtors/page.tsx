@@ -25,6 +25,16 @@ interface ProblemCharge {
   };
 }
 
+interface TerminalDebtor {
+  name: string;
+  idNumber: string | null;
+  amount: number;
+  attempts: number;
+  lastAttempt: string;
+  responseCode: number;
+  reason: string;
+}
+
 interface InactiveOrder {
   id: string;
   customerName: string;
@@ -60,6 +70,8 @@ const fmtNum = (n: number) =>
 export default function DebtorsPage() {
   const [problemCharges, setProblemCharges] = useState<ProblemCharge[]>([]);
   const [inactiveOrders, setInactiveOrders] = useState<InactiveOrder[]>([]);
+  const [terminalDebtors, setTerminalDebtors] = useState<TerminalDebtor[]>([]);
+  const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -69,6 +81,8 @@ export default function DebtorsPage() {
       const json = await res.json();
       setProblemCharges(json.problemCharges ?? []);
       setInactiveOrders(json.inactiveOrders ?? []);
+      setTerminalDebtors(json.terminalDebtors ?? []);
+      setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
     } catch {
       toast.error("שגיאה בטעינת דוח חייבים");
     } finally {
@@ -88,7 +102,9 @@ export default function DebtorsPage() {
     );
   }
 
-  const clean = problemCharges.length === 0 && inactiveOrders.length === 0;
+  const clean =
+    problemCharges.length === 0 && inactiveOrders.length === 0 && terminalDebtors.length === 0;
+  const totalDebt = terminalDebtors.reduce((s, d) => s + d.amount, 0);
 
   return (
     <PullToRefresh onRefresh={fetchData}>
@@ -109,6 +125,50 @@ export default function DebtorsPage() {
             </p>
           </div>
         ) : null}
+
+        {terminalDebtors.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-bold text-white mb-1">
+              חובות בגבייה אוטומטית{" "}
+              <span className="text-sm font-normal text-gray-400">
+                ({terminalDebtors.length} חייבים · ₪{fmtNum(totalDebt)})
+              </span>
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">
+              סריקה רוחבית של כל הטרמינל — כולל הוראות קבע שנוצרו ידנית בדשבורד קארדקום.
+              {snapshotUpdatedAt ? ` עודכן ${new Date(snapshotUpdatedAt).toLocaleString("he-IL")}.` : ""}
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-gray-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-800 border-b border-gray-700 text-right text-gray-400">
+                    <th className="px-3 py-2.5 font-medium">שם בכרטיס</th>
+                    <th className="px-3 py-2.5 font-medium">חוב מצטבר (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">ניסיונות (45 יום)</th>
+                    <th className="px-3 py-2.5 font-medium">ניסיון אחרון</th>
+                    <th className="px-3 py-2.5 font-medium">סיבת הדחייה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {terminalDebtors.map((d) => (
+                    <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800 hover:bg-gray-800/50">
+                      <td className="px-3 py-2 text-white">
+                        {d.name}
+                        {d.idNumber ? <span className="text-gray-500 text-xs mr-2">({d.idNumber})</span> : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-red-400 font-bold">{fmtNum(d.amount)}</td>
+                      <td className="px-3 py-2 font-mono text-gray-300">{d.attempts}</td>
+                      <td className="px-3 py-2 text-gray-300">{fmtDate(d.lastAttempt)}</td>
+                      <td className="px-3 py-2 text-gray-400 text-xs max-w-[280px]">
+                        {d.reason || `קוד ${d.responseCode}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {inactiveOrders.length > 0 && (
           <section className="mb-8">

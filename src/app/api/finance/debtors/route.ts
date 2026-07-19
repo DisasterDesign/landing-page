@@ -15,7 +15,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [problemCharges, inactiveOrders] = await Promise.all([
+    const [problemCharges, inactiveOrders, snapshotRow] = await Promise.all([
       prisma.agreementCharge.findMany({
         where: {
           OR: [
@@ -63,9 +63,23 @@ export async function GET() {
         },
         orderBy: { updatedAt: "desc" },
       }),
+      // Terminal-wide debtors snapshot, refreshed by the daily reconcile.
+      // Covers recurring orders created manually in the Cardcom dashboard,
+      // which no agreement (and therefore no charge row) knows about.
+      prisma.keyValue.findUnique({ where: { key: "cardcom_debtors_snapshot" } }),
     ]);
 
-    return NextResponse.json({ problemCharges, inactiveOrders });
+    const snap = (snapshotRow?.value as Record<string, unknown> | null) ?? {};
+    const terminalDebtors = Object.values(snap).sort(
+      (a, b) => ((b as { amount: number }).amount ?? 0) - ((a as { amount: number }).amount ?? 0)
+    );
+
+    return NextResponse.json({
+      problemCharges,
+      inactiveOrders,
+      terminalDebtors,
+      snapshotUpdatedAt: snapshotRow?.updatedAt ?? null,
+    });
   } catch (error) {
     console.error("Error fetching debtors:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

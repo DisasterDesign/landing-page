@@ -645,3 +645,56 @@ export async function getRecurringPaymentState(accountId: number): Promise<Recur
   }
   return res.UpdateList ?? [];
 }
+
+/** A failed transaction from the terminal-wide sweep (ListTransactions). */
+export interface FailedTransaction {
+  TranzactionId: number;
+  Amount: number;
+  CreateDate: string;
+  CardOwnerName?: string;
+  CardOwnerIdentityNumber?: string;
+  ResponseCode: number;
+  Description?: string;
+  IssuerAuthCodeDescription?: string;
+  DealType?: string;
+  Last4CardDigitsString?: string;
+}
+
+/**
+ * Terminal-wide failed transactions — catches debt on recurring orders that
+ * were created MANUALLY in the Cardcom dashboard and are therefore invisible
+ * to the per-account reconcile (no agreement stores their AccountId). This is
+ * how פיקס טיקטס' three months of debt existed while our books showed quiet.
+ * Regular POST endpoint, unlike the GET-with-body recurring reads.
+ */
+export async function listFailedTransactions(input: {
+  fromDate: Date;
+  toDate: Date;
+  page?: number;
+}): Promise<FailedTransaction[]> {
+  const cfg = getCardcomConfig();
+  if (!cfg) throw new CardcomError("Cardcom credentials not configured");
+  const res = await fetch(`${CARDCOM_BASE}/Transactions/ListTransactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ApiName: cfg.apiName,
+      ApiPassword: cfg.apiPassword,
+      FromDate: formatDateCompact(input.fromDate),
+      ToDate: formatDateCompact(input.toDate),
+      TranStatus: "Failure",
+      Page: input.page ?? 1,
+      Page_size: 100,
+    }),
+  });
+  if (!res.ok) throw new CardcomError(`ListTransactions HTTP ${res.status}`);
+  const json = (await res.json()) as {
+    ResponseCode: number;
+    Description?: string;
+    Tranzactions?: FailedTransaction[];
+  };
+  if (json.ResponseCode !== 0) {
+    throw new CardcomError(`ListTransactions failed: ${json.ResponseCode} ${json.Description ?? ""}`);
+  }
+  return json.Tranzactions ?? [];
+}
