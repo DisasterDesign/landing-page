@@ -97,6 +97,18 @@ interface ProductLite {
   agreementId: string | null;
 }
 
+// A distinct contact identity under one paying client — each past agreement
+// carries the company/person it was signed with (מקורות pays for Aquatis,
+// PEONY LION and טיסר, each with its own signer and email).
+interface ContactProfile {
+  key: string;
+  customerName: string;
+  businessName: string | null;
+  idNumber: string | null;
+  phone: string;
+  email: string;
+}
+
 interface ClientLite {
   id: string;
   number: number;
@@ -129,6 +141,8 @@ export default function AgreementsPage() {
   // Product coverage: "" = none, "new" = create a product, else a product id.
   const [productChoice, setProductChoice] = useState<string>("");
   const [newProductName, setNewProductName] = useState("");
+  // Which contact identity fills the form ("" = manual / none picked yet).
+  const [contactKey, setContactKey] = useState<string>("");
   // Foreign client: English contract + English Cardcom page + zero-rate VAT.
   const [isForeign, setIsForeign] = useState(false);
 
@@ -207,12 +221,69 @@ export default function AgreementsPage() {
     setClientId("");
     setProductChoice("");
     setNewProductName("");
+    setContactKey("");
     setIsForeign(false);
+  };
+
+  // Every contact identity known for a client: one per distinct signer on its
+  // past agreements (newest first) plus the client card itself. This is where
+  // "which company/department is this agreement for" gets answered.
+  const contactProfilesFor = (id: string): ContactProfile[] => {
+    const profiles: ContactProfile[] = [];
+    const seen = new Set<string>();
+    const push = (p: Omit<ContactProfile, "key">) => {
+      if (!p.customerName && !p.email) return;
+      const key = [p.customerName, p.businessName ?? "", p.email]
+        .join("|")
+        .toLowerCase()
+        .trim();
+      if (seen.has(key)) return;
+      seen.add(key);
+      profiles.push({ ...p, key });
+    };
+    for (const a of agreements) {
+      if (a.client?.id !== id) continue;
+      push({
+        customerName: a.customerName,
+        businessName: a.businessName,
+        idNumber: a.idNumber,
+        phone: a.phone,
+        email: a.email,
+      });
+    }
+    const c = clientsList.find((x) => x.id === id);
+    // The client card is a fallback identity, not another signer — adding it
+    // when its email already appears above would just show the same person
+    // twice under two names (מקורות's card carries Aquatis's email).
+    const covered = new Set(profiles.map((x) => x.email.toLowerCase().trim()).filter(Boolean));
+    if (c && !(c.email && covered.has(c.email.toLowerCase().trim()))) {
+      push({
+        customerName: c.name,
+        businessName: c.businessName,
+        idNumber: c.idNumber,
+        phone: c.phone ?? "",
+        email: c.email ?? "",
+      });
+    }
+    return profiles;
+  };
+
+  const applyContactProfile = (id: string, key: string) => {
+    setContactKey(key);
+    const p = contactProfilesFor(id).find((x) => x.key === key);
+    if (!p) return;
+    // An explicit pick overwrites — that is the point of picking.
+    setCustomerName(p.customerName);
+    setBusinessName(p.businessName ?? "");
+    setIdNumber(p.idNumber ?? "");
+    setPhone(p.phone);
+    setEmail(p.email);
   };
 
   const onPickClient = (id: string) => {
     setClientId(id);
     setNewProductName("");
+    setContactKey("");
     if (!id) {
       setProductChoice("");
       return;
@@ -224,7 +295,19 @@ export default function AgreementsPage() {
     // almost always mean a NEW project is being sold. Both stay overridable.
     const prods = c.products ?? [];
     setProductChoice(prods.length === 1 ? prods[0].id : "new");
-    // Auto-fill empty fields from selected client (don't overwrite typed input)
+
+    const profiles = contactProfilesFor(id);
+    if (profiles.length > 1) {
+      // Several known identities (different companies/departments under one
+      // paying client) — auto-filling any one of them would quietly put the
+      // wrong company on a contract. Leave the fields for an explicit pick.
+      return;
+    }
+    if (profiles.length === 1) {
+      applyContactProfile(id, profiles[0].key);
+      return;
+    }
+    // No known profiles — fall back to the client card, empty fields only.
     if (!customerName.trim()) setCustomerName(c.name);
     if (!businessName.trim() && c.businessName) setBusinessName(c.businessName);
     if (!idNumber.trim() && c.idNumber) setIdNumber(c.idNumber);
@@ -940,6 +1023,30 @@ export default function AgreementsPage() {
               בחירה תמלא אוטומטית פרטים ריקים מהלקוח. אם תשאיר ריק, בעת חתימה הלקוח ייווצר/יקושר אוטומטית לפי האימייל/טלפון.
             </p>
           </div>
+
+          {clientId && contactProfilesFor(clientId).length > 1 ? (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">איש קשר / חברה</label>
+              <select
+                value={contactKey}
+                onChange={(e) => applyContactProfile(clientId, e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
+              >
+                <option value="">— בחר את מי שההסכם נחתם מולו —</option>
+                {contactProfilesFor(clientId).map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.customerName}
+                    {p.businessName ? ` · ${p.businessName}` : ""}
+                    {p.email ? ` · ${p.email}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-500 mt-1">
+                ללקוח הזה יש כמה זהויות חתימה (מהסכמים קודמים). בחירה ממלאת שם,
+                עסק, ח.פ., טלפון ואימייל — אפשר לערוך אחרי המילוי.
+              </p>
+            </div>
+          ) : null}
 
           {clientId ? (
             <div>
