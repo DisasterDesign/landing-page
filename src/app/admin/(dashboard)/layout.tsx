@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import BackButton from "@/components/admin/BackButton";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import NotificationBell from "@/components/admin/NotificationBell";
 import { ConfirmSheetHost } from "@/components/ui/ConfirmSheet";
@@ -33,7 +34,8 @@ export default async function DashboardLayout({
         {/* Top bar */}
         <header className="sticky top-0 z-30 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 safe-pt">
           <div className="h-16 flex items-center justify-between px-6 safe-px">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <BackButton />
               <h1 className="text-lg font-bold text-white">ניהול</h1>
             </div>
             <div className="flex items-center gap-2">
