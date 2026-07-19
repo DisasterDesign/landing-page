@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { sweepTerminalFailures } from "@/lib/cardcom-debtors";
+import { sweepTerminalFailures, getDismissedDebtors, debtorKey } from "@/lib/cardcom-debtors";
 
 export const maxDuration = 60;
 
@@ -20,9 +20,13 @@ export async function POST() {
     const summary = { debtors: 0, newDebtorAlerts: 0 };
     const snapshot = await sweepTerminalFailures(new Date(), summary);
 
+    const dismissed = await getDismissedDebtors();
+    const all = Object.values(snapshot).sort((a, b) => b.amount - a.amount);
+
     return NextResponse.json({
       ...summary,
-      terminalDebtors: Object.values(snapshot).sort((a, b) => b.amount - a.amount),
+      terminalDebtors: all.filter((d) => !dismissed[debtorKey(d)]),
+      dismissedDebtors: all.filter((d) => dismissed[debtorKey(d)]),
       snapshotUpdatedAt: new Date().toISOString(),
     });
   } catch (error) {

@@ -71,6 +71,8 @@ export default function DebtorsPage() {
   const [problemCharges, setProblemCharges] = useState<ProblemCharge[]>([]);
   const [inactiveOrders, setInactiveOrders] = useState<InactiveOrder[]>([]);
   const [terminalDebtors, setTerminalDebtors] = useState<TerminalDebtor[]>([]);
+  const [dismissedDebtors, setDismissedDebtors] = useState<TerminalDebtor[]>([]);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -83,6 +85,7 @@ export default function DebtorsPage() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setTerminalDebtors(json.terminalDebtors ?? []);
+      setDismissedDebtors(json.dismissedDebtors ?? []);
       setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
       if (!silent) toast.success("עודכן מול קארדקום");
     } catch {
@@ -100,6 +103,7 @@ export default function DebtorsPage() {
       setProblemCharges(json.problemCharges ?? []);
       setInactiveOrders(json.inactiveOrders ?? []);
       setTerminalDebtors(json.terminalDebtors ?? []);
+      setDismissedDebtors(json.dismissedDebtors ?? []);
       setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
 
       // Self-updating: a snapshot older than an hour silently re-pulls from
@@ -120,6 +124,33 @@ export default function DebtorsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const setDebtorDismissed = async (d: TerminalDebtor, dismissed: boolean) => {
+    // Optimistic move between the two lists; the server call just persists.
+    if (dismissed) {
+      setTerminalDebtors((prev) => prev.filter((x) => x !== d));
+      setDismissedDebtors((prev) => [...prev, d]);
+    } else {
+      setDismissedDebtors((prev) => prev.filter((x) => x !== d));
+      setTerminalDebtors((prev) =>
+        [...prev, d].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
+      );
+    }
+    try {
+      const res = await fetch("/api/finance/debtors/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: d.idNumber || d.name, name: d.name, dismissed }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(dismissed ? "הוסתר — לא יתריע יותר" : "שוחזר לרשימה", {
+        duration: 2000,
+      });
+    } catch {
+      toast.error("שגיאה בשמירה");
+      fetchData();
+    }
+  };
 
   if (loading) {
     return (
@@ -197,11 +228,12 @@ export default function DebtorsPage() {
                     <th className="px-3 py-2.5 font-medium">ניסיונות (45 יום)</th>
                     <th className="px-3 py-2.5 font-medium">ניסיון אחרון</th>
                     <th className="px-3 py-2.5 font-medium">סיבת הדחייה</th>
+                    <th className="w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {terminalDebtors.map((d) => (
-                    <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800 hover:bg-gray-800/50 group">
                       <td className="px-3 py-2 text-white">
                         {d.name}
                         {d.idNumber ? <span className="text-gray-500 text-xs mr-2">({d.idNumber})</span> : null}
@@ -212,11 +244,60 @@ export default function DebtorsPage() {
                       <td className="px-3 py-2 text-gray-400 text-xs max-w-[280px]">
                         {d.reason || `קוד ${d.responseCode}`}
                       </td>
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={() => setDebtorDismissed(d, true)}
+                          className="text-gray-600 hover:text-gray-300 p-1.5 rounded hover:bg-gray-700/50 transition-colors"
+                          title="לא רלוונטי — הסתר והפסק להתריע"
+                          aria-label={`הסתר את ${d.name}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </section>
+        )}
+
+        {dismissedDebtors.length > 0 && (
+          <section className="mb-8">
+            <button
+              onClick={() => setShowDismissed((v) => !v)}
+              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              {showDismissed ? "▾" : "◂"} מוסתרים — סומנו כלא רלוונטיים ({dismissedDebtors.length})
+            </button>
+            {showDismissed ? (
+              <div className="mt-2 overflow-x-auto rounded-lg border border-gray-800">
+                <table className="w-full text-sm opacity-60">
+                  <tbody>
+                    {dismissedDebtors.map((d) => (
+                      <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800/60">
+                        <td className="px-3 py-2 text-gray-400">
+                          {d.name}
+                          {d.idNumber ? <span className="text-gray-600 text-xs mr-2">({d.idNumber})</span> : null}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-gray-500">{fmtNum(d.amount)}</td>
+                        <td className="px-3 py-2 text-gray-600 text-xs">{fmtDate(d.lastAttempt)}</td>
+                        <td className="px-2 py-2 text-left">
+                          <button
+                            onClick={() => setDebtorDismissed(d, false)}
+                            className="text-xs text-gray-500 hover:text-cyan px-2 py-1 rounded hover:bg-gray-800 transition-colors"
+                          >
+                            שחזר
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
         )}
 

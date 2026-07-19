@@ -22,6 +22,21 @@ export interface DebtorSnapshotEntry {
 }
 
 export const DEBTORS_SNAPSHOT_KEY = "cardcom_debtors_snapshot";
+// key → { name, dismissedAt }. A dismissed debtor stays in the snapshot (it
+// is still the truth at Cardcom) but is hidden from the main list and never
+// alerts — for debt rows Elad has ruled irrelevant (old test cards, customers
+// billed through a different card).
+export const DEBTORS_DISMISSED_KEY = "cardcom_debtors_dismissed";
+
+export async function getDismissedDebtors(): Promise<Record<string, { name: string; dismissedAt: string }>> {
+  const row = await prisma.keyValue.findUnique({ where: { key: DEBTORS_DISMISSED_KEY } });
+  return (row?.value as Record<string, { name: string; dismissedAt: string }> | null) ?? {};
+}
+
+/** The snapshot key of a debtor entry — mirrors the sweep's grouping key. */
+export function debtorKey(d: { idNumber: string | null; name: string }): string {
+  return d.idNumber || d.name;
+}
 
 export async function sweepTerminalFailures(
   now: Date,
@@ -59,8 +74,10 @@ export async function sweepTerminalFailures(
 
   const prevRow = await prisma.keyValue.findUnique({ where: { key: DEBTORS_SNAPSHOT_KEY } });
   const prev = (prevRow?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
+  const dismissed = await getDismissedDebtors();
 
   for (const [key, d] of byDebtor) {
+    if (dismissed[key]) continue; // ruled irrelevant — never alert
     const before = prev[key];
     // Alert on appearance and on growth — silence on the daily retries.
     if (!before) {
