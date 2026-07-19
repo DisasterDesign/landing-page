@@ -42,7 +42,8 @@ export default function Contact() {
       if (!res.ok) throw new Error("שגיאה בשליחת הטופס");
 
       // Real conversion — tell Meta/GA4 a lead came in so ads optimize for it.
-      trackLead("contact_form");
+      // Carries the chosen service so GA4 shows which offering converts.
+      trackLead("contact_form", formData.service);
       toast.success("ההודעה נשלחה בהצלחה! נחזור אליך בהקדם.");
       setFormData({ name: "", email: "", phone: "", message: "", service: "" });
     } catch {
@@ -145,7 +146,7 @@ export default function Contact() {
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => trackContact("whatsapp")}
+                onClick={() => trackContact("whatsapp", "contact_section")}
                 className="chromatic-hover flex items-center gap-2 text-black transition-colors font-bold"
                 data-text="דברו איתנו בוואטסאפ"
                 data-cursor="pointer"

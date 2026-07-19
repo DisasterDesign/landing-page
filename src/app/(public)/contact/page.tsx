@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Contact from "@/components/sections/Contact";
 import { SITE_NAME, SITE_URL, WHATSAPP_NUMBER, ADDRESS_FULL } from "@/lib/constants";
 import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
+import TrackedContactLink from "@/components/shared/TrackedContactLink";
 
 export const metadata: Metadata = {
   title: "צור קשר",
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
 const CONTACT_INFO = [
   {
     title: "אימייל",
+    method: "email",
     value: "hello@fuzionwebz.com",
     href: "mailto:hello@fuzionwebz.com",
     icon: (
@@ -32,6 +34,7 @@ const CONTACT_INFO = [
   },
   {
     title: "טלפון",
+    method: "phone",
     value: "054-713-6666",
     href: "tel:+972547136666",
     icon: (
@@ -42,6 +45,7 @@ const CONTACT_INFO = [
   },
   {
     title: "וואטסאפ",
+    method: "whatsapp",
     value: "054-713-6666",
     href: `https://wa.me/${WHATSAPP_NUMBER}`,
     icon: (
@@ -83,7 +87,12 @@ export default function ContactPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {CONTACT_INFO.map((info, i) => (
               <ScrollReveal key={info.title} delay={i * 0.1}>
-                <a href={info.href} target={info.title === "וואטסאפ" ? "_blank" : undefined} rel="noopener noreferrer">
+                <TrackedContactLink
+                  href={info.href}
+                  method={info.method}
+                  location="contact_page"
+                  external={info.title === "וואטסאפ"}
+                >
                   <Card glowColor={i % 2 === 0 ? "pink" : "cyan"} className="text-center py-8">
                     <div className="text-cyan mb-4 flex justify-center">
                       {info.icon}
@@ -93,7 +102,7 @@ export default function ContactPage() {
                     </h3>
                     <p className="text-gray-700">{info.value}</p>
                   </Card>
-                </a>
+                </TrackedContactLink>
               </ScrollReveal>
             ))}
           </div>

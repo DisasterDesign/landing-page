@@ -5,7 +5,9 @@ import { TEAM_MEMBERS, SITE_NAME, SITE_URL } from "@/lib/constants";
 import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
-  title: "אודות — הצוות מאחורי Fuzion Webz",
+  // No brand name here — the root layout's title template already appends
+  // "| Fuzion Webz", and spelling it out again rendered the name twice.
+  title: "אודות — הצוות מאחורי הסטודיו",
   description:
     "הכירו את הצוות של Fuzion Webz — סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים עם מעל עשור ניסיון בעולם הדיגיטל.",
   alternates: {
