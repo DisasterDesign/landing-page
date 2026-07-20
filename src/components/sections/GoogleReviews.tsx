@@ -57,10 +57,12 @@ export default function GoogleReviews() {
   const shown = (data.reviews ?? []).slice(0, 3);
 
   return (
-    <section className="relative bg-white py-24 px-6">
+    // Hugs the client-logos strip above (both are social proof, so they read
+    // as one block) with a normal gap below — avoids the doubled py-32 band.
+    <section className="relative bg-white pt-4 pb-20 md:pt-6 md:pb-28 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <div className="text-center mb-12">
+          <div className="text-center mb-10">
             <h2 className="text-4xl md:text-6xl font-extrabold mb-4">
               לקוחות <span className="text-pink">ממליצים</span>
             </h2>

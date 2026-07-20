@@ -86,14 +86,19 @@ interface PlaceDetails {
 }
 
 export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) return null;
-
+  // Cache-first, key-second. A warm cache is served BEFORE we look at the API
+  // key, so the section keeps rendering even if the key is momentarily absent
+  // (env var not yet propagated, a bad rotation). The key is only needed to
+  // REFRESH once the cache goes stale.
   const cached = await prisma.keyValue.findUnique({ where: { key: REVIEWS_CACHE_KEY } });
   if (cached) {
     const data = cached.value as unknown as GoogleReviewsData;
     if (Date.now() - new Date(data.fetchedAt).getTime() < CACHE_TTL_MS) return data;
   }
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  // No key to refresh with — serve stale cache if we have any, else nothing.
+  if (!apiKey) return staleOrNull(cached);
 
   try {
     const placeId = await resolvePlaceId(apiKey);
