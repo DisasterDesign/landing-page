@@ -289,7 +289,7 @@ export default function Portfolio() {
   const allowVideo = !reduced;
 
   return (
-    <section id="portfolio" className="relative bg-white py-24 md:py-32 px-4 md:px-6">
+    <section id="portfolio" className="relative bg-white py-14 md:py-20 px-4 md:px-6">
       <div className="max-w-[1400px] mx-auto">
         <Reveal reduced={reduced}>
           <div className="text-center mb-14 md:mb-20">

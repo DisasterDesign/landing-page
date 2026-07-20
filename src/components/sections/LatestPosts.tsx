@@ -39,7 +39,7 @@ export default async function LatestPosts() {
   if (posts.length === 0) return null;
 
   return (
-    <section className="bg-white py-20 md:py-28 px-6" dir="rtl">
+    <section className="bg-white py-14 md:py-20 px-6" dir="rtl">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-end justify-between gap-4 flex-wrap mb-10">
           <h2 className="text-[clamp(1.8rem,5vw,3rem)] font-extrabold text-black">

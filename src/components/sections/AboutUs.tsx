@@ -131,7 +131,7 @@ function ValuesStepper() {
 
 export default function AboutUs() {
   return (
-    <section id="about" className="relative bg-white py-24 md:py-32 px-6">
+    <section id="about" className="relative bg-white py-14 md:py-20 px-6">
       <div className="max-w-6xl mx-auto">
         <ValuesStepper />
       </div>

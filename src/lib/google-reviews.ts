@@ -156,3 +156,38 @@ export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
 function staleOrNull(cached: { value: unknown } | null): GoogleReviewsData | null {
   return cached ? (cached.value as unknown as GoogleReviewsData) : null;
 }
+
+// ---------------------------------------------------------------------------
+// Admin-curated featured reviews.
+//
+// The Places API (New) does NOT return review TEXTS for this listing (a
+// service-area business with no pinned address) — only the aggregate rating
+// and count, verified live. So the review CARDS on the homepage come from a
+// small owner-curated list: real reviews from the Google listing, transcribed
+// and hand-picked by Elad. The rating/count stay live from Google; only the
+// quotes are manual. This is also editorially better than whatever five the
+// algorithm would surface.
+// ---------------------------------------------------------------------------
+
+const FEATURED_KEY = "homepage_featured_reviews";
+
+export interface FeaturedReview {
+  author: string;
+  rating: number;
+  text: string;
+  relativeTime: string;
+}
+
+export async function getFeaturedReviews(): Promise<FeaturedReview[]> {
+  const row = await prisma.keyValue.findUnique({ where: { key: FEATURED_KEY } });
+  const list = (row?.value as { reviews?: FeaturedReview[] } | null)?.reviews;
+  return Array.isArray(list) ? list : [];
+}
+
+export async function setFeaturedReviews(reviews: FeaturedReview[]): Promise<void> {
+  await prisma.keyValue.upsert({
+    where: { key: FEATURED_KEY },
+    create: { key: FEATURED_KEY, value: { reviews } as object },
+    update: { value: { reviews } as object },
+  });
+}

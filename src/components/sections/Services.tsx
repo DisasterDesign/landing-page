@@ -126,7 +126,7 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
 
 export default function Services() {
   return (
-    <section id="services" className="relative bg-white py-24 md:py-32 px-6">
+    <section id="services" className="relative bg-white py-14 md:py-20 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
           <h2 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-20" data-text="השירותים שלנו">

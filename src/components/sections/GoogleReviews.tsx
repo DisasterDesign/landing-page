@@ -59,7 +59,7 @@ export default function GoogleReviews() {
   return (
     // Hugs the client-logos strip above (both are social proof, so they read
     // as one block) with a normal gap below — avoids the doubled py-32 band.
-    <section className="relative bg-white pt-4 pb-20 md:pt-6 md:pb-28 px-6">
+    <section className="relative bg-white pt-2 pb-14 md:pt-4 md:pb-20 px-6">
       <div className="max-w-6xl mx-auto">
         <ScrollReveal>
           <div className="text-center mb-10">
