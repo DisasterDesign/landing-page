@@ -16,6 +16,10 @@ export function generateStaticParams() {
   return SERVICE_PAGES.map((p) => ({ slug: p.slug }));
 }
 
+// Re-render hourly so scheduled blog posts join the related list as they
+// publish, without waiting for the next deploy.
+export const revalidate = 3600;
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const page = getServicePage(slug);
@@ -37,11 +41,18 @@ export default async function ServicePage({ params }: Props) {
   if (!page) notFound();
 
   // Only published related posts — scheduled ones join automatically later.
-  const relatedPosts = await prisma.blogPost.findMany({
-    where: { slug: { in: page.relatedPostSlugs }, published: true },
-    select: { slug: true, title: true, coverImage: true },
-    take: 4,
-  });
+  // DB may be absent when this page prerenders in CI (same pattern as
+  // sitemap.ts) — the section just renders empty there.
+  let relatedPosts: { slug: string; title: string; coverImage: string | null }[] = [];
+  try {
+    relatedPosts = await prisma.blogPost.findMany({
+      where: { slug: { in: page.relatedPostSlugs }, published: true },
+      select: { slug: true, title: true, coverImage: true },
+      take: 4,
+    });
+  } catch {
+    // Build environment without DATABASE_URL — continue without related posts.
+  }
   // Preserve the curated order.
   relatedPosts.sort(
     (a, b) => page.relatedPostSlugs.indexOf(a.slug) - page.relatedPostSlugs.indexOf(b.slug)
