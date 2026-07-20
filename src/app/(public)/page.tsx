@@ -6,6 +6,7 @@ import Portfolio from "@/components/sections/Portfolio";
 import Pricing from "@/components/sections/Pricing";
 import Contact from "@/components/sections/Contact";
 import ClientLogos from "@/components/sections/ClientLogos";
+import GoogleReviews from "@/components/sections/GoogleReviews";
 import LatestPosts from "@/components/sections/LatestPosts";
 import Marquee from "@/components/animations/Marquee";
 import { FAQJsonLd } from "@/components/seo/JsonLd";
@@ -27,6 +28,7 @@ export default function Home() {
       <Services />
       <Marquee text="DESIGN • DEVELOP • DELIVER • REPEAT •" />
       <ClientLogos />
+      <GoogleReviews />
       <Portfolio />
       <Pricing />
       <LatestPosts />

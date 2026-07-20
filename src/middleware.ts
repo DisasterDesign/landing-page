@@ -52,6 +52,12 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow public Google-reviews endpoint (homepage social-proof section;
+  // server-side cached, no user data)
+  if (pathname === "/api/reviews") {
+    return NextResponse.next();
+  }
+
   // Allow public Meta webhook endpoint
   if (pathname.startsWith("/api/webhooks/facebook")) {
     return NextResponse.next();
