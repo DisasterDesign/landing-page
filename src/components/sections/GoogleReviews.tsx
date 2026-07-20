@@ -44,24 +44,40 @@ function Stars({ value, className = "w-5 h-5" }: { value: number; className?: st
  */
 export default function GoogleReviews() {
   const [data, setData] = useState<ReviewsPayload | null>(null);
-  const [index, setIndex] = useState(0);
+  const [page, setPage] = useState(0);
+  const [perView, setPerView] = useState(3); // 3 cards on desktop, 1 on mobile
 
   useEffect(() => {
-    fetch("/api/reviews")
+    // no-store so admin edits to the featured reviews appear immediately —
+    // the heavy Places call is already cached server-side in KeyValue, so this
+    // fetch is cheap and needn't be HTTP-cached.
+    fetch("/api/reviews", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => setData(json))
       .catch(() => setData(null));
   }, []);
 
-  const reviews = data?.reviews ?? [];
-
-  // Auto-advance the carousel every 5s (pauses implicitly on manual dot click
-  // by resetting the timer via `index` dependency).
   useEffect(() => {
-    if (reviews.length <= 1) return;
-    const t = setTimeout(() => setIndex((i) => (i + 1) % reviews.length), 5000);
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => setPerView(mq.matches ? 3 : 1);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const reviews = data?.reviews ?? [];
+  const pageCount = Math.max(1, Math.ceil(reviews.length / perView));
+  // Keep the page valid when perView flips (desktop↔mobile) or data loads.
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount - 1));
+  }, [pageCount]);
+
+  // Auto-advance a page every 6s when there is more than one page.
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const t = setTimeout(() => setPage((p) => (p + 1) % pageCount), 6000);
     return () => clearTimeout(t);
-  }, [index, reviews.length]);
+  }, [page, pageCount]);
 
   if (!data?.available || !data.rating || !data.count) return null;
 
@@ -97,24 +113,35 @@ export default function GoogleReviews() {
 
         {reviews.length > 0 && (
           <div className="mb-10">
-            {/* Carousel: one card in view, sliding. dir=ltr keeps the transform
-                math predictable; the centred card text stays legible either way. */}
-            <div className="overflow-hidden max-w-2xl mx-auto" dir="ltr">
+            {/* Carousel: perView cards per page (3 desktop / 1 mobile). The
+                last page's start index is clamped to (length - perView) so a
+                remainder page (e.g. 4 reviews over pages of 3) still shows a
+                FULL window of cards instead of one lonely card. dir=ltr keeps
+                the transform math predictable; card text stays centred. */}
+            <div className="overflow-hidden" dir="ltr">
               <div
                 className="flex transition-transform duration-500 ease-out"
-                style={{ transform: `translateX(-${index * 100}%)` }}
+                style={{
+                  transform: `translateX(-${
+                    Math.min(page * perView, Math.max(0, reviews.length - perView)) * (100 / perView)
+                  }%)`,
+                }}
               >
                 {reviews.map((r, i) => (
-                  <div key={`${r.author}-${i}`} className="w-full shrink-0 px-2">
-                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 md:p-8 text-center">
+                  <div
+                    key={`${r.author}-${i}`}
+                    className="shrink-0 px-2"
+                    style={{ flex: `0 0 ${100 / perView}%`, maxWidth: `${100 / perView}%` }}
+                  >
+                    <div className="h-full bg-gray-50 border border-gray-200 rounded-2xl p-6 md:p-7 text-center flex flex-col">
                       <div className="flex justify-center mb-3">
                         <Stars value={r.rating} className="w-5 h-5" />
                       </div>
-                      <p className="text-gray-800 text-base md:text-lg leading-relaxed whitespace-pre-wrap mb-5">
+                      <p className="text-gray-800 text-sm md:text-base leading-relaxed whitespace-pre-wrap mb-5 flex-1">
                         “{r.text}”
                       </p>
                       <div className="flex items-center justify-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-pink/10 text-pink flex items-center justify-center font-bold text-sm">
+                        <div className="w-9 h-9 rounded-full bg-pink/10 text-pink flex items-center justify-center font-bold text-sm shrink-0">
                           {r.author.slice(0, 1)}
                         </div>
                         <div className="text-right">
@@ -130,15 +157,15 @@ export default function GoogleReviews() {
               </div>
             </div>
 
-            {reviews.length > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-5">
-                {reviews.map((_, i) => (
+            {pageCount > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                {Array.from({ length: pageCount }).map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => setIndex(i)}
-                    aria-label={`ביקורת ${i + 1}`}
+                    onClick={() => setPage(i)}
+                    aria-label={`עמוד ${i + 1}`}
                     className={`h-2 rounded-full transition-all ${
-                      i === index ? "w-6 bg-pink" : "w-2 bg-gray-300 hover:bg-gray-400"
+                      i === page ? "w-6 bg-pink" : "w-2 bg-gray-300 hover:bg-gray-400"
                     }`}
                   />
                 ))}

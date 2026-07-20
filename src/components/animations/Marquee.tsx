@@ -38,7 +38,7 @@ export default function Marquee({
         .marquee-wrap {
           overflow: hidden;
           user-select: none;
-          padding: 1.5rem 0;
+          padding: 0.6rem 0;
         }
         .marquee-scroll {
           display: flex;

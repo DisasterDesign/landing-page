@@ -20,9 +20,11 @@ export async function GET() {
       data.reviews.length > 0
         ? data.reviews
         : featured.map((r) => ({ ...r, authorPhoto: null, publishTime: "" }));
+    // No shared HTTP cache — the expensive Places lookup is already cached in
+    // KeyValue (6h), and admin edits to featured reviews must show right away.
     return NextResponse.json(
       { available: true, ...data, reviews },
-      { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=86400" } }
+      { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     console.error("Error fetching reviews:", error);
