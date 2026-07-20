@@ -660,41 +660,77 @@ export interface FailedTransaction {
   Last4CardDigitsString?: string;
 }
 
+const PAGE_SIZE = 100;
+// Guard against an unbounded loop if Cardcom ever stops shrinking the last
+// page. 20 pages = 2000 transactions, far beyond any 45-day window here.
+const MAX_PAGES = 20;
+
 /**
- * Terminal-wide failed transactions — catches debt on recurring orders that
- * were created MANUALLY in the Cardcom dashboard and are therefore invisible
- * to the per-account reconcile (no agreement stores their AccountId). This is
- * how פיקס טיקטס' three months of debt existed while our books showed quiet.
- * Regular POST endpoint, unlike the GET-with-body recurring reads.
+ * Terminal-wide transactions of one status, all pages.
+ *
+ * Catches activity on recurring orders that were created MANUALLY in the
+ * Cardcom dashboard and are therefore invisible to the per-account reconcile
+ * (no agreement stores their AccountId). This is how פיקס טיקטס' three months
+ * of debt existed while our books showed quiet. Regular POST endpoint, unlike
+ * the GET-with-body recurring reads.
  */
-export async function listFailedTransactions(input: {
+export async function listTransactionsByStatus(input: {
+  status: "Failure" | "Success";
   fromDate: Date;
   toDate: Date;
-  page?: number;
 }): Promise<FailedTransaction[]> {
   const cfg = getCardcomConfig();
   if (!cfg) throw new CardcomError("Cardcom credentials not configured");
-  const res = await fetch(`${CARDCOM_BASE}/Transactions/ListTransactions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ApiName: cfg.apiName,
-      ApiPassword: cfg.apiPassword,
-      FromDate: formatDateCompact(input.fromDate),
-      ToDate: formatDateCompact(input.toDate),
-      TranStatus: "Failure",
-      Page: input.page ?? 1,
-      Page_size: 100,
-    }),
-  });
-  if (!res.ok) throw new CardcomError(`ListTransactions HTTP ${res.status}`);
-  const json = (await res.json()) as {
-    ResponseCode: number;
-    Description?: string;
-    Tranzactions?: FailedTransaction[];
-  };
-  if (json.ResponseCode !== 0) {
-    throw new CardcomError(`ListTransactions failed: ${json.ResponseCode} ${json.Description ?? ""}`);
+
+  const all: FailedTransaction[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const res = await fetch(`${CARDCOM_BASE}/Transactions/ListTransactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ApiName: cfg.apiName,
+        ApiPassword: cfg.apiPassword,
+        FromDate: formatDateCompact(input.fromDate),
+        ToDate: formatDateCompact(input.toDate),
+        TranStatus: input.status,
+        Page: page,
+        Page_size: PAGE_SIZE,
+      }),
+    });
+    if (!res.ok) throw new CardcomError(`ListTransactions HTTP ${res.status}`);
+    const json = (await res.json()) as {
+      ResponseCode: number;
+      Description?: string;
+      Tranzactions?: FailedTransaction[];
+    };
+    if (json.ResponseCode !== 0) {
+      throw new CardcomError(
+        `ListTransactions failed: ${json.ResponseCode} ${json.Description ?? ""}`
+      );
+    }
+    const rows = json.Tranzactions ?? [];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
   }
-  return json.Tranzactions ?? [];
+  return all;
+}
+
+/** Terminal-wide failed transactions — the debt side of the sweep. */
+export async function listFailedTransactions(input: {
+  fromDate: Date;
+  toDate: Date;
+}): Promise<FailedTransaction[]> {
+  return listTransactionsByStatus({ ...input, status: "Failure" });
+}
+
+/**
+ * Terminal-wide successful transactions — the settlement side. Without these
+ * the sweep can only ever ADD debtors: a debt that gets paid would sit on the
+ * report until its last failed attempt aged out of the window.
+ */
+export async function listSuccessfulTransactions(input: {
+  fromDate: Date;
+  toDate: Date;
+}): Promise<FailedTransaction[]> {
+  return listTransactionsByStatus({ ...input, status: "Success" });
 }

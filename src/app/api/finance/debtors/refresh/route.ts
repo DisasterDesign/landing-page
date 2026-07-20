@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { sweepTerminalFailures, getDismissedDebtors, debtorKey } from "@/lib/cardcom-debtors";
+import { sweepTerminalFailures, bucketDebtors } from "@/lib/cardcom-debtors";
 
 export const maxDuration = 60;
 
@@ -17,16 +17,13 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const summary = { debtors: 0, newDebtorAlerts: 0 };
+    const summary = { debtors: 0, newDebtorAlerts: 0, settled: 0 };
     const snapshot = await sweepTerminalFailures(new Date(), summary);
-
-    const dismissed = await getDismissedDebtors();
-    const all = Object.values(snapshot).sort((a, b) => b.amount - a.amount);
+    const buckets = await bucketDebtors(snapshot);
 
     return NextResponse.json({
       ...summary,
-      terminalDebtors: all.filter((d) => !dismissed[debtorKey(d)]),
-      dismissedDebtors: all.filter((d) => dismissed[debtorKey(d)]),
+      ...buckets,
       snapshotUpdatedAt: new Date().toISOString(),
     });
   } catch (error) {

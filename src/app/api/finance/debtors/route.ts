@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { getDismissedDebtors, debtorKey, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
+import { bucketDebtors, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
 
 /**
  * The debtors report: everything Cardcom says is not paying cleanly.
@@ -71,16 +71,12 @@ export async function GET() {
     ]);
 
     const snap = (snapshotRow?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
-    const dismissed = await getDismissedDebtors();
-    const all = Object.values(snap).sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
-    const terminalDebtors = all.filter((d) => !dismissed[debtorKey(d)]);
-    const dismissedDebtors = all.filter((d) => dismissed[debtorKey(d)]);
+    const buckets = await bucketDebtors(snap);
 
     return NextResponse.json({
       problemCharges,
       inactiveOrders,
-      terminalDebtors,
-      dismissedDebtors,
+      ...buckets,
       snapshotUpdatedAt: snapshotRow?.updatedAt ?? null,
     });
   } catch (error) {

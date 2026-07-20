@@ -33,6 +33,9 @@ interface TerminalDebtor {
   lastAttempt: string;
   responseCode: number;
   reason: string;
+  /** Set when a payment landed after the last failed attempt — debt closed. */
+  settledAt?: string;
+  settledAmount?: number;
 }
 
 interface InactiveOrder {
@@ -71,6 +74,7 @@ export default function DebtorsPage() {
   const [problemCharges, setProblemCharges] = useState<ProblemCharge[]>([]);
   const [inactiveOrders, setInactiveOrders] = useState<InactiveOrder[]>([]);
   const [terminalDebtors, setTerminalDebtors] = useState<TerminalDebtor[]>([]);
+  const [settledDebtors, setSettledDebtors] = useState<TerminalDebtor[]>([]);
   const [dismissedDebtors, setDismissedDebtors] = useState<TerminalDebtor[]>([]);
   const [showDismissed, setShowDismissed] = useState(false);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
@@ -85,6 +89,7 @@ export default function DebtorsPage() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setTerminalDebtors(json.terminalDebtors ?? []);
+      setSettledDebtors(json.settledDebtors ?? []);
       setDismissedDebtors(json.dismissedDebtors ?? []);
       setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
       if (!silent) toast.success("עודכן מול קארדקום");
@@ -103,6 +108,7 @@ export default function DebtorsPage() {
       setProblemCharges(json.problemCharges ?? []);
       setInactiveOrders(json.inactiveOrders ?? []);
       setTerminalDebtors(json.terminalDebtors ?? []);
+      setSettledDebtors(json.settledDebtors ?? []);
       setDismissedDebtors(json.dismissedDebtors ?? []);
       setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
 
@@ -132,9 +138,17 @@ export default function DebtorsPage() {
       setDismissedDebtors((prev) => [...prev, d]);
     } else {
       setDismissedDebtors((prev) => prev.filter((x) => x !== d));
-      setTerminalDebtors((prev) =>
-        [...prev, d].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
-      );
+      // A restored debtor whose debt was already paid belongs in the settled
+      // list, not back among the open debts.
+      if (d.settledAt) {
+        setSettledDebtors((prev) =>
+          [...prev, d].sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? ""))
+        );
+      } else {
+        setTerminalDebtors((prev) =>
+          [...prev, d].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
+        );
+      }
     }
     try {
       const res = await fetch("/api/finance/debtors/dismiss", {
@@ -255,6 +269,50 @@ export default function DebtorsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                           </svg>
                         </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {settledDebtors.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-bold text-white mb-1">
+              נסגרו לאחרונה{" "}
+              <span className="text-sm font-normal text-gray-400">
+                ({settledDebtors.length})
+              </span>
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">
+              היו בחוב, ואז נכנס תשלום מוצלח אחרי הניסיון הכושל האחרון. יוצגו כאן עד שהחוב
+              הישן ייצא מחלון 45 הימים.
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-gray-800">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-800/60 border-b border-gray-800 text-right text-gray-400">
+                    <th className="px-3 py-2.5 font-medium">שם בכרטיס</th>
+                    <th className="px-3 py-2.5 font-medium">שולם (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">תאריך תשלום</th>
+                    <th className="px-3 py-2.5 font-medium">החוב שהיה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settledDebtors.map((d) => (
+                    <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800/60">
+                      <td className="px-3 py-2 text-gray-300">
+                        {d.name}
+                        {d.idNumber ? <span className="text-gray-600 text-xs mr-2">({d.idNumber})</span> : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-green-400 font-bold">
+                        {fmtNum(d.settledAmount ?? d.amount)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-400">{fmtDate(d.settledAt ?? null)}</td>
+                      <td className="px-3 py-2 font-mono text-gray-500 line-through">
+                        {fmtNum(d.amount)}
                       </td>
                     </tr>
                   ))}
