@@ -14,7 +14,9 @@ import { prisma } from "@/lib/prisma";
 
 const PLACE_ID_KEY = "google_place_id";
 const REVIEWS_CACHE_KEY = "google_reviews_cache";
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// 1h: Elad adds reviews in bursts and wants the homepage count to follow the
+// same day. ~24 refreshes/day stays comfortably inside the Places free tier.
+const CACHE_TTL_MS = 60 * 60 * 1000;
 // The GBP identity — matches the listing linked from the site's JSON-LD.
 const PLACE_QUERY = "Fuzion Webz ראשון לציון";
 // The listing is a service-area business with no pinned address, which
