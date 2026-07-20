@@ -47,13 +47,12 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           data-cursor="pointer"
         >
           <Image
-            src="/logo.svg"
+            src="/logo-header.svg"
             alt="Fuzion Webz"
             width={200}
             height={65}
             priority
             className="h-12 w-auto"
-            style={{ filter: "invert(1)" }}
           />
         </Link>
 

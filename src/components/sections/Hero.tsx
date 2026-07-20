@@ -71,7 +71,7 @@ export default function Hero() {
               &nbsp;
             </motion.span>
             {"WEBZ".split("").map((char, i) => (
-              <motion.span key={`w${i}`} className="inline-block text-gray-500" custom={i + 7} variants={letterVariants}>
+              <motion.span key={`w${i}`} className="inline-block text-black" custom={i + 7} variants={letterVariants}>
                 {char}
               </motion.span>
             ))}

@@ -294,7 +294,7 @@ export default function Portfolio() {
         <Reveal reduced={reduced}>
           <div className="text-center mb-14 md:mb-20">
             <h2
-              className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-black w-full"
+              className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full"
               data-text="העבודות שלנו"
             >
               העבודות שלנו

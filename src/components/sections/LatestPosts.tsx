@@ -41,10 +41,15 @@ export default async function LatestPosts() {
   return (
     <section className="bg-white py-14 md:py-20 px-6" dir="rtl">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-end justify-between gap-4 flex-wrap mb-10">
-          <h2 className="text-[clamp(1.8rem,5vw,3rem)] font-extrabold text-black">
+        <div className="text-center mb-6">
+          <h2
+            className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full"
+            data-text="מהבלוג"
+          >
             מהבלוג
           </h2>
+        </div>
+        <div className="text-center mb-10">
           <Link
             href="/blog"
             className="text-cyan hover:text-pink transition-colors text-sm font-bold"

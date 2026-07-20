@@ -289,7 +289,7 @@ export default function HowItWorks() {
     <section
       ref={sectionRef}
       id="how-it-works"
-      className="min-h-screen relative overflow-hidden py-12 sm:py-16 md:py-20 bg-white"
+      className="relative overflow-hidden py-14 md:py-20 bg-white"
     >
       {/* Icon — right side, large, subtle */}
       <div className="absolute top-1/2 right-[15%] z-0 pointer-events-none hidden lg:block" style={{ transform: "translateY(calc(-50% + 30px)) translateX(10px)" }}>

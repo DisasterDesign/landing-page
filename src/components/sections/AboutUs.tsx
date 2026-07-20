@@ -40,10 +40,10 @@ function ValuesStepper() {
 
   return (
     // Tall outer container — gives scroll runway for 4 steps
-    <div ref={outerRef} style={{ minHeight: "250vh" }}>
+    <div ref={outerRef} style={{ minHeight: "150vh" }}>
     {/* Sticky inner — pins while scrolling through outer */}
     <div className="sticky top-0 h-screen flex flex-col items-center justify-center">
-    <h3 className="chromatic-hover chromatic-always text-[clamp(1.5rem,4vw,3rem)] font-extrabold text-center text-black w-full mb-12" data-text="הערכים שלנו">
+    <h3 className="chromatic-hover chromatic-always text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-center text-black w-full mb-12" data-text="הערכים שלנו">
       הערכים שלנו
     </h3>
     <div className="max-w-6xl mx-auto w-full px-6">
