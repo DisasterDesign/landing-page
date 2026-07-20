@@ -17,6 +17,13 @@ const REVIEWS_CACHE_KEY = "google_reviews_cache";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 // The GBP identity — matches the listing linked from the site's JSON-LD.
 const PLACE_QUERY = "Fuzion Webz ראשון לציון";
+// The listing is a service-area business with no pinned address, which
+// Places text search does NOT index (verified live: every query variant
+// returned empty). This id was derived from the listing's feature id
+// (0x4d753b9e88019b75:0xc4d2729172d4f218 = CID 14182524145565495832) and
+// verified against Place Details: "Fuzion Webz", rating 5. Search stays as
+// a self-heal path in case the listing ever gains a pinned address.
+const KNOWN_PLACE_ID = "ChIJdZsBiJ47dU0RGPLUcpFy0sQ";
 
 export interface GoogleReview {
   author: string;
@@ -52,11 +59,10 @@ async function resolvePlaceId(apiKey: string): Promise<string | null> {
   });
   if (!res.ok) {
     console.error("[google-reviews] searchText failed:", res.status, await res.text());
-    return null;
+    return KNOWN_PLACE_ID;
   }
   const json = (await res.json()) as { places?: { id: string }[] };
-  const id = json.places?.[0]?.id;
-  if (!id) return null;
+  const id = json.places?.[0]?.id ?? KNOWN_PLACE_ID;
 
   await prisma.keyValue.upsert({
     where: { key: PLACE_ID_KEY },
