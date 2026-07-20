@@ -3,6 +3,7 @@ import Link from "next/link";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import Card from "@/components/ui/Card";
 import { SERVICES, SITE_NAME, SITE_URL } from "@/lib/constants";
+import { SERVICE_PAGES } from "@/lib/services-content";
 import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
@@ -168,6 +169,7 @@ export default function ServicesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
               {SERVICES.map((service, i) => {
                 const detail = SERVICE_DETAILS[service.id];
+                const servicePage = SERVICE_PAGES.find((p) => p.serviceId === service.id);
                 const accentColor: "pink" | "cyan" = i % 2 === 0 ? "pink" : "cyan";
                 return (
                   <ScrollReveal key={service.id} delay={(i % 3) * 0.1}>
@@ -202,6 +204,16 @@ export default function ServicesPage() {
                             </li>
                           ))}
                         </ul>
+                      )}
+                      {servicePage && (
+                        <Link
+                          href={`/services/${servicePage.slug}`}
+                          className={`mt-5 inline-block font-bold text-sm ${
+                            accentColor === "pink" ? "text-pink" : "text-cyan-dark"
+                          } hover:underline underline-offset-4`}
+                        >
+                          לעמוד השירות המלא ←
+                        </Link>
                       )}
                     </Card>
                   </ScrollReveal>

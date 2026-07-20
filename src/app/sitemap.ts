@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
+import { SERVICE_PAGES } from "@/lib/services-content";
 
 /**
  * Generated fresh on every request. ISR (revalidate=3600) proved unreliable
@@ -38,6 +39,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority,
   }));
 
+  // Per-service landing pages (keyword-targeted, launched 2026-07-20).
+  const serviceEntries = SERVICE_PAGES.map((p) => ({
+    url: `${SITE_URL}/services/${encodeURIComponent(p.slug)}`,
+    lastModified: "2026-07-20",
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }));
+
   // Dynamic blog posts
   let blogEntries: MetadataRoute.Sitemap = [];
   try {
@@ -72,5 +81,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // DB may not be available during build — continue with static entries
   }
 
-  return [...staticEntries, ...blogEntries, ...fontEntries];
+  return [...staticEntries, ...serviceEntries, ...blogEntries, ...fontEntries];
 }
