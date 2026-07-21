@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import DocumentLocale from "@/components/util/DocumentLocale";
 
 export const dynamic = "force-dynamic";
 
@@ -7,9 +9,26 @@ interface Props {
   searchParams: Promise<{ agreement?: string }>;
 }
 
+/** Follows the agreement's language — Cardcom lands foreign clients here too. */
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const { agreement: agreementId } = await searchParams;
+  const a = agreementId
+    ? await prisma.agreement.findUnique({
+        where: { id: agreementId },
+        select: { locale: true },
+      })
+    : null;
+  return {
+    title: a?.locale === "en" ? "Payment not completed" : "התשלום לא הושלם",
+    robots: { index: false, follow: false },
+  };
+}
+
 function BrandShell({ children, dir = "rtl" }: { children: React.ReactNode; dir?: "rtl" | "ltr" }) {
   return (
     <div dir={dir} className="min-h-screen bg-black text-white">
+      {/* The root <html> is hard-coded he/rtl — realign it for English payers. */}
+      <DocumentLocale lang={dir === "ltr" ? "en" : "he"} dir={dir} />
       <div
         className="pointer-events-none fixed inset-0 opacity-30"
         style={{

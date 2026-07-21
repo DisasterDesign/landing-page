@@ -279,7 +279,12 @@ export default function SignAgreementClient({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.url) {
-        setPaymentError(typeof json.error === "string" ? json.error : t.errPaymentLink);
+        // Always the localized string — the server's `error` values are
+        // developer-facing English ("Not found", "Already paid") or, worse,
+        // Cardcom's own Hebrew rejection text. Neither belongs in front of a
+        // customer, in either language. The real cause is in the server log.
+        console.error("payment link failed:", json.error ?? res.status, json.vendor ?? "");
+        setPaymentError(t.errPaymentLink);
         return false;
       }
       window.location.href = json.url;

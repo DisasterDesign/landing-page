@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import DocumentLocale from "@/components/util/DocumentLocale";
 import SignAgreementClient from "./SignAgreementClient";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,9 @@ export async function generateMetadata({
 
   // Contract links are private — never index them.
   if (!agreement) {
-    return { title: "הסכם לא נמצא", robots: { index: false, follow: false } };
+    // No row means no locale to read, and a foreign client is the likeliest
+    // visitor on a broken link — English first, matching agreement/not-found.
+    return { title: "Agreement link not valid", robots: { index: false, follow: false } };
   }
 
   const who = agreement.businessName || agreement.customerName;
@@ -93,6 +96,8 @@ export async function generateMetadata({
 function BrandShell({ children, dir = "rtl" }: { children: React.ReactNode; dir?: "rtl" | "ltr" }) {
   return (
     <div dir={dir} className="min-h-screen bg-black text-white">
+      {/* The root <html> is hard-coded he/rtl — realign it for English signers. */}
+      <DocumentLocale lang={dir === "ltr" ? "en" : "he"} dir={dir} />
       <div
         className="pointer-events-none fixed inset-0 opacity-30"
         style={{

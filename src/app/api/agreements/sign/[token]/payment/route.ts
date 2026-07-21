@@ -66,7 +66,15 @@ export async function POST(
   } catch (error) {
     console.error("Sign payment endpoint error:", error);
     if (error instanceof CardcomError) {
-      return NextResponse.json({ error: error.message }, { status: 502 });
+      // Cardcom's own rejection Descriptions are often HEBREW, and the client
+      // renders whatever `error` holds verbatim — which would drop a Hebrew
+      // sentence into a foreign client's English "payment failed" box. The real
+      // message is logged above; the customer gets a neutral one. `vendor` is
+      // for admin debugging only and is never displayed.
+      return NextResponse.json(
+        { error: "Could not create a payment link", vendor: error.message },
+        { status: 502 }
+      );
     }
     return NextResponse.json(
       { error: "Internal server error" },
