@@ -14,16 +14,20 @@ import { prisma } from "@/lib/prisma";
 
 const PLACE_ID_KEY = "google_place_id";
 const REVIEWS_CACHE_KEY = "google_reviews_cache";
-// 1h — and this number is a BUDGET, not a preference.
+// 24h. The cadence is a cost decision, but not a tight one at this end.
 //
 // Asking for `rating`/`userRatingCount` puts the call in Google's Place Details
 // ENTERPRISE SKU: 1,000 free calls per month, then $20 per 1,000 (verified on
-// Google's official pricing page, July 2026). One refresh per hour is ~720/mo,
-// which fits. Ten minutes would be ~4,300/mo — about $66/month for a number
-// that changes a few times a week. So the lag is bought deliberately; when the
-// count must be current NOW, use forceRefreshGoogleReviews() from the admin
-// screen instead of shortening this.
-const CACHE_TTL_MS = 60 * 60 * 1000;
+// Google's official pricing page, July 2026). What that budget actually rules
+// out is FAST polling — 10 minutes would be ~4,300 calls/mo, about $66/month.
+// Down here the curve is flat: daily is ~30 calls/mo and weekly is ~4, both a
+// rounding error against 1,000. Elad said weekly freshness is enough, so daily
+// costs nothing extra and caps how long a stale count can be shown at one day
+// instead of seven.
+//
+// When a review must appear immediately, press "משוך מגוגל עכשיו" on
+// /admin/reviews (forceRefreshGoogleReviews) rather than shortening this.
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 // The GBP identity — matches the listing linked from the site's JSON-LD.
 const PLACE_QUERY = "Fuzion Webz ראשון לציון";
 // The listing is a service-area business with no pinned address, which

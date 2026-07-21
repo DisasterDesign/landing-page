@@ -112,7 +112,7 @@ export default function ReviewsAdminPage() {
             {fetchedAt
               ? `עודכן ${new Date(fetchedAt).toLocaleString("he-IL")}.`
               : ""}{" "}
-            הנתון מתרענן לבד כל שעה. אחרי שנכנסת ביקורת חדשה, לחץ כאן כדי שתופיע מיד.
+            הנתון מתרענן לבד פעם ביום. אחרי שנכנסת ביקורת חדשה, לחץ כאן כדי שתופיע מיד.
           </span>
         </div>
       </div>
