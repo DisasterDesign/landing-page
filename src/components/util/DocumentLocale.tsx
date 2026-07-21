@@ -18,21 +18,31 @@ import { useEffect } from "react";
 export default function DocumentLocale({
   lang,
   dir,
+  title,
 }: {
   lang: string;
   dir: "ltr" | "rtl";
+  /**
+   * Optional title override. Needed on the not-found boundary: a page reached
+   * through notFound() does not get its segment's generateMetadata in a
+   * production build, so the tab falls back to the Hebrew site default.
+   */
+  title?: string;
 }) {
   useEffect(() => {
     const el = document.documentElement;
     const prevLang = el.lang;
     const prevDir = el.dir;
+    const prevTitle = document.title;
     el.lang = lang;
     el.dir = dir;
+    if (title) document.title = title;
     return () => {
       el.lang = prevLang;
       el.dir = prevDir;
+      if (title) document.title = prevTitle;
     };
-  }, [lang, dir]);
+  }, [lang, dir, title]);
 
   return null;
 }

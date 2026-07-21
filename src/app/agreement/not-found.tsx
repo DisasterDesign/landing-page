@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DocumentLocale from "@/components/util/DocumentLocale";
 
 /**
  * Not-found boundary for contract links specifically.
@@ -13,6 +14,9 @@ import Link from "next/link";
 export default function AgreementNotFound() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-6">
+      {/* generateMetadata does not reach a notFound() render in production, so
+          the tab would otherwise show the Hebrew site title. */}
+      <DocumentLocale lang="en" dir="ltr" title="Agreement link not valid | Fuzion Webz" />
       <div className="text-center max-w-lg">
         <h1 className="text-[7rem] md:text-[11rem] font-extrabold leading-none select-none">
           <span className="text-pink">O</span>
