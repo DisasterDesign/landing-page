@@ -14,8 +14,15 @@ import { prisma } from "@/lib/prisma";
 
 const PLACE_ID_KEY = "google_place_id";
 const REVIEWS_CACHE_KEY = "google_reviews_cache";
-// 1h: Elad adds reviews in bursts and wants the homepage count to follow the
-// same day. ~24 refreshes/day stays comfortably inside the Places free tier.
+// 1h — and this number is a BUDGET, not a preference.
+//
+// Asking for `rating`/`userRatingCount` puts the call in Google's Place Details
+// ENTERPRISE SKU: 1,000 free calls per month, then $20 per 1,000 (verified on
+// Google's official pricing page, July 2026). One refresh per hour is ~720/mo,
+// which fits. Ten minutes would be ~4,300/mo — about $66/month for a number
+// that changes a few times a week. So the lag is bought deliberately; when the
+// count must be current NOW, use forceRefreshGoogleReviews() from the admin
+// screen instead of shortening this.
 const CACHE_TTL_MS = 60 * 60 * 1000;
 // The GBP identity — matches the listing linked from the site's JSON-LD.
 const PLACE_QUERY = "Fuzion Webz ראשון לציון";
@@ -87,20 +94,48 @@ interface PlaceDetails {
   }[];
 }
 
+/**
+ * Single-flight guard.
+ *
+ * Every homepage visitor calls /api/reviews, so at the moment the cache
+ * expires N concurrent visitors would each fire their own paid Google lookup.
+ * At 720 refreshes/month against a 1,000-call free cap there is no room for
+ * that multiplier. This claims the refresh with one conditional UPDATE: the
+ * `fetchedAt` in the WHERE clause means only the request that actually moves
+ * the row wins, and the losers serve the stale copy for the few hundred ms
+ * until the winner writes.
+ */
+async function claimRefresh(cachedFetchedAt: string | null): Promise<boolean> {
+  if (!cachedFetchedAt) return true; // nothing cached — nothing to race over
+  const claimedAt = new Date().toISOString();
+  const won = await prisma.$executeRaw`
+    UPDATE "KeyValue"
+       SET "value" = jsonb_set("value", '{fetchedAt}', ${JSON.stringify(claimedAt)}::jsonb)
+     WHERE "key" = ${REVIEWS_CACHE_KEY}
+       AND "value"->>'fetchedAt' = ${cachedFetchedAt}
+  `;
+  return won === 1;
+}
+
 export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
   // Cache-first, key-second. A warm cache is served BEFORE we look at the API
   // key, so the section keeps rendering even if the key is momentarily absent
   // (env var not yet propagated, a bad rotation). The key is only needed to
   // REFRESH once the cache goes stale.
   const cached = await prisma.keyValue.findUnique({ where: { key: REVIEWS_CACHE_KEY } });
+  let cachedFetchedAt: string | null = null;
   if (cached) {
     const data = cached.value as unknown as GoogleReviewsData;
+    cachedFetchedAt = data.fetchedAt ?? null;
     if (Date.now() - new Date(data.fetchedAt).getTime() < CACHE_TTL_MS) return data;
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   // No key to refresh with — serve stale cache if we have any, else nothing.
   if (!apiKey) return staleOrNull(cached);
+
+  // Lost the race — another request is already paying for this refresh.
+  if (!(await claimRefresh(cachedFetchedAt))) return staleOrNull(cached);
 
   try {
     const placeId = await resolvePlaceId(apiKey);
@@ -157,6 +192,19 @@ export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
 /** A stale cache beats an empty section when Google hiccups. */
 function staleOrNull(cached: { value: unknown } | null): GoogleReviewsData | null {
   return cached ? (cached.value as unknown as GoogleReviewsData) : null;
+}
+
+/**
+ * Admin-triggered refresh: drop the cache and pull from Google right now.
+ *
+ * This is the answer to "I just got a review and the site still shows the old
+ * number". Polling faster would cost real money (see CACHE_TTL_MS); refreshing
+ * on the one event that matters costs a single call, and Elad is the only
+ * person who knows when that event happened.
+ */
+export async function forceRefreshGoogleReviews(): Promise<GoogleReviewsData | null> {
+  await prisma.keyValue.deleteMany({ where: { key: REVIEWS_CACHE_KEY } });
+  return getGoogleReviews();
 }
 
 // ---------------------------------------------------------------------------

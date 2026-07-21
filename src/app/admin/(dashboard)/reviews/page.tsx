@@ -17,6 +17,8 @@ export default function ReviewsAdminPage() {
   const [live, setLive] = useState<{ rating?: number; count?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -28,7 +30,10 @@ export default function ReviewsAdminPage() {
         if (fRes.ok) setReviews((await fRes.json()).reviews ?? []);
         if (pRes.ok) {
           const p = await pRes.json();
-          if (p.available) setLive({ rating: p.rating, count: p.count });
+          if (p.available) {
+            setLive({ rating: p.rating, count: p.count });
+            setFetchedAt(p.fetchedAt ?? null);
+          }
         }
       } catch {
         toast.error("שגיאה בטעינה");
@@ -37,6 +42,23 @@ export default function ReviewsAdminPage() {
       }
     })();
   }, []);
+
+  const refreshFromGoogle = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/reviews/refresh", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const p = await res.json();
+      const changed = p.count !== live?.count || p.rating !== live?.rating;
+      setLive({ rating: p.rating, count: p.count });
+      setFetchedAt(p.fetchedAt ?? null);
+      toast.success(changed ? `עודכן: ${p.count} ביקורות, דירוג ${p.rating}` : "אין שינוי בגוגל");
+    } catch {
+      toast.error("שגיאה במשיכה מגוגל");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const update = (i: number, patch: Partial<FeaturedReview>) =>
     setReviews((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -77,6 +99,22 @@ export default function ReviewsAdminPage() {
           את הביקורות שמוצגות בכרטיסים בדף הבית בוחרים כאן ידנית — גוגל לא מספקת את
           הטקסטים דרך ה-API לכרטיס הזה. העתק ביקורות אמיתיות מהעמוד שלך בגוגל.
         </p>
+
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <button
+            onClick={refreshFromGoogle}
+            disabled={refreshing}
+            className="text-sm px-4 py-2 rounded-xl bg-gray-800 border border-gray-700 text-white hover:border-pink transition-colors disabled:opacity-50"
+          >
+            {refreshing ? "מושך מגוגל…" : "משוך מגוגל עכשיו"}
+          </button>
+          <span className="text-xs text-gray-500">
+            {fetchedAt
+              ? `עודכן ${new Date(fetchedAt).toLocaleString("he-IL")}.`
+              : ""}{" "}
+            הנתון מתרענן לבד כל שעה. אחרי שנכנסת ביקורת חדשה, לחץ כאן כדי שתופיע מיד.
+          </span>
+        </div>
       </div>
 
       <div className="space-y-4">
