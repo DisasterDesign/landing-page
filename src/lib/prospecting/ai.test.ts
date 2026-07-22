@@ -72,6 +72,42 @@ test("territory requests define the complete strict JSON response contract", asy
   }
 });
 
+test("visual requests define the complete strict JSON response contract", async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const response = {
+    content: [{ type: "text", text: JSON.stringify(visual) }],
+    usage: { input_tokens: 120, output_tokens: 80 },
+  };
+
+  await assessWebsiteVisuals(
+    {
+      screenshotDataUrl: "data:image/jpeg;base64,ZmFrZQ==",
+      technicalEvidence: { hasTitle: false },
+      bodyText: "Website copy",
+      businessShape: "SERVICE",
+    },
+    {
+      apiKey: "ai-key",
+      model: "claude-test",
+      fetchImpl: async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body));
+        return Response.json(response);
+      },
+    },
+  );
+
+  const system = String(requestBody?.system);
+  for (const property of ["visualScore", "confidence", "findings", "code", "severity", "evidence", "callAngles"]) {
+    assert.match(system, new RegExp(`\\b${property}\\b`));
+  }
+  for (const code of ["HIERARCHY", "READABILITY", "NAVIGATION", "BRAND", "TRUST", "CTA"]) {
+    assert.match(system, new RegExp(`\\b${code}\\b`));
+  }
+  for (const severity of ["low", "medium", "high"]) {
+    assert.match(system, new RegExp(`\\b${severity}\\b`));
+  }
+});
+
 test("website content is marked untrusted and cannot add tools to the AI call", async () => {
   let requestBody: Record<string, unknown> | undefined;
   const response = {
