@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const PAGESPEED_TIMEOUT_MS = 120_000;
+
 export interface PageSpeedAudit {
   performanceScore: number;
   seoScore: number;
@@ -70,7 +72,9 @@ export async function runPageSpeed(
   endpoint.searchParams.append("category", "best-practices");
   endpoint.searchParams.set("key", options.apiKey);
 
-  const response = await (options.fetchImpl ?? fetch)(endpoint);
+  const response = await (options.fetchImpl ?? fetch)(endpoint, {
+    signal: AbortSignal.timeout(PAGESPEED_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`PageSpeed failed with HTTP ${response.status}`);
   return parsePageSpeedResponse(await response.json());
 }

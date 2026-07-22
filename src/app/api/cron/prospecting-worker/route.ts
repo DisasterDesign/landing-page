@@ -9,7 +9,7 @@ import { getProspectingConfig } from "@/lib/prospecting/config";
 import { processNextProspectingWork } from "@/lib/prospecting/worker";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   if (!isCronAuthorized(request)) {

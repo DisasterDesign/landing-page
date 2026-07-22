@@ -97,6 +97,7 @@ test("territory requests define the complete strict JSON response contract", asy
 
 test("visual requests define the complete strict JSON response contract", async () => {
   let requestBody: Record<string, unknown> | undefined;
+  let requestSignal: AbortSignal | null | undefined;
   const response = {
     content: [{ type: "text", text: JSON.stringify(visual) }],
     usage: { input_tokens: 120, output_tokens: 80 },
@@ -114,6 +115,7 @@ test("visual requests define the complete strict JSON response contract", async 
       model: "claude-test",
       fetchImpl: async (_input, init) => {
         requestBody = JSON.parse(String(init?.body));
+        requestSignal = init?.signal;
         return Response.json(response);
       },
     },
@@ -149,6 +151,7 @@ test("visual requests define the complete strict JSON response contract", async 
   assert.deepEqual(findings.properties.severity.enum, ["low", "medium", "high"]);
   assert.equal(properties.callAngles.minItems, 3);
   assert.equal(properties.callAngles.maxItems, 3);
+  assert.ok(requestSignal instanceof AbortSignal);
 });
 
 test("website content is marked untrusted and cannot add tools to the AI call", async () => {

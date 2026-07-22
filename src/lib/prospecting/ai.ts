@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { BusinessShape, TerritoryProposalOutput, VisualAssessment } from "./types";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_TIMEOUT_MS = 60_000;
 
 const territorySchema = z.object({
   displayName: z.string().trim().min(2).max(200),
@@ -136,6 +137,7 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
       "x-api-key": options.apiKey,
     },
+    signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS),
     body: JSON.stringify({
       model: options.model,
       max_tokens: 1_200,

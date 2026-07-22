@@ -23,9 +23,14 @@ test("PageSpeed parser extracts lab scores, key timings, SEO evidence and screen
 });
 
 test("absent CrUX field data does not fail a lab audit", async () => {
+  let requestSignal: AbortSignal | null | undefined;
   const result = await runPageSpeed("https://example.com", {
     apiKey: "speed-key",
-    fetchImpl: async () => Response.json(fixture),
+    fetchImpl: async (_input, init) => {
+      requestSignal = init?.signal;
+      return Response.json(fixture);
+    },
   });
   assert.equal(result.performanceScore, 62);
+  assert.ok(requestSignal instanceof AbortSignal);
 });
