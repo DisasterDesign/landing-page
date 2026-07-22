@@ -62,6 +62,10 @@ export class GooglePlacesProspectingProvider implements PlacesProspectingProvide
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
+  getCallCount(): number {
+    return this.calls;
+  }
+
   async discover(input: TerritorySearchInput): Promise<DiscoveredPlace[]> {
     const queryResults: DiscoveredPlace[] = [];
     let pageToken = input.pageToken;

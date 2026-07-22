@@ -369,25 +369,27 @@ model ContactNote {
 // ==================
 
 model ProspectingCycle {
-  id                String                 @id @default(cuid())
-  weekStart         DateTime               @unique
-  status            ProspectingCycleStatus @default(PROPOSING)
-  targetCount       Int                    @default(50)
-  assignedSellerId  String?
-  assignedSeller    User?                  @relation("ProspectingCycleSeller", fields: [assignedSellerId], references: [id])
-  lockedAt          DateTime?
-  lockToken         String?
-  placesSearchCalls Int                    @default(0)
-  placesDetailCalls Int                    @default(0)
-  pageSpeedCalls    Int                    @default(0)
-  aiInputTokens     Int                    @default(0)
-  aiOutputTokens    Int                    @default(0)
-  estimatedCostUsd  Float                  @default(0)
-  lastError         String?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  approvedAt        DateTime?
-  publishedAt       DateTime?
+  id                  String                 @id @default(cuid())
+  weekStart           DateTime               @unique
+  status              ProspectingCycleStatus @default(PROPOSING)
+  targetCount         Int                    @default(50)
+  assignedSellerId    String?
+  assignedSeller      User?                  @relation("ProspectingCycleSeller", fields: [assignedSellerId], references: [id])
+  lockedAt            DateTime?
+  lockToken           String?
+  placesSearchCalls   Int                    @default(0)
+  placesDetailCalls   Int                    @default(0)
+  discoveryQueryIndex Int                    @default(0)
+  pageSpeedCalls      Int                    @default(0)
+  aiCalls             Int                    @default(0)
+  aiInputTokens       Int                    @default(0)
+  aiOutputTokens      Int                    @default(0)
+  estimatedCostUsd    Float                  @default(0)
+  lastError           String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  approvedAt          DateTime?
+  publishedAt         DateTime?
 
   proposals TerritoryProposal[]
   prospects Prospect[]
@@ -420,33 +422,37 @@ model TerritoryProposal {
 }
 
 model Prospect {
-  id                 String                 @id @default(cuid())
-  placeId            String                 @unique
-  cycleId            String
-  cycle              ProspectingCycle       @relation(fields: [cycleId], references: [id], onDelete: Restrict)
-  status             ProspectStatus         @default(DISCOVERED)
-  websiteStatus      WebsiteStatus          @default(UNKNOWN)
-  auditedDomain      String?
-  businessShape      String?
-  qualityScore       Int?
-  rawQualityScore    Int?
-  auditConfidence    Float?
-  opportunitySummary String?
-  callAngles         String[]
-  scoringVersion     Int?
-  assignedSellerId   String?
-  assignedSeller     User?                  @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
-  batchId            String?
-  batch              WeeklyProspectBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  promotedLeadId     String?                @unique
-  promotedLead       ContactSubmission?     @relation("PromotedProspect", fields: [promotedLeadId], references: [id], onDelete: SetNull)
-  lastContactedAt    DateTime?
-  nextFollowUpAt     DateTime?
-  publishedAt        DateTime?
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  audits             ProspectWebsiteAudit[]
-  interactions       ProspectInteraction[]
+  id                  String                 @id @default(cuid())
+  placeId             String                 @unique
+  cycleId             String
+  cycle               ProspectingCycle       @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  status              ProspectStatus         @default(DISCOVERED)
+  websiteStatus       WebsiteStatus          @default(UNKNOWN)
+  auditedDomain       String?
+  businessShape       String?
+  qualityScore        Int?
+  rawQualityScore     Int?
+  auditConfidence     Float?
+  opportunitySummary  String?
+  callAngles          String[]
+  scoringVersion      Int?
+  assignedSellerId    String?
+  assignedSeller      User?                  @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
+  batchId             String?
+  batch               WeeklyProspectBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  promotedLeadId      String?                @unique
+  promotedLead        ContactSubmission?     @relation("PromotedProspect", fields: [promotedLeadId], references: [id], onDelete: SetNull)
+  lastContactedAt     DateTime?
+  nextFollowUpAt      DateTime?
+  publishedAt         DateTime?
+  firstAuditFailureAt DateTime?
+  lastAuditFailureAt  DateTime?
+  nextAuditAt         DateTime?
+  auditFailureCount   Int                    @default(0)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  audits              ProspectWebsiteAudit[]
+  interactions        ProspectInteraction[]
 
   @@index([cycleId, status])
   @@index([assignedSellerId, status, nextFollowUpAt])

@@ -50,6 +50,9 @@ export async function createNotification(
         type: input.type,
         title: input.title,
         body: input.body,
+        actionUrl:
+          input.url ||
+          defaultUrl(input.type, { taskId: input.taskId, leadId: input.leadId }),
         taskId: input.taskId,
         leadId: input.leadId,
       },
