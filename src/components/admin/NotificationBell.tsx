@@ -9,7 +9,9 @@ type NotifType =
   | "TASK_COMMENTED"
   | "CONTACT_RECEIVED"
   | "AGREEMENT_SIGNED"
-  | "LEAD_FOLLOWUP";
+  | "LEAD_FOLLOWUP"
+  | "PROSPECTING_APPROVAL"
+  | "PROSPECTING_BATCH_READY";
 
 interface NotificationItem {
   id: string;
@@ -20,9 +22,11 @@ interface NotificationItem {
   createdAt: string;
   task: { id: string; title: string } | null;
   leadId: string | null;
+  actionUrl: string | null;
 }
 
 function targetUrlFor(n: NotificationItem): string | null {
+  if (n.actionUrl) return n.actionUrl;
   switch (n.type) {
     case "TASK_ASSIGNED":
     case "TASK_UPDATED":
@@ -34,6 +38,10 @@ function targetUrlFor(n: NotificationItem): string | null {
       return "/admin/agreements";
     case "LEAD_FOLLOWUP":
       return n.leadId ? `/admin/leads?focus=${n.leadId}` : "/admin/leads";
+    case "PROSPECTING_APPROVAL":
+      return "/admin/prospecting";
+    case "PROSPECTING_BATCH_READY":
+      return "/seller/cold-leads";
   }
 }
 
