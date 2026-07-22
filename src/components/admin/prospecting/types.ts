@@ -41,6 +41,13 @@ export interface ProspectView {
   callAngles: string[];
   createdAt: string;
   audits: ProspectAuditView[];
+  live?: {
+    displayName: string;
+    nationalPhoneNumber: string | null;
+    formattedAddress: string | null;
+    websiteUri: string | null;
+    businessStatus: string | null;
+  } | null;
 }
 
 export interface ProspectingCycleView {

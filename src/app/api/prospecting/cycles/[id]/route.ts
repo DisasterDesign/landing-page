@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
+import { getProspectingConfig } from "@/lib/prospecting/config";
+import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
+import type { LivePlaceDetails } from "@/lib/prospecting/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +28,26 @@ export async function GET(
     },
   });
   if (!cycle) return NextResponse.json({ error: "Cycle not found" }, { status: 404 });
-  return NextResponse.json({ cycle });
+  const config = getProspectingConfig();
+  let liveDetails = new Map<string, LivePlaceDetails>();
+  if (config.placesApiKey) {
+    try {
+      liveDetails = await new GooglePlacesProspectingProvider({
+        apiKey: config.placesApiKey,
+        maxDiscoveredPerCycle: config.maxDiscoveredPerCycle,
+        maxPlacesCallsPerCycle: config.maxPlacesCallsPerCycle,
+      }).getLiveDetails(cycle.prospects.map(({ placeId }) => placeId));
+    } catch {
+      // Admin audit evidence remains available during a temporary Places outage.
+    }
+  }
+  return NextResponse.json({
+    cycle: {
+      ...cycle,
+      prospects: cycle.prospects.map((prospect) => ({
+        ...prospect,
+        live: liveDetails.get(prospect.placeId) ?? null,
+      })),
+    },
+  });
 }

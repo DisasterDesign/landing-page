@@ -35,8 +35,13 @@ export default function ProspectTable({ prospects }: { prospects: ProspectView[]
           {prospects.map((prospect) => (
             <tr key={prospect.id} className="hover:bg-gray-800/40">
               <td className="px-4 py-3">
-                <div className="font-medium text-white">{prospect.auditedDomain ?? "ללא דומיין"}</div>
-                <div className="mt-1 font-mono text-[10px] text-gray-600">{prospect.placeId}</div>
+                <div className="font-medium text-white">
+                  {prospect.live?.displayName ?? prospect.auditedDomain ?? "פרטי העסק לא זמינים"}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-gray-500">
+                  {prospect.live?.nationalPhoneNumber && <span dir="ltr">{prospect.live.nationalPhoneNumber}</span>}
+                  {prospect.auditedDomain && <span>{prospect.auditedDomain}</span>}
+                </div>
               </td>
               <td className="px-4 py-3 text-gray-300">
                 {websiteLabels[prospect.websiteStatus] ?? prospect.websiteStatus}
