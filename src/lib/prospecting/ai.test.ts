@@ -5,6 +5,7 @@ import {
   assessWebsiteVisuals,
   parseTerritoryProposal,
   parseVisualAssessment,
+  proposeTerritory,
 } from "./ai";
 
 const territory = {
@@ -33,6 +34,42 @@ test("AI visual responses reject bad ranges and anything other than three call a
   assert.throws(() => parseVisualAssessment(JSON.stringify({ ...visual, visualScore: 16 })));
   assert.throws(() => parseVisualAssessment(JSON.stringify({ ...visual, callAngles: ["אחד", "שתיים"] })));
   assert.throws(() => parseVisualAssessment("not-json"));
+});
+
+test("territory requests define the complete strict JSON response contract", async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const response = {
+    content: [{ type: "text", text: JSON.stringify(territory) }],
+    usage: { input_tokens: 80, output_tokens: 60 },
+  };
+
+  await proposeTerritory(
+    { previousCoverageKeys: [], performanceSummary: { requestedProspects: 50 } },
+    {
+      apiKey: "ai-key",
+      model: "claude-test",
+      fetchImpl: async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body));
+        return Response.json(response);
+      },
+    },
+  );
+
+  const system = String(requestBody?.system);
+  for (const property of [
+    "displayName",
+    "city",
+    "kind",
+    "searchQuery",
+    "rationale",
+    "expectedBusinessTypes",
+    "confidence",
+  ]) {
+    assert.match(system, new RegExp(`\\b${property}\\b`));
+  }
+  for (const kind of ["STREET", "COMMERCIAL_CENTER", "AREA"]) {
+    assert.match(system, new RegExp(`\\b${kind}\\b`));
+  }
 });
 
 test("website content is marked untrusted and cannot add tools to the AI call", async () => {

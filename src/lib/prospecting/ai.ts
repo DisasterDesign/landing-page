@@ -96,8 +96,15 @@ export async function proposeTerritory(
 ): Promise<AiResult<TerritoryProposalOutput>> {
   const response = await callAnthropic(
     {
-      system:
-        "Return JSON only. Propose one compact territory in Israel for local-business prospecting. Do not browse and do not use tools.",
+      system: [
+        "Return exactly one JSON object and no other text.",
+        "Propose one compact territory in Israel for local-business prospecting.",
+        "Use exactly these top-level properties and no others:",
+        'displayName: string (2-200 characters); city: string (2-100 characters); kind: exactly one of "STREET", "COMMERCIAL_CENTER", or "AREA";',
+        "searchQuery: string (3-300 characters) suitable for Google Places search; rationale: string (10-1000 characters);",
+        "expectedBusinessTypes: array of 1-20 non-empty strings; confidence: number from 0 to 1.",
+        "Do not browse and do not use tools.",
+      ].join(" "),
       messages: [{ role: "user", content: JSON.stringify(input) }],
     },
     options,
