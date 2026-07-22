@@ -37,18 +37,17 @@ const visualSchema = z.object({
 const territoryOutputSchema = {
   type: "object",
   properties: {
-    displayName: { type: "string", minLength: 2, maxLength: 200 },
-    city: { type: "string", minLength: 2, maxLength: 100 },
+    displayName: { type: "string", description: "Must contain 2-200 characters." },
+    city: { type: "string", description: "Must contain 2-100 characters." },
     kind: { type: "string", enum: ["STREET", "COMMERCIAL_CENTER", "AREA"] },
-    searchQuery: { type: "string", minLength: 3, maxLength: 300 },
-    rationale: { type: "string", minLength: 10, maxLength: 1_000 },
+    searchQuery: { type: "string", description: "Must contain 3-300 characters." },
+    rationale: { type: "string", description: "Must contain 10-1000 characters." },
     expectedBusinessTypes: {
       type: "array",
-      minItems: 1,
-      maxItems: 20,
-      items: { type: "string", minLength: 1, maxLength: 100 },
+      description: "Must contain 1-20 business-type strings.",
+      items: { type: "string", description: "Must contain 1-100 characters." },
     },
-    confidence: { type: "number", minimum: 0, maximum: 1 },
+    confidence: { type: "number", description: "Must be between 0 and 1 inclusive." },
   },
   required: [
     "displayName",
@@ -65,11 +64,11 @@ const territoryOutputSchema = {
 const visualOutputSchema = {
   type: "object",
   properties: {
-    visualScore: { type: "integer", minimum: 0, maximum: 15 },
-    confidence: { type: "number", minimum: 0, maximum: 1 },
+    visualScore: { type: "integer", description: "Must be an integer from 0 through 15." },
+    confidence: { type: "number", description: "Must be between 0 and 1 inclusive." },
     findings: {
       type: "array",
-      maxItems: 12,
+      description: "Must contain at most 12 findings.",
       items: {
         type: "object",
         properties: {
@@ -78,7 +77,7 @@ const visualOutputSchema = {
             enum: ["HIERARCHY", "READABILITY", "NAVIGATION", "BRAND", "TRUST", "CTA"],
           },
           severity: { type: "string", enum: ["low", "medium", "high"] },
-          evidence: { type: "string", minLength: 1, maxLength: 500 },
+          evidence: { type: "string", description: "Must contain 1-500 characters." },
         },
         required: ["code", "severity", "evidence"],
         additionalProperties: false,
@@ -86,9 +85,8 @@ const visualOutputSchema = {
     },
     callAngles: {
       type: "array",
-      minItems: 3,
-      maxItems: 3,
-      items: { type: "string", minLength: 1, maxLength: 300 },
+      description: "Must contain exactly three call-angle strings.",
+      items: { type: "string", description: "Must contain 1-300 characters." },
     },
   },
   required: ["visualScore", "confidence", "findings", "callAngles"],

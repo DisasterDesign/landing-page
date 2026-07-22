@@ -93,6 +93,9 @@ test("territory requests define the complete strict JSON response contract", asy
   assert.equal(schema.additionalProperties, false);
   const properties = schema.properties as Record<string, Record<string, unknown>>;
   assert.deepEqual(properties.kind.enum, ["STREET", "COMMERCIAL_CENTER", "AREA"]);
+  for (const unsupported of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"]) {
+    assert.doesNotMatch(JSON.stringify(schema), new RegExp(`"${unsupported}"`));
+  }
 });
 
 test("visual requests define the complete strict JSON response contract", async () => {
@@ -149,8 +152,11 @@ test("visual requests define the complete strict JSON response contract", async 
     "CTA",
   ]);
   assert.deepEqual(findings.properties.severity.enum, ["low", "medium", "high"]);
-  assert.equal(properties.callAngles.minItems, 3);
-  assert.equal(properties.callAngles.maxItems, 3);
+  assert.match(String(properties.visualScore.description), /0.*15/);
+  assert.match(String(properties.callAngles.description), /exactly three/i);
+  for (const unsupported of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"]) {
+    assert.doesNotMatch(JSON.stringify(schema), new RegExp(`"${unsupported}"`));
+  }
   assert.ok(requestSignal instanceof AbortSignal);
 });
 
