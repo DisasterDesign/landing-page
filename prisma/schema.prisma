@@ -72,6 +72,8 @@ enum NotificationType {
   CONTACT_RECEIVED
   AGREEMENT_SIGNED
   LEAD_FOLLOWUP
+  PROSPECTING_APPROVAL
+  PROSPECTING_BATCH_READY
 }
 
 enum ContactStatus {
@@ -80,6 +82,74 @@ enum ContactStatus {
   CLOSED
   LOST
   SPAM
+}
+
+enum AcquisitionChannel {
+  META
+  WEBSITE
+  GOOGLE_PROSPECTING
+  MANUAL
+  OTHER
+}
+
+enum ProspectingCycleStatus {
+  PROPOSING
+  AWAITING_APPROVAL
+  DISCOVERY_QUEUED
+  DISCOVERING
+  AUDITING
+  READY
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum TerritoryKind {
+  STREET
+  COMMERCIAL_CENTER
+  AREA
+}
+
+enum TerritoryProposalStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  INVALID
+}
+
+enum ProspectStatus {
+  DISCOVERED
+  AUDIT_PENDING
+  AUDITING
+  READY
+  PUBLISHED
+  FOLLOW_UP
+  QUALIFIED
+  NOT_INTERESTED
+  DO_NOT_CALL
+  INVALID
+  SUPPRESSED
+  FAILED_REVIEW
+}
+
+enum WebsiteStatus {
+  NO_WEBSITE
+  SOCIAL_ONLY
+  PARKED
+  UNREACHABLE
+  ACTIVE
+  BLOCKED
+  UNKNOWN
+}
+
+enum ProspectCallOutcome {
+  NO_ANSWER
+  CALLBACK
+  CONNECTED
+  INTERESTED
+  NOT_INTERESTED
+  DO_NOT_CALL
+  WRONG_NUMBER
 }
 
 enum BlogPostStatus {
@@ -91,35 +161,40 @@ enum BlogPostStatus {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id                 String   @id @default(cuid())
+  email              String   @unique
   /// Optional login handle for admin-provisioned users (e.g. sellers) who
   /// sign in by name instead of email. Case-insensitive at login.
-  username     String?   @unique
-  name         String
-  passwordHash String
+  username           String?  @unique
+  name               String
+  passwordHash       String
   /// True while the user is still on the admin-issued starting password;
   /// cleared when they set their own via the change-password flow.
-  mustChangePassword Boolean @default(false)
-  role         Role      @default(MEMBER)
-  avatarUrl    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  mustChangePassword Boolean  @default(false)
+  role               Role     @default(MEMBER)
+  avatarUrl          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  assignedTasks Task[]   @relation("TaskAssignees")
-  createdTasks  Task[]   @relation("CreatedTasks")
-  comments      Comment[]
-  attachments   TaskAttachment[] @relation("UploadedAttachments")
-  blogPosts     BlogPost[]
-  notifications Notification[] @relation("NotificationRecipient")
-  googleIntegration GoogleIntegration?
+  assignedTasks        Task[]                @relation("TaskAssignees")
+  createdTasks         Task[]                @relation("CreatedTasks")
+  comments             Comment[]
+  attachments          TaskAttachment[]      @relation("UploadedAttachments")
+  blogPosts            BlogPost[]
+  notifications        Notification[]        @relation("NotificationRecipient")
+  googleIntegration    GoogleIntegration?
   facebookIntegrations FacebookIntegration[]
-  utmLinks      UtmLink[]
-  pushSubscriptions PushSubscription[]
-  contactNotes  ContactNote[]
-  clientNotes   ClientNote[] @relation("ClientNoteAuthor")
-  assignedLeads ContactSubmission[] @relation("LeadAssignees")
-  commissions   SellerCommission[] @relation("SellerCommissions")
+  utmLinks             UtmLink[]
+  pushSubscriptions    PushSubscription[]
+  contactNotes         ContactNote[]
+  clientNotes          ClientNote[]          @relation("ClientNoteAuthor")
+  assignedLeads        ContactSubmission[]   @relation("LeadAssignees")
+  commissions          SellerCommission[]    @relation("SellerCommissions")
+  prospectingCycles    ProspectingCycle[]    @relation("ProspectingCycleSeller")
+  territoryApprovals   TerritoryProposal[]   @relation("TerritoryApprover")
+  assignedProspects    Prospect[]            @relation("ProspectSeller")
+  prospectBatches      WeeklyProspectBatch[] @relation("WeeklyBatchSeller")
+  prospectInteractions ProspectInteraction[] @relation("ProspectInteractionAuthor")
 }
 
 /// First-month commission earned by a seller when an agreement THEY created
@@ -131,7 +206,7 @@ model SellerCommission {
   seller      User             @relation("SellerCommissions", fields: [sellerId], references: [id])
   agreementId String           @unique
   clientName  String
-  amount      Float            // first-month monthly price the deal closed at
+  amount      Float // first-month monthly price the deal closed at
   status      CommissionStatus @default(PENDING)
   paidAt      DateTime?
   /// Task created when the seller submits the site brief to the admins.
@@ -164,13 +239,13 @@ model Task {
   order       Int        @default(0)
   tags        String[]
 
-  projectId  String?
-  project    Project? @relation(fields: [projectId], references: [id])
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
 
   assignees User[] @relation("TaskAssignees")
 
   creatorId String
-  creator   User     @relation("CreatedTasks", fields: [creatorId], references: [id])
+  creator   User   @relation("CreatedTasks", fields: [creatorId], references: [id])
 
   comments      Comment[]
   notifications Notification[]
@@ -207,15 +282,16 @@ model TaskAttachment {
 }
 
 model Notification {
-  id          String           @id @default(cuid())
-  type        NotificationType
-  title       String
-  body        String?
-  readAt      DateTime?
-  createdAt   DateTime         @default(now())
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  body      String?
+  actionUrl String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
 
   recipientId String
-  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipient   User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   taskId String?
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -242,18 +318,19 @@ model Comment {
 }
 
 model ContactSubmission {
-  id              String        @id @default(cuid())
-  name            String
-  email           String
-  phone           String?
-  company         String?
-  message         String
-  service         String?
-  isRead          Boolean       @default(false)
-  status          ContactStatus @default(NEW)
-  tags            String[]
+  id                 String              @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  company            String?
+  message            String
+  service            String?
+  isRead             Boolean             @default(false)
+  status             ContactStatus       @default(NEW)
+  tags               String[]
   source             String?
-  externalLeadId     String?       @unique
+  acquisitionChannel AcquisitionChannel?
+  externalLeadId     String?             @unique
   externalFormId     String?
   externalFormName   String?
   externalCampaignId String?
@@ -261,11 +338,13 @@ model ContactSubmission {
   nextFollowUpAt     DateTime?
   lastContactedAt    DateTime?
   closedAt           DateTime?
-  createdAt          DateTime      @default(now())
+  createdAt          DateTime            @default(now())
 
   notes         ContactNote[]
   assignees     User[]         @relation("LeadAssignees")
   notifications Notification[]
+  prospect      Prospect?      @relation("PromotedProspect")
+  agreements    Agreement[]
 
   @@index([isRead])
   @@index([status])
@@ -274,15 +353,168 @@ model ContactSubmission {
 }
 
 model ContactNote {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   contactId String
   contact   ContactSubmission @relation(fields: [contactId], references: [id], onDelete: Cascade)
   authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User              @relation(fields: [authorId], references: [id])
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime          @default(now())
 
   @@index([contactId, createdAt])
+}
+
+// ==================
+// WEEKLY COLD PROSPECTING
+// ==================
+
+model ProspectingCycle {
+  id                String                 @id @default(cuid())
+  weekStart         DateTime               @unique
+  status            ProspectingCycleStatus @default(PROPOSING)
+  targetCount       Int                    @default(50)
+  assignedSellerId  String?
+  assignedSeller    User?                  @relation("ProspectingCycleSeller", fields: [assignedSellerId], references: [id])
+  lockedAt          DateTime?
+  lockToken         String?
+  placesSearchCalls Int                    @default(0)
+  placesDetailCalls Int                    @default(0)
+  pageSpeedCalls    Int                    @default(0)
+  aiInputTokens     Int                    @default(0)
+  aiOutputTokens    Int                    @default(0)
+  estimatedCostUsd  Float                  @default(0)
+  lastError         String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  approvedAt        DateTime?
+  publishedAt       DateTime?
+
+  proposals TerritoryProposal[]
+  prospects Prospect[]
+  batch     WeeklyProspectBatch?
+
+  @@index([status, createdAt])
+}
+
+model TerritoryProposal {
+  id                    String                  @id @default(cuid())
+  cycleId               String
+  cycle                 ProspectingCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  displayName           String
+  city                  String
+  kind                  TerritoryKind
+  searchQuery           String
+  coverageKey           String
+  rationale             String
+  expectedBusinessTypes String[]
+  confidence            Float
+  status                TerritoryProposalStatus @default(PROPOSED)
+  rejectionReason       String?
+  approvedById          String?
+  approvedBy            User?                   @relation("TerritoryApprover", fields: [approvedById], references: [id])
+  approvedAt            DateTime?
+  createdAt             DateTime                @default(now())
+
+  @@unique([cycleId, coverageKey])
+  @@index([status, createdAt])
+}
+
+model Prospect {
+  id                 String                 @id @default(cuid())
+  placeId            String                 @unique
+  cycleId            String
+  cycle              ProspectingCycle       @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  status             ProspectStatus         @default(DISCOVERED)
+  websiteStatus      WebsiteStatus          @default(UNKNOWN)
+  auditedDomain      String?
+  businessShape      String?
+  qualityScore       Int?
+  rawQualityScore    Int?
+  auditConfidence    Float?
+  opportunitySummary String?
+  callAngles         String[]
+  scoringVersion     Int?
+  assignedSellerId   String?
+  assignedSeller     User?                  @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
+  batchId            String?
+  batch              WeeklyProspectBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  promotedLeadId     String?                @unique
+  promotedLead       ContactSubmission?     @relation("PromotedProspect", fields: [promotedLeadId], references: [id], onDelete: SetNull)
+  lastContactedAt    DateTime?
+  nextFollowUpAt     DateTime?
+  publishedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  audits             ProspectWebsiteAudit[]
+  interactions       ProspectInteraction[]
+
+  @@index([cycleId, status])
+  @@index([assignedSellerId, status, nextFollowUpAt])
+  @@index([qualityScore, auditConfidence])
+}
+
+model ProspectWebsiteAudit {
+  id                String        @id @default(cuid())
+  prospectId        String
+  prospect          Prospect      @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  scoringVersion    Int
+  websiteStatus     WebsiteStatus
+  rawScore          Int?
+  qualityScore      Int?
+  availabilityScore Int?
+  performanceScore  Int?
+  seoScore          Int?
+  maintenanceScore  Int?
+  visualScore       Int?
+  commercialScore   Int?
+  confidence        Float?
+  technicalEvidence Json
+  visualEvidence    Json?
+  callAngles        String[]
+  pageSpeedStrategy String?
+  auditedAt         DateTime      @default(now())
+
+  @@index([prospectId, auditedAt])
+}
+
+model WeeklyProspectBatch {
+  id          String           @id @default(cuid())
+  cycleId     String           @unique
+  cycle       ProspectingCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  weekStart   DateTime         @unique
+  sellerId    String
+  seller      User             @relation("WeeklyBatchSeller", fields: [sellerId], references: [id])
+  publishedAt DateTime         @default(now())
+
+  prospects Prospect[]
+
+  @@index([sellerId, weekStart])
+}
+
+model ProspectInteraction {
+  id             String              @id @default(cuid())
+  prospectId     String
+  prospect       Prospect            @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User                @relation("ProspectInteractionAuthor", fields: [authorId], references: [id])
+  outcome        ProspectCallOutcome
+  note           String?
+  nextFollowUpAt DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([prospectId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model ProspectSuppression {
+  id               String   @id @default(cuid())
+  placeId          String?  @unique
+  phoneHash        String?  @unique
+  domainHash       String?  @unique
+  reason           String
+  sourceProspectId String?
+  createdById      String
+  createdAt        DateTime @default(now())
 }
 
 // ==================
@@ -297,7 +529,7 @@ model BlogPost {
   /// stale URLs to the new canonical slug.
   oldSlug     String?
   excerpt     String?
-  content     String    // Rich HTML from TipTap
+  content     String // Rich HTML from TipTap
   coverImage  String?
   category    String?
   tags        String[]
@@ -337,7 +569,7 @@ model FontFamily {
   description String?
   designer    String?
   previewUrl  String?
-  category    String?  // serif, sans, display, script, mono
+  category    String? // serif, sans, display, script, mono
   tags        String[]
   featured    Boolean  @default(false)
   published   Boolean  @default(false)
@@ -351,13 +583,13 @@ model FontFamily {
 }
 
 model FontStyle {
-  id              String @id @default(cuid())
+  id              String  @id @default(cuid())
   name            String // "Regular", "Bold", "Light"
-  weight          Int    @default(400)
+  weight          Int     @default(400)
   fontFileUrl     String // Path to downloadable font file
   previewUrl      String?
-  pricePersonal   Float  @default(0)
-  priceCommercial Float  @default(0)
+  pricePersonal   Float   @default(0)
+  priceCommercial Float   @default(0)
 
   fontFamilyId String
   fontFamily   FontFamily @relation(fields: [fontFamilyId], references: [id], onDelete: Cascade)
@@ -367,41 +599,41 @@ model FontStyle {
 }
 
 model Client {
-  id           String    @id @default(cuid())
-  number       Int       @default(autoincrement())
-  name         String
-  status       String    @default("")
-  notes        String?
+  id            String    @id @default(cuid())
+  number        Int       @default(autoincrement())
+  name          String
+  status        String    @default("")
+  notes         String?
   // amount = CUMULATIVE total received from this client (incremented by the
   // webhook on every charge). monthlyAmount = the true recurring MONTHLY
   // (gross) — the figure to use for MRR and partner-report, so the profit
   // split no longer inflates as a client pays more months.
-  amount       Float?
+  amount        Float?
   monthlyAmount Float?
-  expense      Float?
-  cardcomFee   Float?
-  websiteUrl   String?
+  expense       Float?
+  cardcomFee    Float?
+  websiteUrl    String?
   // Contact / business identity (added for Client Card)
-  email        String?
-  phone        String?
-  businessName String?
-  idNumber     String?
-  source       String?   // "agreement_signed" | "manual" | "lead_converted" | "import"
-  partner      String    @default("fuzion") // "fuzion" = part of fuzion-webz partnership; other = legacy/private client
+  email         String?
+  phone         String?
+  businessName  String?
+  idNumber      String?
+  source        String? // "agreement_signed" | "manual" | "lead_converted" | "import"
+  partner       String    @default("fuzion") // "fuzion" = part of fuzion-webz partnership; other = legacy/private client
   // Foreign client whose revenue is zero-rated VAT — the partner report must
   // NOT back out 18% VAT from their payments (none was collected).
-  vatExempt    Boolean   @default(false)
-  archivedAt   DateTime?
-  startDate    DateTime?
-  paymentDate  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  vatExempt     Boolean   @default(false)
+  archivedAt    DateTime?
+  startDate     DateTime?
+  paymentDate   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  agreements    Agreement[]
-  clientNotes   ClientNote[]
-  expenses      Expense[]
-  jobs          ClientJob[]
-  products      ClientProduct[]
+  agreements  Agreement[]
+  clientNotes ClientNote[]
+  expenses    Expense[]
+  jobs        ClientJob[]
+  products    ClientProduct[]
 
   @@index([number])
   @@index([email])
@@ -458,11 +690,11 @@ model ClientJob {
   clientId         String
   client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   title            String
-  amount           Float     // net (pre-VAT) unless vatIncluded=true
+  amount           Float // net (pre-VAT) unless vatIncluded=true
   vatIncluded      Boolean   @default(false)
   cardcomFee       Boolean   @default(false) // false = bank transfer, no 2% fee
   status           JobStatus @default(PENDING)
-  closedAt         DateTime  // when the job was closed/billed (billing month)
+  closedAt         DateTime // when the job was closed/billed (billing month)
   paymentTermsDays Int       @default(60) // שוטף+60
   paidAt           DateTime? // when payment actually received; null = outstanding
   notes            String?
@@ -475,14 +707,14 @@ model ClientJob {
 }
 
 enum ExpenseCategory {
-  LLM_API       // Anthropic / OpenAI subscriptions & credits
-  SERVERS       // Hetzner etc.
-  HOSTING       // Vercel / Cloudflare paid plans
-  DOMAINS       // registrations & renewals
-  SAAS          // Resend, Magnific, tools
-  PAYMENTS      // Cardcom packages
-  ADVERTISING   // Meta ads etc.
-  PROFESSIONAL  // רו"ח, עו"ד
+  LLM_API // Anthropic / OpenAI subscriptions & credits
+  SERVERS // Hetzner etc.
+  HOSTING // Vercel / Cloudflare paid plans
+  DOMAINS // registrations & renewals
+  SAAS // Resend, Magnific, tools
+  PAYMENTS // Cardcom packages
+  ADVERTISING // Meta ads etc.
+  PROFESSIONAL // רו"ח, עו"ד
   OTHER
 }
 
@@ -531,65 +763,69 @@ model ClientNote {
 
 model Agreement {
   id                 String          @id @default(cuid())
-  tier               AgreementTier?  // base tier (required for new agreements; nullable for legacy rows)
-  additionalServices String[]        @default([])  // extra service clauses appended to the tier base list
-  monthlyPrice       Float           // editable by creator; defaults to tier price when tier is picked
-  oneTimeFee         Float?          // optional setup fee
+  tier               AgreementTier? // base tier (required for new agreements; nullable for legacy rows)
+  additionalServices String[]        @default([]) // extra service clauses appended to the tier base list
+  monthlyPrice       Float // editable by creator; defaults to tier price when tier is picked
+  oneTimeFee         Float? // optional setup fee
   // Foreign-client support. locale drives the contract + Cardcom page/invoice
   // language; vatExempt zero-rates VAT (Israeli VAT law sec. 30(a)(5), export
   // of services to a foreign resident). Both default to the Israeli case.
-  locale             String          @default("he")   // "he" | "en"
+  locale             String          @default("he") // "he" | "en"
   vatExempt          Boolean         @default(false)
   // True when issued by a seller — captured at creation so the first-month
   // commission is owed even if the creator's role changes before payment.
   isSellerDeal       Boolean         @default(false)
-  customerName    String
-  businessName    String?
-  idNumber        String?
-  phone           String
-  email           String
-  status          AgreementStatus @default(DRAFT)
-  signedAt        DateTime?
-  signatureData   String?
-  content         String
+  customerName       String
+  businessName       String?
+  idNumber           String?
+  phone              String
+  email              String
+  status             AgreementStatus @default(DRAFT)
+  signedAt           DateTime?
+  signatureData      String?
+  content            String
   // One-off custom proposals (e.g. video production) carry their own legal
   // body HTML; renderAgreement slots it in instead of the website-tier
   // template. Null for all standard subscription agreements.
-  customBodyHtml  String?
-  signToken       String          @unique @default(cuid())
-  createdBy       String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  customBodyHtml     String?
+  signToken          String          @unique @default(cuid())
+  createdBy          String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   // Legal trail captured at signing
-  signedIp        String?
-  signedUserAgent String?
-  documentVersion Int             @default(1)
+  signedIp           String?
+  signedUserAgent    String?
+  documentVersion    Int             @default(1)
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])
 
+  leadId String?
+  lead   ContactSubmission? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
   // Cardcom payment integration
-  paymentStatus PaymentStatus @default(PENDING)
-  paymentUrl    String?       // LowProfile checkout URL returned by Cardcom
-  paymentId     String?       // Cardcom LowProfileId (per-attempt)
-  cardcomDealId String?       // Cardcom InternalDealNumber after successful charge
-  cardcomToken  String?       // Token for future recurring charges
-  cardcomRecurringId Int?     // Cardcom's ID for the recurring schedule (BillGoldService)
+  paymentStatus       PaymentStatus @default(PENDING)
+  paymentUrl          String? // LowProfile checkout URL returned by Cardcom
+  paymentId           String? // Cardcom LowProfileId (per-attempt)
+  cardcomDealId       String? // Cardcom InternalDealNumber after successful charge
+  cardcomToken        String? // Token for future recurring charges
+  cardcomRecurringId  Int? // Cardcom's ID for the recurring schedule (BillGoldService)
   cardcomLowProfileId String? // LowProfile GUID — used to create recurring order via Name-to-Value API
-  cardcomAccountId   Int?     // Cardcom account ID returned after recurring creation
+  cardcomAccountId    Int? // Cardcom account ID returned after recurring creation
   // Mirrored from GetRecurringPayment by the daily reconcile cron — the live
   // truth about whether Cardcom will actually bill this agreement again.
   cardcomIsActive     Boolean?
   cardcomNextBillDate DateTime?
   cardcomSyncedAt     DateTime?
-  invoiceNumber String?       // Cardcom invoice number, if generated
-  paidAt        DateTime?
-  paidAmount    Float?
+  invoiceNumber       String? // Cardcom invoice number, if generated
+  paidAt              DateTime?
+  paidAmount          Float?
 
-  charges       AgreementCharge[]
+  charges AgreementCharge[]
 
   @@index([status])
   @@index([clientId])
+  @@index([leadId])
   @@index([signToken])
   @@index([paymentStatus])
 }
@@ -599,9 +835,9 @@ model AgreementCharge {
   agreementId        String
   agreement          Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
   amount             Float
-  cardcomDealId      String?   // InternalDealNumber for this specific charge (unique per Cardcom deal)
-  invoiceNumber      String?   // DocumentNumber (חשבונית מס)
-  cardcomRecurringId Int?      // null for the first/LowProfile charge; populated for recurring auto-charges
+  cardcomDealId      String? // InternalDealNumber for this specific charge (unique per Cardcom deal)
+  invoiceNumber      String? // DocumentNumber (חשבונית מס)
+  cardcomRecurringId Int? // null for the first/LowProfile charge; populated for recurring auto-charges
   success            Boolean   @default(true)
   // Debtors data pulled back from Cardcom (GetRecurringPaymentHistory) or the
   // official recurring webhook. status: SUCCESSFUL | DEBTAUTOBILLING |
@@ -612,7 +848,7 @@ model AgreementCharge {
   billingAttempts    Int?
   cardcomChargeDate  DateTime? // the actual billing date at Cardcom (chargedAt is webhook-arrival time)
   chargedAt          DateTime  @default(now())
-  rawPayload         Json?     // raw webhook body for debugging
+  rawPayload         Json? // raw webhook body for debugging
 
   @@index([agreementId, chargedAt])
   @@index([cardcomDealId])
@@ -628,12 +864,12 @@ model FontOrder {
   totalPrice    Float
   currency      String        @default("ILS")
   paymentStatus PaymentStatus @default(PENDING)
-  paymentId     String?       // CardCom transaction ID
+  paymentId     String? // CardCom transaction ID
   downloadToken String?       @unique
   downloadCount Int           @default(0)
 
-  expiresAt     DateTime?
-  downloadedAt  DateTime?
+  expiresAt    DateTime?
+  downloadedAt DateTime?
 
   fontFamilyId String
   fontFamily   FontFamily @relation(fields: [fontFamilyId], references: [id], onDelete: Cascade)
@@ -650,8 +886,8 @@ model GoogleIntegration {
   userId        String   @unique
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   email         String?
-  accessToken   String   // AES-256-GCM encrypted
-  refreshToken  String   // AES-256-GCM encrypted
+  accessToken   String // AES-256-GCM encrypted
+  refreshToken  String // AES-256-GCM encrypted
   expiresAt     DateTime
   scopes        String[]
   gscSiteUrl    String?
@@ -705,20 +941,20 @@ model Backlink {
 }
 
 model UtmLink {
-  id         String   @id @default(cuid())
-  fullUrl    String
-  baseUrl    String
-  source     String
-  medium     String
-  campaign   String
-  term       String?
-  content    String?
-  label      String?
-  clicks     Int      @default(0)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  fullUrl   String
+  baseUrl   String
+  source    String
+  medium    String
+  campaign  String
+  term      String?
+  content   String?
+  label     String?
+  clicks    Int      @default(0)
+  createdAt DateTime @default(now())
 
-  createdBy   String
-  createdByUser User    @relation(fields: [createdBy], references: [id])
+  createdBy     String
+  createdByUser User   @relation(fields: [createdBy], references: [id])
 
   @@index([createdAt])
   @@index([createdBy])
@@ -738,15 +974,15 @@ model PushSubscription {
 }
 
 model FacebookIntegration {
-  id                String   @id @default(cuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  pageId            String   @unique
-  pageName          String
-  pageAccessToken   String   // AES-256-GCM encrypted
-  subscribedAt      DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageId          String    @unique
+  pageName        String
+  pageAccessToken String // AES-256-GCM encrypted
+  subscribedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([userId])
 }

@@ -79,6 +79,7 @@ export const createAgreementSchema = z.object({
   phone: z.string().min(9, "טלפון לא תקין"),
   email: z.string().email("אימייל לא תקין"),
   clientId: z.string().optional(),
+  leadId: z.string().optional(),
   // Product coverage — which of the linked client's products this agreement
   // pays for. productId links an existing product; newProductName creates one
   // (status ריק until its first payment). Both require clientId.
@@ -88,6 +89,45 @@ export const createAgreementSchema = z.object({
   // "foreign client" toggle in the admin UI; stored as two fields.
   locale: agreementLocaleEnum.optional().default("he"),
   vatExempt: z.boolean().optional().default(false),
+});
+
+// ==================
+// COLD PROSPECTING
+// ==================
+
+export const territoryApprovalSchema = z.object({
+  proposalId: z.string().min(1).max(200),
+});
+
+export const territoryRejectionSchema = z.object({
+  proposalId: z.string().min(1).max(200),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const prospectInteractionSchema = z.object({
+  outcome: z.enum([
+    "NO_ANSWER",
+    "CALLBACK",
+    "CONNECTED",
+    "INTERESTED",
+    "NOT_INTERESTED",
+    "WRONG_NUMBER",
+    "DO_NOT_CALL",
+  ]),
+  note: z.string().trim().max(2_000).optional(),
+  nextFollowUpAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export const promoteProspectSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().trim().min(9).max(30).optional(),
+  company: z.string().trim().max(200).optional(),
+});
+
+export const prospectingSettingsSchema = z.object({
+  sellerId: z.string().min(1).max(200),
+  weeklyTarget: z.number().int().min(1).max(50),
 });
 
 export const updateAgreementSchema = z.object({
