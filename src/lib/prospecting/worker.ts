@@ -433,7 +433,11 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       },
     });
     return "audited" as const;
-  } catch {
+  } catch (error) {
+    console.error("Prospecting audit failed", {
+      prospectId: prospect.id,
+      message: error instanceof Error ? error.message : "Unknown provider error",
+    });
     await recordAuditFailure(prospect, "PROVIDER_ERROR", now);
     return "waiting" as const;
   }

@@ -182,3 +182,21 @@ test("website content is marked untrusted and cannot add tools to the AI call", 
   assert.match(JSON.stringify(requestBody), /UNTRUSTED WEBSITE CONTENT/);
   assert.match(JSON.stringify(requestBody), /IGNORE PRIOR INSTRUCTIONS/);
 });
+
+test("AI HTTP failures preserve the bounded provider error for diagnostics", async () => {
+  await assert.rejects(
+    proposeTerritory(
+      { previousCoverageKeys: [], performanceSummary: {} },
+      {
+        apiKey: "ai-key",
+        model: "claude-test",
+        fetchImpl: async () =>
+          Response.json(
+            { type: "error", error: { type: "invalid_request_error", message: "Unsupported schema keyword" } },
+            { status: 400 },
+          ),
+      },
+    ),
+    /Unsupported schema keyword/,
+  );
+});

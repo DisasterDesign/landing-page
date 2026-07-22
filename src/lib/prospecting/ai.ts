@@ -145,7 +145,12 @@ async function callAnthropic(
       ...body,
     }),
   });
-  if (!response.ok) throw new Error(`AI request failed with HTTP ${response.status}`);
+  if (!response.ok) {
+    const providerError = (await response.text()).replace(/\s+/g, " ").slice(0, 500);
+    throw new Error(
+      `AI request failed with HTTP ${response.status}${providerError ? `: ${providerError}` : ""}`,
+    );
+  }
 
   const parsed = anthropicResponseSchema.parse(await response.json());
   const text = parsed.content.find((block) => block.type === "text")?.text;
