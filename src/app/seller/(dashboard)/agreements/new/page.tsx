@@ -36,6 +36,7 @@ export default function SellerNewAgreementPage() {
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [leadId, setLeadId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
 
@@ -46,6 +47,7 @@ export default function SellerNewAgreementPage() {
     if (p.get("phone")) setPhone(p.get("phone")!);
     if (p.get("email")) setEmail(p.get("email")!);
     if (p.get("business")) setBusinessName(p.get("business")!);
+    if (p.get("lead")) setLeadId(p.get("lead"));
   }, []);
 
   const pickTier = (t: TierChoice) => {
@@ -99,6 +101,7 @@ export default function SellerNewAgreementPage() {
           businessName: businessName.trim() || undefined,
           phone: phone.trim(),
           email: email.trim(),
+          leadId: leadId || undefined,
         }),
       });
       if (!res.ok) {

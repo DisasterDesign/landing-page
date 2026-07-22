@@ -17,9 +17,13 @@ const scoreLabels = {
 export default function ColdLeadCard({
   lead,
   onOutcome,
+  onPromote,
+  promoting = false,
 }: {
   lead: SellerColdLead;
   onOutcome: () => void;
+  onPromote?: () => void;
+  promoting?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const name = lead.live?.displayName ?? lead.auditedDomain ?? "פרטי העסק לא זמינים";
@@ -54,6 +58,16 @@ export default function ColdLeadCard({
           >
             תעד שיחה
           </button>
+          {lead.status === "QUALIFIED" && onPromote && (
+            <button
+              type="button"
+              disabled={promoting}
+              onClick={onPromote}
+              className="rounded-xl bg-cyan px-4 py-2 text-sm font-bold text-gray-950 disabled:opacity-50"
+            >
+              {promoting ? "מעביר..." : "העבר ללידים החמים"}
+            </button>
+          )}
         </div>
       </div>
 

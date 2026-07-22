@@ -11,7 +11,6 @@ export async function GET() {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const agreements = await prisma.agreement.findMany({
       where: { createdBy: session.user.id },
       select: {
@@ -60,6 +59,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const sellerId = session.user.id;
 
     const body = await request.json();
     const parsed = createAgreementSchema.safeParse(body);
@@ -80,7 +80,18 @@ export async function POST(request: NextRequest) {
       idNumber,
       phone,
       email,
+      leadId,
     } = parsed.data;
+
+    if (leadId) {
+      const ownedLead = await prisma.contactSubmission.findFirst({
+        where: { id: leadId, assignees: { some: { id: sellerId } } },
+        select: { id: true },
+      });
+      if (!ownedLead) {
+        return NextResponse.json({ error: "Lead is not assigned to this seller" }, { status: 403 });
+      }
+    }
 
     const cleanedExtras = (additionalServices ?? [])
       .map((s) => s.trim())
@@ -117,7 +128,8 @@ export async function POST(request: NextRequest) {
         vatExempt: false,
         isSellerDeal: true,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
-        createdBy: session.user.id,
+        createdBy: sellerId,
+        leadId: leadId ?? null,
       },
       select: { id: true, signToken: true, customerName: true },
     });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 import CallOutcomeSheet from "@/components/seller/CallOutcomeSheet";
@@ -21,11 +22,13 @@ interface ColdLeadResponse {
 }
 
 export default function SellerColdLeadsPage() {
+  const router = useRouter();
   const [data, setData] = useState<ColdLeadResponse>({ batch: null, current: [], followUps: [] });
   const [tab, setTab] = useState<"current" | "followUps">("current");
   const [selected, setSelected] = useState<SellerColdLead | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +63,25 @@ export default function SellerColdLeadsPage() {
       toast.error("שמירת השיחה נכשלה");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const promote = async (lead: SellerColdLead) => {
+    setPromotingId(lead.id);
+    try {
+      const response = await fetch(`/api/seller/cold-leads/${lead.id}/promote`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? "העברת הליד נכשלה");
+      toast.success("הליד הועבר למסלול המכירה הרגיל");
+      router.push(`/seller/leads?focus=${result.leadId}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "העברת הליד נכשלה");
+    } finally {
+      setPromotingId(null);
     }
   };
 
@@ -118,7 +140,13 @@ export default function SellerColdLeadsPage() {
       ) : (
         <div className="space-y-3">
           {leads.map((lead) => (
-            <ColdLeadCard key={lead.id} lead={lead} onOutcome={() => setSelected(lead)} />
+            <ColdLeadCard
+              key={lead.id}
+              lead={lead}
+              onOutcome={() => setSelected(lead)}
+              onPromote={() => promote(lead)}
+              promoting={promotingId === lead.id}
+            />
           ))}
         </div>
       )}
