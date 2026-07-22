@@ -33,6 +33,67 @@ const visualSchema = z.object({
   ]),
 });
 
+const territoryOutputSchema = {
+  type: "object",
+  properties: {
+    displayName: { type: "string", minLength: 2, maxLength: 200 },
+    city: { type: "string", minLength: 2, maxLength: 100 },
+    kind: { type: "string", enum: ["STREET", "COMMERCIAL_CENTER", "AREA"] },
+    searchQuery: { type: "string", minLength: 3, maxLength: 300 },
+    rationale: { type: "string", minLength: 10, maxLength: 1_000 },
+    expectedBusinessTypes: {
+      type: "array",
+      minItems: 1,
+      maxItems: 20,
+      items: { type: "string", minLength: 1, maxLength: 100 },
+    },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+  },
+  required: [
+    "displayName",
+    "city",
+    "kind",
+    "searchQuery",
+    "rationale",
+    "expectedBusinessTypes",
+    "confidence",
+  ],
+  additionalProperties: false,
+} as const;
+
+const visualOutputSchema = {
+  type: "object",
+  properties: {
+    visualScore: { type: "integer", minimum: 0, maximum: 15 },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    findings: {
+      type: "array",
+      maxItems: 12,
+      items: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            enum: ["HIERARCHY", "READABILITY", "NAVIGATION", "BRAND", "TRUST", "CTA"],
+          },
+          severity: { type: "string", enum: ["low", "medium", "high"] },
+          evidence: { type: "string", minLength: 1, maxLength: 500 },
+        },
+        required: ["code", "severity", "evidence"],
+        additionalProperties: false,
+      },
+    },
+    callAngles: {
+      type: "array",
+      minItems: 3,
+      maxItems: 3,
+      items: { type: "string", minLength: 1, maxLength: 300 },
+    },
+  },
+  required: ["visualScore", "confidence", "findings", "callAngles"],
+  additionalProperties: false,
+} as const;
+
 const anthropicResponseSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
   usage: z.object({ input_tokens: z.number().int().nonnegative(), output_tokens: z.number().int().nonnegative() }),
@@ -66,6 +127,7 @@ interface AiResult<T> {
 async function callAnthropic(
   body: Record<string, unknown>,
   options: AiOptions,
+  outputSchema: Record<string, unknown>,
 ): Promise<{ text: string; usage: AiResult<unknown>["usage"] }> {
   const response = await (options.fetchImpl ?? fetch)(ANTHROPIC_MESSAGES_URL, {
     method: "POST",
@@ -74,7 +136,12 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
       "x-api-key": options.apiKey,
     },
-    body: JSON.stringify({ model: options.model, max_tokens: 1_200, ...body }),
+    body: JSON.stringify({
+      model: options.model,
+      max_tokens: 1_200,
+      output_config: { format: { type: "json_schema", schema: outputSchema } },
+      ...body,
+    }),
   });
   if (!response.ok) throw new Error(`AI request failed with HTTP ${response.status}`);
 
@@ -108,6 +175,7 @@ export async function proposeTerritory(
       messages: [{ role: "user", content: JSON.stringify(input) }],
     },
     options,
+    territoryOutputSchema,
   );
   return { value: parseTerritoryProposal(response.text), usage: response.usage };
 }
@@ -158,6 +226,7 @@ export async function assessWebsiteVisuals(
       ],
     },
     options,
+    visualOutputSchema,
   );
   return { value: parseVisualAssessment(response.text), usage: response.usage };
 }

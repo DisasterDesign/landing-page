@@ -4,7 +4,7 @@
 
 **Goal:** Make weekly territory proposals and visual audits reliably match their strict production schemas.
 
-**Architecture:** Preserve the Zod boundaries and change only the two Anthropic system instructions. Verify each exact outbound prompt through the existing injected `fetchImpl` seam.
+**Architecture:** Preserve the Zod boundaries, make both semantic system instructions explicit, and enforce equivalent JSON Schemas with Anthropic Structured Outputs. Verify each exact outbound request through the existing injected `fetchImpl` seam.
 
 **Tech Stack:** TypeScript, Node test runner, Zod, Anthropic Messages API
 
@@ -65,3 +65,20 @@ Commit only the two code files and the two contract documents. Merge the tested 
 - [x] **Step 2: Add the minimal visual prompt contract without changing parsing or retries**
 
 - [x] **Step 3: Run the focused test and verify it passes**
+
+### Task 3: Enforce both contracts with Anthropic Structured Outputs
+
+**Files:**
+- Modify: `src/lib/prospecting/ai.test.ts`
+- Modify: `src/lib/prospecting/ai.ts`
+- Modify: `docs/superpowers/specs/2026-07-22-prospecting-ai-json-contract-design.md`
+
+**Interfaces:**
+- Consumes: the existing territory and visual Zod response contracts
+- Produces: `output_config.format` request objects with `type: "json_schema"` for both Anthropic calls
+
+- [x] **Step 1: Add failing assertions for structured-output schemas in both request bodies**
+
+- [x] **Step 2: Add the minimal equivalent JSON Schemas and pass them through `callAnthropic`**
+
+- [x] **Step 3: Verify both focused contract tests pass without retries or parser coercion**

@@ -25,6 +25,15 @@ const visual = {
   callAngles: ["שיפור מהירות", "חיזוק SEO", "שיפור מסלול רכישה"],
 };
 
+function outputJsonSchema(requestBody: Record<string, unknown> | undefined): Record<string, unknown> {
+  const outputConfig = requestBody?.output_config as
+    | { format?: { type?: unknown; schema?: unknown } }
+    | undefined;
+  assert.equal(outputConfig?.format?.type, "json_schema");
+  assert.equal(typeof outputConfig?.format?.schema, "object");
+  return outputConfig?.format?.schema as Record<string, unknown>;
+}
+
 test("AI parsers accept strict JSON and Markdown-fenced JSON", () => {
   assert.deepEqual(parseTerritoryProposal(JSON.stringify(territory)), territory);
   assert.deepEqual(parseVisualAssessment(`\`\`\`json\n${JSON.stringify(visual)}\n\`\`\``), visual);
@@ -70,6 +79,20 @@ test("territory requests define the complete strict JSON response contract", asy
   for (const kind of ["STREET", "COMMERCIAL_CENTER", "AREA"]) {
     assert.match(system, new RegExp(`\\b${kind}\\b`));
   }
+
+  const schema = outputJsonSchema(requestBody);
+  assert.deepEqual(schema.required, [
+    "displayName",
+    "city",
+    "kind",
+    "searchQuery",
+    "rationale",
+    "expectedBusinessTypes",
+    "confidence",
+  ]);
+  assert.equal(schema.additionalProperties, false);
+  const properties = schema.properties as Record<string, Record<string, unknown>>;
+  assert.deepEqual(properties.kind.enum, ["STREET", "COMMERCIAL_CENTER", "AREA"]);
 });
 
 test("visual requests define the complete strict JSON response contract", async () => {
@@ -106,6 +129,26 @@ test("visual requests define the complete strict JSON response contract", async 
   for (const severity of ["low", "medium", "high"]) {
     assert.match(system, new RegExp(`\\b${severity}\\b`));
   }
+
+
+  const schema = outputJsonSchema(requestBody);
+  assert.deepEqual(schema.required, ["visualScore", "confidence", "findings", "callAngles"]);
+  assert.equal(schema.additionalProperties, false);
+  const properties = schema.properties as Record<string, Record<string, unknown>>;
+  const findings = properties.findings.items as {
+    properties: Record<string, Record<string, unknown>>;
+  };
+  assert.deepEqual(findings.properties.code.enum, [
+    "HIERARCHY",
+    "READABILITY",
+    "NAVIGATION",
+    "BRAND",
+    "TRUST",
+    "CTA",
+  ]);
+  assert.deepEqual(findings.properties.severity.enum, ["low", "medium", "high"]);
+  assert.equal(properties.callAngles.minItems, 3);
+  assert.equal(properties.callAngles.maxItems, 3);
 });
 
 test("website content is marked untrusted and cannot add tools to the AI call", async () => {
