@@ -1,4 +1,12 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fuzion Webz
+
+The Fuzion Webz website and internal operations application: leads, sellers, agreements, payments, clients, finance, SEO and content operations.
+
+## Cold prospecting trial
+
+The isolated `feat/cold-lead-pipeline` branch contains a disabled-by-default weekly Google Places prospecting flow. See [the operations runbook](docs/PROSPECTING_RUNBOOK.md) and [decision log](DECISIONS.md). No production migration or deployment is implied by the presence of this code.
+
+This is a [Next.js](https://nextjs.org) application.
 
 ## Getting Started
 

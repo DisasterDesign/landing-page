@@ -347,7 +347,9 @@ model ProspectingCycle {
   lockToken          String?
   placesSearchCalls  Int                    @default(0)
   placesDetailCalls  Int                    @default(0)
+  discoveryQueryIndex Int                   @default(0)
   pageSpeedCalls     Int                    @default(0)
+  aiCalls            Int                    @default(0)
   aiInputTokens      Int                    @default(0)
   aiOutputTokens     Int                    @default(0)
   estimatedCostUsd   Float                  @default(0)
@@ -410,6 +412,10 @@ model Prospect {
   lastContactedAt    DateTime?
   nextFollowUpAt     DateTime?
   publishedAt        DateTime?
+  firstAuditFailureAt DateTime?
+  lastAuditFailureAt  DateTime?
+  nextAuditAt         DateTime?
+  auditFailureCount   Int                    @default(0)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   audits             ProspectWebsiteAudit[]
@@ -695,6 +701,7 @@ PROSPECTING_AI_MODEL=
 PROSPECTING_GOOGLE_PLACES_API_KEY=
 PROSPECTING_PAGESPEED_API_KEY=
 PROSPECTING_HASH_SECRET=
+PROSPECTING_WEEKLY_TARGET=50
 PROSPECTING_MAX_DISCOVERED_PER_CYCLE=250
 PROSPECTING_MAX_PLACES_CALLS_PER_CYCLE=400
 PROSPECTING_MAX_AI_CALLS_PER_CYCLE=250
