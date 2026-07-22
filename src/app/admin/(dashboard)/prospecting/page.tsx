@@ -12,6 +12,7 @@ import type {
 } from "@/components/admin/prospecting/types";
 
 interface Settings {
+  environmentEnabled: boolean;
   sellerId: string | null;
   weeklyTarget: number;
   adminKillSwitch: boolean;
@@ -167,12 +168,16 @@ export default function ProspectingAdminPage() {
         </div>
         <span
           className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${
-            settings?.adminKillSwitch
+            !settings?.environmentEnabled || settings?.adminKillSwitch
               ? "bg-red-500/15 text-red-300"
               : "bg-green-500/15 text-green-300"
           }`}
         >
-          {settings?.adminKillSwitch ? "האוטומציה עצורה" : "האוטומציה מורשית"}
+          {!settings?.environmentEnabled
+            ? "הפיצ׳ר כבוי ב-environment"
+            : settings.adminKillSwitch
+              ? "האוטומציה עצורה"
+              : "האוטומציה פעילה"}
         </span>
       </header>
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
+import { getProspectingConfig } from "@/lib/prospecting/config";
 import { prospectingSettingsSchema } from "@/lib/validations";
 
 export async function GET() {
@@ -27,7 +28,9 @@ export async function GET() {
     }),
   ]);
   const values = new Map(settings.map(({ key, value }) => [key, value]));
+  const config = getProspectingConfig();
   return NextResponse.json({
+    environmentEnabled: config.enabled,
     sellerId: values.get("prospecting:defaultSellerId") ?? null,
     adminKillSwitch: values.get("prospecting:adminKillSwitch") === true,
     weeklyTarget: values.get("prospecting:weeklyTarget") ?? 50,
