@@ -128,6 +128,7 @@ export const promoteProspectSchema = z.object({
 export const prospectingSettingsSchema = z.object({
   sellerId: z.string().min(1).max(200),
   weeklyTarget: z.number().int().min(1).max(50),
+  adminKillSwitch: z.boolean().optional().default(false),
 });
 
 export const updateAgreementSchema = z.object({

@@ -62,8 +62,9 @@ export async function createWeeklyProposal(
   const existing = await prisma.prospectingCycle.findUnique({ where: { weekStart } });
   if (existing) return { action: "exists", cycleId: existing.id };
 
-  const [sellerSetting, previousProposals] = await Promise.all([
+  const [sellerSetting, targetSetting, previousProposals] = await Promise.all([
     prisma.keyValue.findUnique({ where: { key: "prospecting:defaultSellerId" } }),
+    prisma.keyValue.findUnique({ where: { key: "prospecting:weeklyTarget" } }),
     prisma.territoryProposal.findMany({
       where: { status: "APPROVED" },
       select: { coverageKey: true },
@@ -73,11 +74,13 @@ export async function createWeeklyProposal(
   ]);
   const sellerId = settingString(sellerSetting?.value);
   if (!sellerId) throw new Error("No default seller is configured for prospecting");
+  const storedTarget = typeof targetSetting?.value === "number" ? targetSetting.value : config.weeklyTarget;
+  const targetCount = Math.min(Math.max(Math.trunc(storedTarget), 1), 50);
 
   const cycle = await prisma.prospectingCycle.create({
     data: {
       weekStart,
-      targetCount: config.weeklyTarget,
+      targetCount,
       assignedSellerId: sellerId,
       status: "PROPOSING",
     },
@@ -87,7 +90,7 @@ export async function createWeeklyProposal(
     const proposalResult = await (dependencies.propose ?? proposeTerritory)(
       {
         previousCoverageKeys: previousProposals.map(({ coverageKey }) => coverageKey),
-        performanceSummary: { requestedProspects: config.weeklyTarget },
+        performanceSummary: { requestedProspects: targetCount },
       },
       { apiKey: config.aiApiKey, model: config.aiModel },
     );
@@ -136,4 +139,68 @@ export async function createWeeklyProposal(
     });
     throw error;
   }
+}
+
+export async function createReplacementProposal(
+  cycleId: string,
+  dependencies: {
+    propose?: typeof proposeTerritory;
+    notifyAdmins?: typeof notifyAllAdmins;
+  } = {},
+): Promise<{ proposalId: string }> {
+  const config = getProspectingConfig();
+  const cycle = await prisma.prospectingCycle.findUnique({ where: { id: cycleId } });
+  if (!cycle) throw new Error("Prospecting cycle not found");
+
+  const previousProposals = await prisma.territoryProposal.findMany({
+    where: { OR: [{ status: "APPROVED" }, { cycleId }] },
+    select: { coverageKey: true },
+    orderBy: { createdAt: "desc" },
+    take: 250,
+  });
+  const proposalResult = await (dependencies.propose ?? proposeTerritory)(
+    {
+      previousCoverageKeys: previousProposals.map(({ coverageKey }) => coverageKey),
+      performanceSummary: { requestedProspects: cycle.targetCount, replacement: true },
+    },
+    { apiKey: config.aiApiKey, model: config.aiModel },
+  );
+  const proposal = proposalResult.value;
+  const coverageKey = createCoverageKey(proposal);
+  if (previousProposals.some((previous) => previous.coverageKey === coverageKey)) {
+    throw new Error("AI proposed a territory that was already considered");
+  }
+
+  const saved = await prisma.$transaction(async (transaction) => {
+    const created = await transaction.territoryProposal.create({
+      data: {
+        cycleId,
+        displayName: proposal.displayName,
+        city: proposal.city,
+        kind: proposal.kind,
+        searchQuery: proposal.searchQuery,
+        coverageKey,
+        rationale: proposal.rationale,
+        expectedBusinessTypes: proposal.expectedBusinessTypes,
+        confidence: proposal.confidence,
+      },
+    });
+    await transaction.prospectingCycle.update({
+      where: { id: cycleId },
+      data: {
+        status: "AWAITING_APPROVAL",
+        lastError: null,
+        aiInputTokens: { increment: proposalResult.usage.inputTokens },
+        aiOutputTokens: { increment: proposalResult.usage.outputTokens },
+      },
+    });
+    return created;
+  });
+  await (dependencies.notifyAdmins ?? notifyAllAdmins)({
+    type: "PROSPECTING_APPROVAL",
+    title: "אזור חלופי ממתין לאישור",
+    body: `${proposal.displayName}, ${proposal.city}`,
+    url: `/admin/prospecting?proposal=${saved.id}`,
+  });
+  return { proposalId: saved.id };
 }
