@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import fixture from "./__fixtures__/pagespeed.json";
-import { parsePageSpeedResponse, runPageSpeed } from "./pagespeed";
+import { hasPageSpeedScreenshot, parsePageSpeedResponse, runPageSpeed } from "./pagespeed";
 
 test("PageSpeed parser extracts lab scores, key timings, SEO evidence and screenshot", () => {
   assert.deepEqual(parsePageSpeedResponse(fixture), {
@@ -33,4 +33,19 @@ test("absent CrUX field data does not fail a lab audit", async () => {
   });
   assert.equal(result.performanceScore, 62);
   assert.ok(requestSignal instanceof AbortSignal);
+});
+
+test("a PageSpeed result without a final screenshot is not ready for visual scoring", () => {
+  const { "final-screenshot": _screenshot, ...auditsWithoutScreenshot } =
+    fixture.lighthouseResult.audits;
+  void _screenshot;
+  const audit = parsePageSpeedResponse({
+    ...fixture,
+    lighthouseResult: {
+      ...fixture.lighthouseResult,
+      audits: auditsWithoutScreenshot,
+    },
+  });
+
+  assert.equal(hasPageSpeedScreenshot(audit), false);
 });

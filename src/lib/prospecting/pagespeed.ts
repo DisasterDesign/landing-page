@@ -18,6 +18,12 @@ export interface PageSpeedAudit {
   finalScreenshotDataUrl: string | null;
 }
 
+export function hasPageSpeedScreenshot(
+  audit: PageSpeedAudit,
+): audit is PageSpeedAudit & { finalScreenshotDataUrl: string } {
+  return typeof audit.finalScreenshotDataUrl === "string" && audit.finalScreenshotDataUrl.startsWith("data:image/");
+}
+
 const responseSchema = z
   .object({
     lighthouseResult: z.object({

@@ -8,7 +8,7 @@ import { assessWebsiteVisuals } from "./ai";
 import { classifyWebsiteUrl, looksParked } from "./classify-website";
 import { auditCommerce } from "./commerce-audit";
 import { getProspectingConfig } from "./config";
-import { runPageSpeed } from "./pagespeed";
+import { hasPageSpeedScreenshot, runPageSpeed } from "./pagespeed";
 import { GooglePlacesProspectingProvider, PROSPECTING_CATEGORY_QUERIES } from "./places";
 import { publishProspectingCycle } from "./publisher";
 import { safeFetchHtml, type SafeFetchFailureCode } from "./safe-fetch";
@@ -367,7 +367,23 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       where: { id: cycleId },
       data: { pageSpeedCalls: { increment: 1 } },
     });
-    if (!pageSpeed.finalScreenshotDataUrl) throw new Error("PageSpeed did not return a final screenshot");
+    const { finalScreenshotDataUrl: _discardedScreenshot, ...pageSpeedEvidence } = pageSpeed;
+    void _discardedScreenshot;
+    if (!hasPageSpeedScreenshot(pageSpeed)) {
+      await saveTerminalAudit({
+        prospectId: prospect.id,
+        websiteStatus: "ACTIVE",
+        auditedDomain: domain,
+        technicalEvidence: {
+          technical,
+          commerce,
+          pageSpeed: pageSpeedEvidence,
+          visualAudit: "PageSpeed did not return a final screenshot",
+        } as unknown as Prisma.InputJsonValue,
+        businessShape: commerce.businessShape,
+      });
+      return "audited" as const;
+    }
 
     const visual = await assessWebsiteVisuals(
       {
@@ -386,8 +402,6 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       visualScore: visual.value.visualScore,
     });
     const score = calculateWebsiteScore({ websiteStatus: "ACTIVE", dimensions });
-    const { finalScreenshotDataUrl: _discardedScreenshot, ...pageSpeedEvidence } = pageSpeed;
-    void _discardedScreenshot;
 
     await saveTerminalAudit({
       prospectId: prospect.id,
