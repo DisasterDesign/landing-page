@@ -79,6 +79,7 @@ test("territory requests define the complete strict JSON response contract", asy
   for (const kind of ["STREET", "COMMERCIAL_CENTER", "AREA"]) {
     assert.match(system, new RegExp(`\\b${kind}\\b`));
   }
+  assert.match(system, /Hebrew/i);
 
   const schema = outputJsonSchema(requestBody);
   assert.deepEqual(schema.required, [
@@ -134,6 +135,9 @@ test("visual requests define the complete strict JSON response contract", async 
   for (const severity of ["low", "medium", "high"]) {
     assert.match(system, new RegExp(`\\b${severity}\\b`));
   }
+  assert.match(system, /Hebrew/i);
+  assert.match(system, /observed weakness/i);
+  assert.match(system, /Fuzion/i);
 
 
   const schema = outputJsonSchema(requestBody);
