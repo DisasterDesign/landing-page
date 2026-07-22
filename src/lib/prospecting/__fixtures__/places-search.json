@@ -1,0 +1,8 @@
+{
+  "places": [
+    { "id": "place-1" },
+    { "id": "place-2" },
+    { "id": "place-2" }
+  ],
+  "nextPageToken": "page-2"
+}
