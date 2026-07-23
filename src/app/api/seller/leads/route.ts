@@ -46,9 +46,6 @@ async function includeFocusedIncomingLead(input: {
       id: input.focus,
       sellerId: input.sellerId,
     });
-    if (lead.intentLevel === "OUTBOUND") {
-      return { leads: input.leads, focusState: "not_found" as const };
-    }
     return {
       leads: [lead, ...input.leads],
       focusState: "found" as const,
@@ -74,9 +71,13 @@ export async function GET(request: NextRequest) {
     const focus = searchParams.get("focus");
     const unified = getLeadLifecycleConfig().enabled;
     if (unified) {
+      // ONE queue, all three temperatures (hot → medium → cold via
+      // INCOMING_PRIORITY). The separate cold-leads page is gone — a seller
+      // has a single list, and temperature is a visible dimension, not a
+      // navigation split.
       const page = await getSellerLeadList({
         sellerId,
-        intents: ["INBOUND", "AD_RESPONSE"],
+        intents: ["INBOUND", "AD_RESPONSE", "OUTBOUND"],
         cursor: searchParams.get("cursor") ?? undefined,
         limit: Number(searchParams.get("limit") ?? 50),
         search,

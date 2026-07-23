@@ -5,11 +5,22 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
-import LeadSourceBadge from "@/components/leads/LeadSourceBadge";
+import type { LeadIntentLevel } from "@prisma/client";
+
+import LeadSourceBadge, {
+  LEAD_TEMPERATURES,
+} from "@/components/leads/LeadSourceBadge";
 import Modal from "@/components/ui/Modal";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import type { SellerLeadDetail } from "@/lib/leads/projection";
 import { mergeLeadQueueItems } from "@/lib/leads/ui-state";
+
+const TEMPERATURE_TABS: Array<{ value: LeadIntentLevel | ""; label: string }> = [
+  { value: "", label: "הכל" },
+  { value: "INBOUND", label: `${LEAD_TEMPERATURES.INBOUND.emoji} חמים` },
+  { value: "AD_RESPONSE", label: `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} בינוניים` },
+  { value: "OUTBOUND", label: `${LEAD_TEMPERATURES.OUTBOUND.emoji} קרים` },
+];
 
 const slaLabels = {
   ON_TIME: "בתוך זמן התגובה",
@@ -35,6 +46,7 @@ export default function UnifiedIncomingLeadsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
+  const [temperature, setTemperature] = useState<LeadIntentLevel | "">("");
 
   const load = useCallback(async () => {
     try {
@@ -141,10 +153,10 @@ export default function UnifiedIncomingLeadsPage() {
       <div dir="rtl" className="space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-white">לידים נכנסים</h1>
+            <h1 className="text-2xl font-bold text-white">הלידים שלי</h1>
             <p className="mt-1 text-sm text-gray-400">
-              פניות יזומות של לקוחות תחילה, אחריהן תגובות לפרסומות — הישן
-              ביותר קודם.
+              רשימה אחת, שלוש דרגות חום: 🔥 חם — הלקוח חיפש אותנו · 🌤️ בינוני
+              — השאיר פרטים בפרסומת · 🧊 קר — איתור יזום שלנו. חמים תחילה.
             </p>
           </div>
           <button
@@ -156,15 +168,51 @@ export default function UnifiedIncomingLeadsPage() {
           </button>
         </header>
 
+        <nav
+          aria-label="סינון לפי דרגת חום"
+          className="flex flex-wrap gap-2"
+        >
+          {TEMPERATURE_TABS.map((tab) => {
+            const count =
+              tab.value === ""
+                ? leads.length
+                : leads.filter((lead) => lead.intentLevel === tab.value)
+                    .length;
+            const active = temperature === tab.value;
+            return (
+              <button
+                key={tab.value || "all"}
+                type="button"
+                onClick={() => setTemperature(tab.value)}
+                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                  active
+                    ? "border-pink bg-pink/10 text-white"
+                    : "border-gray-700 bg-gray-900 text-gray-400 hover:text-white"
+                }`}
+              >
+                {tab.label}
+                <span className="mr-1.5 text-xs text-gray-500">
+                  ({count})
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
         {loading ? (
           <div className="py-16 text-center text-gray-500">טוען...</div>
         ) : leads.length === 0 ? (
           <div className="rounded-2xl border border-gray-700 bg-gray-900 py-16 text-center text-gray-500">
-            אין כרגע לידים נכנסים לטיפול.
+            אין כרגע לידים לטיפול.
           </div>
         ) : (
           <div className="space-y-3">
-            {leads.map((lead) => {
+            {leads
+              .filter(
+                (lead) =>
+                  temperature === "" || lead.intentLevel === temperature,
+              )
+              .map((lead) => {
               const displayName = lead.displayName;
               const sla = lead.responseSla;
               return (

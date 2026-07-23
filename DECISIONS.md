@@ -121,3 +121,29 @@ Local status fields, replayable callback bodies and stale sessions are not autho
 ### Reversibility
 
 The evidence and recurring-idempotency columns are additive and nullable for legacy data. The application remains fail-closed if evidence or secrets are absent. UI flags can still restore the prior screens, but payment proof, canonical suppression and persisted-role checks are invariant and are not disabled by UI rollback.
+
+## 2026-07-24 — שלוש דרגות חום לליד, ורשימת לידים אחת לכל תפקיד
+
+**Status:** Accepted.
+
+### Decision
+
+לכל ליד יש בדיוק אחת משלוש דרגות חום, והיא הממד הראשון שאדם רואה — לפני שם, לפני מקור:
+
+| דרגה | `intentLevel` | משמעות | ערוץ נוכחי |
+|---|---|---|---|
+| 🧊 ליד קר | `OUTBOUND` | אנחנו יזמנו | אוטומציית Google Maps |
+| 🌤️ ליד בינוני | `AD_RESPONSE` | הלקוח השאיר פנייה חפוזה על מודעה | Meta Lead Ads |
+| 🔥 ליד חם | `INBOUND` | הלקוח חיפש אותנו | פה-לאוזן היום, Google Search בעתיד |
+
+ערוץ טכני חדש (`sourceKey`) ממופה לאחת משלוש הדרגות — לא ממציאים "סוג ליד" רביעי.
+
+בהתאם: רשימת לידים **אחת** לכל תפקיד. `/seller/cold-leads` הפך ל-redirect אל `/seller/leads` (שמציג את שלוש הדרגות עם טאבי חום); באדמין `/admin/leads` הוא הרשימה היחידה, ו-`/admin/prospecting` נשאר כדף תפעול המנוע ("אוטומציית גוגל") — מכונה, לא לידים.
+
+### Rationale
+
+פיצול לפי מקור כפה על אותו איש מכירות שתי רשימות עבודה ושבר את המבט האחד על המשפך. דרגת החום היא ההקשר המכירתי האמיתי (איך פותחים שיחה, כמה דחוף לענות); המקור הוא רק שדה משני.
+
+### Reversibility
+
+UI בלבד — הנתונים (`intentLevel`, `sourceKey`) לא השתנו. ה-routes הישנים של cold-leads נשארו כ-redirect/compat.

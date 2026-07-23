@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
+import { LEAD_TEMPERATURES } from "@/components/leads/LeadSourceBadge";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import type {
   LeadMetrics as LeadMetricsValue,
@@ -166,9 +167,61 @@ export default function UnifiedAdminLeadsPage() {
         <header>
           <h1 className="text-2xl font-bold text-white">לידים — CRM מאוחד</h1>
           <p className="mt-1 text-sm text-gray-400">
-            כל מקורות הליד, הבעלות, הפעילות והעסקאות במקום אחד.
+            כל הלידים במקום אחד, בשלוש דרגות חום: 🔥 חם — הלקוח חיפש אותנו ·
+            🌤️ בינוני — השאיר פרטים בפרסומת · 🧊 קר — איתור יזום מגוגל.
           </p>
         </header>
+
+        {/* Temperature first — the one dimension you read before anything. */}
+        <nav aria-label="סינון לפי דרגת חום" className="flex flex-wrap gap-2">
+          {(
+            [
+              ["", "הכל"],
+              ["INBOUND", `${LEAD_TEMPERATURES.INBOUND.emoji} חמים`],
+              [
+                "AD_RESPONSE",
+                `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} בינוניים`,
+              ],
+              ["OUTBOUND", `${LEAD_TEMPERATURES.OUTBOUND.emoji} קרים`],
+            ] as const
+          ).map(([value, label]) => {
+            const active = filters.intent === value;
+            const count =
+              value === ""
+                ? metrics
+                  ? Object.values(metrics.byIntent).reduce(
+                      (sum, funnel) => sum + funnel.created,
+                      0,
+                    )
+                  : null
+                : metrics?.byIntent[value]?.created ?? 0;
+            return (
+              <button
+                key={value || "all"}
+                type="button"
+                onClick={() => {
+                  const next = { ...filters, intent: value };
+                  setFilters(next);
+                  router.replace(
+                    `/admin/leads?${paramsFromFilters(next).toString()}`,
+                  );
+                }}
+                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                  active
+                    ? "border-pink bg-pink/10 text-white"
+                    : "border-gray-700 bg-gray-900 text-gray-400 hover:text-white"
+                }`}
+              >
+                {label}
+                {count !== null && (
+                  <span className="mr-1.5 text-xs text-gray-500">
+                    ({count})
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {cards.map(([label, value]) => (
