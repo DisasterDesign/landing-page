@@ -31,3 +31,32 @@ Keeping prospects separate prevents speculative cold records from polluting the 
 ### Reversibility
 
 No production schema change or deployment is part of this branch. Before migration, removal is deleting the branch/worktree. After migration, set `PROSPECTING_ENABLED=false` immediately; dropping the isolated prospecting tables and nullable integration columns is a separate reviewed migration.
+
+## 2026-07-23 — Separate website opportunity from sales fit
+
+**Status:** Accepted for production rollout.
+
+### Decision
+
+A cold prospect must pass two independent gates:
+
+1. Website opportunity: the existing deterministic score is 0 through 4.
+2. Sales fit: the business is likely independent, confidence is at least 0.80, owner reachability is at least 70, and a public business phone exists.
+
+Territory selection is changed from a generic compact area to a named commercial street or open local commercial center. Broad areas, malls, chain-dominated centers, campuses, institutions, industrial zones and logistics centers are prohibited.
+
+Chains and franchises are excluded completely. A versioned deterministic denylist and prohibited business types catch high-certainty cases. A bounded structured AI assessment handles the remaining ambiguous public evidence and fails closed to `UNCERTAIN`.
+
+### Public business data
+
+The seller receives public business phone, website, map, category, address, rating/review context and opening hours. Google content remains live and is not stored. Each Place Details request fails independently, so one bad response cannot erase the rest of the list. The independently audited domain is the website fallback.
+
+No private owner name, mobile number, email or other personal contact is discovered or inferred.
+
+### Batch replacement
+
+Cycles and batches are revisioned by `[weekStart, revision]`. An unsuitable published batch is superseded rather than deleted. Only untouched prospects are invalidated; calls, audits, promoted leads and attribution remain intact. The seller reads the latest non-superseded batch.
+
+### Rationale
+
+The Dizengoff Center batch optimized for website weakness but included businesses whose purchasing decision is controlled by a chain or large organization. That is not a usable cold-sales list. The new model optimizes for both a solvable website problem and a realistic path to the person who can approve the purchase.

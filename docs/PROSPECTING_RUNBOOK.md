@@ -2,7 +2,9 @@
 
 ## Current status
 
-The implementation lives only on `feat/cold-lead-pipeline`. It has not been pushed, deployed, or connected to the production database. No production migration has been applied. `PROSPECTING_ENABLED` defaults to `false`.
+The initial prospecting pipeline is active in production. The first Dizengoff Center batch demonstrated that website quality alone is not enough: a business must also be an independent, owner-reachable sales prospect.
+
+The sales-fit overhaul is implemented on `fix/prospecting-sales-fit`. It adds territory-shape validation, chain/franchise exclusion, a separate sales-fit gate, partial Place Details resilience, call-ready seller cards, and revisioned batch replacement. `PROSPECTING_ENABLED` and the admin kill switch remain the immediate stop controls.
 
 ## Required services
 
@@ -33,28 +35,43 @@ PROSPECTING_MAX_ESTIMATED_COST_USD=25
 
 Generate `PROSPECTING_HASH_SECRET` as a long random value and keep it stable. Changing it makes existing phone/domain suppression hashes impossible to reproduce.
 
-## Pre-production setup
+## Sales-fit upgrade rollout
 
 1. Create a preview database from a current schema-safe copy. Never point preview verification at production.
-2. Apply `prisma/schema.prisma` to the preview database using the same reviewed schema workflow used by Fuzion. This repository currently has no migration history; do not invent a full baseline migration or run `prisma db push` against production from this branch.
-3. Deploy the branch to a preview environment with all provider keys and `PROSPECTING_ENABLED=false`.
-4. Open `/admin/prospecting`. Select the seller, keep the weekly target at 50, enable the admin kill switch, and save.
-5. Verify that all three prospecting cron endpoints return a successful disabled/no-op response and create no cycle.
-6. Set `PROSPECTING_ENABLED=true` in preview while the admin kill switch remains on. Verify the UI reports that automation is stopped by admin control.
-7. Review Google and Anthropic quotas and confirm the estimated-cost ceiling is appropriate.
+2. Apply `prisma/schema.prisma` to preview and confirm existing cycles become revision 1, historical rows remain readable, and all new sales-fit columns are nullable.
+3. Deploy the branch with the admin kill switch enabled.
+4. Run the full tests, lint and production build against the exact deploy commit.
+5. Generate one test proposal. Confirm `STREET` and open-local `COMMERCIAL_CENTER` pass, while malls, broad areas, campuses, industrial zones and chain-dominated centers fail.
+6. Run a bounded discovery sample. Confirm chains, franchises, institutions and missing-phone businesses are terminally excluded before PageSpeed.
+7. Open the seller list and confirm phone, website/no-site state, Google Maps, category, address, rating context, hours, sales-fit reason and website findings are visible.
+8. Simulate one malformed Place Details response and confirm the other businesses retain their live data.
+9. Review Google and Anthropic quotas. Active websites may use one sales-fit AI call plus one visual-audit AI call.
 
-## First-cycle checklist
+## Weekly-cycle checklist
 
 1. Turn off the admin kill switch in preview.
 2. Invoke `/api/cron/prospecting-propose` once with valid cron authorization.
 3. Confirm every admin receives an in-app notification linking to the proposed territory.
-4. Review the proposal in `/admin/prospecting`; reject it once to verify a bounded replacement is created, then approve an appropriate proposal.
+4. Approve only a named commercial street or open local center whose rationale targets independent storefront businesses.
 5. Invoke the worker repeatedly or wait for its ten-minute schedule.
-6. Confirm that only Place IDs and derived audit evidence are stored—never raw Google payloads, HTML or screenshot data.
-7. Confirm scores follow the fixed boundaries and that score 5 is absent from the seller batch.
-8. Confirm the seller receives at most 50 records, live phone/business data, three call angles and no territory/scoring controls.
+6. Confirm that only Place IDs and Fuzion-derived sales-fit/audit evidence are stored—never raw Google payloads, business details, HTML or screenshot data.
+7. Confirm every published prospect is `INDEPENDENT_LIKELY`, sales-fit confidence is at least 0.80, owner reachability is at least 70, a live public phone exists, and website score 5 is absent.
+8. Confirm the seller receives at most 50 records. Fewer than 50 is correct when the territory cannot meet the thresholds.
 9. Record a follow-up, `DO_NOT_CALL`, and `INTERESTED`. Verify suppression, promotion to a warm lead, agreement `leadId`, payment flow and commission behavior.
-10. Only after a successful preview cycle, schedule a separate production migration/deploy review.
+
+## Replacing an unsuitable published batch
+
+Use `supersedePublishedCycle(cycleId, reason)` only after the new production deployment passes live smoke tests.
+
+The operation:
+
+1. Marks the published cycle and batch as superseded.
+2. Marks only untouched `PUBLISHED` prospects as `INVALID`.
+3. Preserves prospects with interactions, call history, audits and attribution.
+4. Creates the next revision for the same week and seller.
+5. Generates a new territory proposal and notifies admins.
+
+The operation is idempotent. Never manually delete the old batch or prospect rows.
 
 ## Schedules
 
@@ -82,14 +99,15 @@ Already published historical seller records remain readable if provider credenti
 - Maximum 250 AI calls per cycle.
 - Maximum estimated AI cost: USD 25 per cycle.
 - Google Text Search is treated as best-effort and capped at 60 results per query; it is not a complete business registry.
+- New proposals contain two to four bounded search seeds. The worker may expand only through those approved seeds and the fixed business-category taxonomy.
+- Ratings and review counts are context only. They cannot independently prove that a business is a chain, large organization or owner-operated.
+- Google Place Details are fetched live with bounded concurrency and per-place failure isolation. Only Place IDs are durable Google data.
 - Every arbitrary website request validates DNS and each redirect, rejects private/local/metadata addresses, permits only HTTP(S), limits redirects to 5, total time to 12 seconds, body size to 5 MB and analyzed text to 100,000 characters.
 - Outreach is human-only. Never add automated calls, WhatsApp, email or social messaging without a new explicit decision.
 
 ## Removal
 
-Before any production migration: delete the feature branch/worktree; production is unchanged.
-
-After a migration:
+To stop or remove the production trial:
 
 1. Set `PROSPECTING_ENABLED=false` and turn on the admin kill switch.
 2. Export any prospect/call history that must be retained.
