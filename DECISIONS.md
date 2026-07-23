@@ -60,3 +60,34 @@ Cycles and batches are revisioned by `[weekStart, revision]`. An unsuitable publ
 ### Rationale
 
 The Dizengoff Center batch optimized for website weakness but included businesses whose purchasing decision is controlled by a chain or large organization. That is not a usable cold-sales list. The new model optimizes for both a solvable website problem and a realistic path to the person who can approve the purchase.
+
+## 2026-07-23 — Unify the commercial lead lifecycle
+
+**Status:** Accepted for implementation behind feature flags.
+
+### Decision
+
+Every published cold prospect becomes a canonical commercial lead immediately. `Prospect` remains the one-to-one research and website-audit record; the existing `ContactSubmission` table is extended as the canonical lead store. The previous rule that created a `ContactSubmission` only after seller-recorded interest is superseded.
+
+Leads carry two independent source dimensions:
+
+- Immutable business intent: `OUTBOUND`, `AD_RESPONSE`, or `INBOUND`.
+- Extensible technical channel such as `google_maps`, `meta_lead_ads`, `website`, or `google_search_ads`.
+
+Seller views remain source-specific because the work differs: outbound leads require preparation, ad responses require fast follow-up, and customer-initiated leads receive the highest priority. All views write to the same lifecycle, ownership, notes, follow-up, agreement and event models.
+
+Ownership is exclusive and claimed atomically. A lead is `WON` only after the first successful payment; agreement creation, sending and signing remain separate stages. Notes are company CRM data rather than private seller notes. Every material transition is written to an append-only lead event log.
+
+### User experience
+
+The seller sees only the final assigned cold list and does not participate in research approval or scoring. Public business phone and the existing website are actionable in both seller and admin interfaces. Google phone data remains live by Place ID rather than being persisted; first-party or seller-confirmed contact data may be stored with provenance. Cold-lead preparation shows source context, the current site, the Fuzion audit and concrete call angles before dialing.
+
+The feature changes information hierarchy and behavior only. It reuses the existing admin/seller shell, components, RTL behavior, Birzia/Meruba/Anomalia fonts and existing pink/cyan/gray tokens. It does not introduce a new visual language or modify global design tokens.
+
+### Rationale
+
+Promoting a prospect only after interest splits one sales journey across two records and discards reliable funnel data before qualification. A canonical lead from publication preserves source attribution, claim history, failed contact attempts, notes, follow-ups, loss reasons, agreements and payment conversion without forcing the seller into research decisions.
+
+### Reversibility
+
+Schema changes are additive and the new UI and domain flow remain behind independent feature flags. Legacy fields and routes are retained through the migration window. Disabling the flags restores the prior interface without deleting the new audit history.
