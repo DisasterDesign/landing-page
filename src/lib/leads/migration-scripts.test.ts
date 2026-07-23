@@ -24,7 +24,9 @@ import {
   hasPublishedProspectLeadCreatedMetadata,
   isExactActiveNameRepairEvent,
   activeNameRepairManifestHash,
+  classifyActiveNameRepairState,
   protectedLeadState,
+  runActiveNameRepairTransaction,
   safeActiveNameRepairSummary,
   stableJson,
   validPublicPlaceCompanyName,
@@ -543,6 +545,8 @@ test("active historical outbound name repair is fail-closed and limits its produ
   assert.match(repairSources, /businessStatus\s*!==\s*"OPERATIONAL"/);
   assert.match(repairSources, /getLiveDetails/);
   assert.match(repairSources, /Post-write/i);
+  assert.match(activeNameRepairSource, /runActiveNameRepairTransaction(?:<[\s\S]*?>)?\(/);
+  assert.match(activeNameRepairSource, /validate:\s*async/);
 });
 
 test("active name repair output is restricted to aggregate counts and the manifest hash", () => {
@@ -678,8 +682,8 @@ test("repair event is exact about actor, stages and metadata", () => {
     type: "MIGRATED",
     actorType: "SYSTEM",
     actorUserId: null,
-    fromStage: "CONTACTING",
-    toStage: "CONTACTING",
+    fromStage: "NEW",
+    toStage: "NEW",
     dedupeKey: "lead:lead-1:public-place-company-name-backfill:v1",
     metadata: {
       action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
@@ -687,22 +691,25 @@ test("repair event is exact about actor, stages and metadata", () => {
       version: 1,
     },
   };
-  assert.equal(isExactActiveNameRepairEvent(event, "lead-1", "CONTACTING"), true);
+  assert.equal(isExactActiveNameRepairEvent(event, "lead-1"), true);
   assert.equal(
-    isExactActiveNameRepairEvent({ ...event, actorUserId: "user-1" }, "lead-1", "CONTACTING"),
+    isExactActiveNameRepairEvent({ ...event, actorUserId: "user-1" }, "lead-1"),
     false,
   );
   assert.equal(
-    isExactActiveNameRepairEvent({ ...event, toStage: "QUALIFIED" }, "lead-1", "CONTACTING"),
+    isExactActiveNameRepairEvent({ ...event, toStage: "QUALIFIED" }, "lead-1"),
     false,
   );
   assert.equal(
     isExactActiveNameRepairEvent(
       { ...event, metadata: { ...event.metadata, extra: true } },
       "lead-1",
-      "CONTACTING",
     ),
     false,
+  );
+  assert.equal(
+    classifyActiveNameRepairState({ company: "עסק", events: [event], leadId: "lead-1" }),
+    "alreadyRepaired",
   );
 });
 
@@ -733,6 +740,66 @@ test("protected repair manifest preserves raw snapshots and ISO dates while excl
     ),
   );
   assert.deepEqual(protectedLeadState({ ...base, company: "changed" }), protectedLeadState(base));
+  assert.equal(
+    activeNameRepairManifestHash(protectedLeadState(base)),
+    activeNameRepairManifestHash(protectedLeadState({ ...base, events: [base.events[0]] })),
+  );
+  assert.notEqual(
+    activeNameRepairManifestHash(protectedLeadState(base)),
+    activeNameRepairManifestHash(
+      protectedLeadState({
+        ...base,
+        events: [...base.events, { id: "event-2", dedupeKey: "ordinary" }],
+      }),
+    ),
+  );
+  assert.notEqual(
+    activeNameRepairManifestHash(protectedLeadState(base)),
+    activeNameRepairManifestHash(
+      protectedLeadState({ ...base, notes: [{ id: "note-2" }] }),
+    ),
+  );
+});
+
+test("repair transaction rolls back company and event when its in-transaction validator fails", async () => {
+  type Memory = { company: string | null; events: string[] };
+  let state: Memory = { company: null, events: [] };
+  const runTransaction = async <T>(callback: (transaction: Memory) => Promise<T>): Promise<T> => {
+    const before = structuredClone(state);
+    try {
+      return await callback(state);
+    } catch (error) {
+      state = before;
+      throw error;
+    }
+  };
+  const write = async (transaction: Memory) => {
+    transaction.company = "עסק";
+    transaction.events.push("repair");
+    return "written";
+  };
+
+  await assert.rejects(
+    runActiveNameRepairTransaction({
+      runTransaction,
+      write,
+      validate: async () => {
+        throw new Error("post-write failed");
+      },
+    }),
+    /post-write failed/,
+  );
+  assert.deepEqual(state, { company: null, events: [] });
+
+  assert.equal(
+    await runActiveNameRepairTransaction({
+      runTransaction,
+      write,
+      validate: async () => undefined,
+    }),
+    "written",
+  );
+  assert.deepEqual(state, { company: "עסק", events: ["repair"] });
 });
 
 test("post-write target guard rejects a changed target count or a pending target", () => {

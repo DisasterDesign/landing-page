@@ -122,21 +122,66 @@ export function isExactActiveNameRepairEvent(
     metadata: unknown;
   },
   leadId: string,
-  stage: string,
 ): boolean {
   const metadata = event.metadata as Record<string, unknown>;
   return (
     event.type === "MIGRATED" &&
     event.actorType === "SYSTEM" &&
     event.actorUserId === null &&
-    event.fromStage === stage &&
-    event.toStage === stage &&
+    event.fromStage !== null &&
+    event.fromStage === event.toStage &&
+    activeLeadStage(event.fromStage) &&
     event.dedupeKey === publicPlaceNameRepairDedupeKey(leadId) &&
     hasExactKeys(metadata, ["action", "provider", "version"]) &&
     metadata.action === "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED" &&
     metadata.provider === "GOOGLE_PLACES" &&
     metadata.version === 1
   );
+}
+
+export function classifyActiveNameRepairState(input: {
+  company: string | null;
+  events: Array<{
+    type: string;
+    actorType: string;
+    actorUserId: string | null;
+    fromStage: string | null;
+    toStage: string | null;
+    dedupeKey: string | null;
+    metadata: unknown;
+  }>;
+  leadId: string;
+}): "pending" | "alreadyRepaired" {
+  const repairEvents = input.events.filter(
+    (event) => event.dedupeKey === publicPlaceNameRepairDedupeKey(input.leadId),
+  );
+  if (input.company === null) {
+    if (repairEvents.length > 0) {
+      throw new Error("Target validation failed: repair event exists without company");
+    }
+    return "pending";
+  }
+  if (
+    repairEvents.length !== 1 ||
+    !isExactActiveNameRepairEvent(repairEvents[0], input.leadId)
+  ) {
+    throw new Error("Target validation failed: company drift without repair event");
+  }
+  return "alreadyRepaired";
+}
+
+export async function runActiveNameRepairTransaction<TClient, TResult>(input: {
+  runTransaction: (
+    callback: (transaction: TClient) => Promise<TResult>,
+  ) => Promise<TResult>;
+  write: (transaction: TClient) => Promise<TResult>;
+  validate: (transaction: TClient, result: TResult) => Promise<void>;
+}): Promise<TResult> {
+  return input.runTransaction(async (transaction) => {
+    const result = await input.write(transaction);
+    await input.validate(transaction, result);
+    return result;
+  });
 }
 
 export function stableJson(value: unknown): string {

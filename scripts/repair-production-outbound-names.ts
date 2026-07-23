@@ -14,11 +14,12 @@ import {
   assertOperationalPublicPlaceCompanyName,
   assertPostWriteActiveNameRepairTargets,
   assertActiveNameRepairTargetCount,
+  classifyActiveNameRepairState,
   hasPublishedProspectLeadCreatedMetadata,
-  isExactActiveNameRepairEvent,
   prospectCreatedByBackfillDedupeKey,
   publicPlaceNameRepairDedupeKey,
   protectedLeadState,
+  runActiveNameRepairTransaction,
   safeActiveNameRepairSummary,
 } from "./public-place-name-repair";
 
@@ -86,20 +87,6 @@ function hasBackfillProvenanceDedupeKey(lead: RepairLead): boolean {
   );
 }
 
-function repairEvents(lead: RepairLead) {
-  return lead.events.filter(
-    (event) => event.dedupeKey === publicPlaceNameRepairDedupeKey(lead.id),
-  );
-}
-
-function hasExactRepairEvent(lead: RepairLead): boolean {
-  const events = repairEvents(lead);
-  return (
-    events.length === 1 &&
-    isExactActiveNameRepairEvent(events[0], lead.id, lead.stage)
-  );
-}
-
 function targetForLead(lead: RepairLead): RepairTarget | null {
   if (
     lead.intentLevel !== "OUTBOUND" ||
@@ -132,17 +119,15 @@ function targetForLead(lead: RepairLead): RepairTarget | null {
   if (lead.name !== null) {
     throw new Error("Target validation failed: contact-person name must remain null");
   }
-  const exactRepairEvent = hasExactRepairEvent(lead);
-  if (lead.company !== null && !exactRepairEvent) {
-    throw new Error("Target validation failed: company drift without repair event");
-  }
-  if (lead.company === null && repairEvents(lead).length > 0) {
-    throw new Error("Target validation failed: repair event exists without company");
-  }
+  const state = classifyActiveNameRepairState({
+    company: lead.company,
+    events: lead.events,
+    leadId: lead.id,
+  });
   return {
     lead,
     placeId,
-    state: lead.company === null ? "pending" : "alreadyRepaired",
+    state,
     snapshot,
   };
 }
@@ -236,8 +221,17 @@ async function applyRepair(input: {
   names: ReadonlyMap<string, string>;
   repairStartedAt: Date;
 }): Promise<{ updated: number; eventsCreated: number }> {
-  return prisma.$transaction(
-    async (transaction) => {
+  return runActiveNameRepairTransaction<
+    Prisma.TransactionClient,
+    { updated: number; eventsCreated: number }
+  >({
+    runTransaction: (callback) =>
+      prisma.$transaction(callback, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 30_000,
+      }),
+    write: async (transaction) => {
       await lockTargets(transaction, input.targets);
       const reloaded = await loadScopedLeads(transaction);
       const lockedTargets = validatedTargets(reloaded, input.expectedTargetCount);
@@ -291,6 +285,9 @@ async function applyRepair(input: {
         if (!event.created) throw new Error("Transaction validation failed: repair event already exists");
         eventsCreated += 1;
       }
+      return { updated, eventsCreated };
+    },
+    validate: async (transaction) => {
       const postWriteLeads = await loadScopedLeads(transaction);
       const postWriteTargets = validatedTargets(postWriteLeads, input.expectedTargetCount);
       assertPostWriteActiveNameRepairTargets({
@@ -299,14 +296,8 @@ async function applyRepair(input: {
         pendingCount: postWriteTargets.filter((target) => target.state === "pending").length,
       });
       assertSameManifest(input.manifestHash, postWriteTargets);
-      return { updated, eventsCreated };
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      maxWait: 10_000,
-      timeout: 30_000,
-    },
-  );
+  });
 }
 
 async function main(): Promise<void> {
