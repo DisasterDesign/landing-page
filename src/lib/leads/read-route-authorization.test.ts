@@ -145,9 +145,6 @@ test("seller agreement access follows the current linked lead owner without leak
           is: {
             ownerId: "seller-2",
             migrationReviewRequired: false,
-            intentLevel: { not: null },
-            sourceKey: { not: null },
-            stage: { not: null },
           },
         },
       },

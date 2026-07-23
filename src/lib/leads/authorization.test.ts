@@ -12,9 +12,6 @@ test("seller scope includes only owned or explicitly eligible canonical leads", 
   assert.deepEqual(sellerLeadScope("seller-1"), {
     OR: [{ ownerId: "seller-1" }, { ownerId: null, eligibleSellerId: "seller-1" }],
     migrationReviewRequired: false,
-    intentLevel: { not: null },
-    sourceKey: { not: null },
-    stage: { not: null },
   });
 });
 

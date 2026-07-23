@@ -78,9 +78,6 @@ export function sellerLeadScope(
   return {
     OR: [{ ownerId: sellerId }, { ownerId: null, eligibleSellerId: sellerId }],
     migrationReviewRequired: false,
-    intentLevel: { not: null },
-    sourceKey: { not: null },
-    stage: { not: null },
   };
 }
 
@@ -94,9 +91,6 @@ export function sellerAgreementScope(
           is: {
             ownerId: sellerId,
             migrationReviewRequired: false,
-            intentLevel: { not: null },
-            sourceKey: { not: null },
-            stage: { not: null },
           },
         },
       },

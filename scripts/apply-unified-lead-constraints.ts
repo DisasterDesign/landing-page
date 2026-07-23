@@ -28,15 +28,13 @@ export async function runUnifiedLeadConstraintsPreflight(): Promise<ConstraintPr
     compositeIndexes,
     leads,
   ] = await Promise.all([
-    prisma.contactSubmission.count({
-      where: {
-        OR: [
-          { intentLevel: null },
-          { sourceKey: null },
-          { stage: null },
-        ],
-      },
-    }),
+    scalarCount(Prisma.sql`
+      SELECT COUNT(*)::bigint AS "count"
+      FROM "ContactSubmission"
+      WHERE "intentLevel" IS NULL
+         OR "sourceKey" IS NULL
+         OR "stage" IS NULL
+    `),
     prisma.contactSubmission.count({
       where: { migrationReviewRequired: true },
     }),
@@ -66,10 +64,10 @@ export async function runUnifiedLeadConstraintsPreflight(): Promise<ConstraintPr
     scalarCount(Prisma.sql`
       SELECT COUNT(*)::bigint AS "count"
       FROM (
-        SELECT "externalLeadId"
+        SELECT "sourceKey", "externalLeadId"
         FROM "ContactSubmission"
         WHERE "externalLeadId" IS NOT NULL
-        GROUP BY "externalLeadId"
+        GROUP BY "sourceKey", "externalLeadId"
         HAVING COUNT(*) > 1
       ) collisions
     `),

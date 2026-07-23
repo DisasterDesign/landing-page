@@ -122,20 +122,6 @@ function fakePublicationTransaction(
               ) ?? null
             : null;
         },
-        async findFirst({
-          where,
-        }: {
-          where: { externalLeadId: string; sourceKey?: string | null };
-        }) {
-          return (
-            leads.find(
-              (lead) =>
-                lead.externalLeadId === where.externalLeadId &&
-                (!Object.prototype.hasOwnProperty.call(where, "sourceKey") ||
-                  lead.sourceKey === where.sourceKey),
-            ) ?? null
-          );
-        },
         async createMany({ data }: { data: Record<string, unknown> }) {
           if (
             leads.some(

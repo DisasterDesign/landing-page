@@ -897,53 +897,6 @@ export async function createLeadInTransaction(
         effects: [],
       };
     }
-
-    const transitional = await transaction.contactSubmission.findFirst({
-      where: {
-        externalLeadId: input.externalLeadId,
-        sourceKey: null,
-      },
-      include: { assignees: { select: { id: true } } },
-    });
-    if (transitional) {
-      const mirror = legacySourceMirror(input.sourceKey);
-      const unresolved =
-        transitional.stage === null ||
-        transitional.assignees.length > 1 ||
-        (transitional.ownerId !== null &&
-          transitional.ownerId !== input.eligibleSellerId);
-      const upgraded = await transaction.contactSubmission.update({
-        where: { id: transitional.id },
-        data: {
-          intentLevel: input.intentLevel,
-          sourceKey: input.sourceKey,
-          sourceSnapshot: sourceSnapshot as Prisma.InputJsonValue,
-          source: mirror.source,
-          acquisitionChannel: mirror.acquisitionChannel,
-          eligibleSellerId:
-            transitional.eligibleSellerId ?? input.eligibleSellerId ?? null,
-          migrationReviewRequired: unresolved,
-          migrationReviewReason: unresolved
-            ? "LEGACY_STAGE_OR_OWNERSHIP_AMBIGUOUS"
-            : null,
-          legacyStateHash: legacyHashForLead(transitional, transitional.assignees.map(({ id }) => id), {
-            source: mirror.source,
-            acquisitionChannel: mirror.acquisitionChannel,
-          }),
-        },
-      });
-      await appendLeadEventOnce(transaction, {
-        leadId: transitional.id,
-        type: "MIGRATED",
-        actor: { type: "SYSTEM" },
-        dedupeKey: `lead:${transitional.id}:source-upgrade:v1`,
-        metadata: { action: "LEGACY_SOURCE_UPGRADED", sourceKey: input.sourceKey },
-      });
-      return {
-        lead: await mergeMissingContactDetails(transaction, upgraded, input),
-        effects: [],
-      };
-    }
   }
 
   const now = new Date();
@@ -1049,15 +1002,6 @@ export async function createLeadInTransaction(
       },
     });
     if (!persisted) {
-      const occupied = await transaction.contactSubmission.findFirst({
-        where: { externalLeadId: input.externalLeadId },
-      });
-      if (occupied) {
-        throw new LeadDomainError(
-          "CONFLICT",
-          "External lead ID is occupied during rollout",
-        );
-      }
       throw new Error("Lead was not persisted after idempotent create");
     }
     lead = persisted;

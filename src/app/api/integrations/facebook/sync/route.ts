@@ -70,20 +70,11 @@ export async function POST(req: Request) {
           },
           select: { id: true },
         });
-        const existing =
-          existingPair ??
-          (await prisma.contactSubmission.findFirst({
-            where: {
-              externalLeadId: lead.id,
-              sourceKey: null,
-            },
-            select: { id: true },
-          }));
         await ingestMetaLead(lead, {
           mode: "MANUAL_SYNC",
           eligibleSellerId,
         });
-        if (existing) updated++;
+        if (existingPair) updated++;
         else created++;
       } catch (err) {
         console.error(`FB sync: failed to process lead ${lead.id}:`, err);

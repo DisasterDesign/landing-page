@@ -11,6 +11,7 @@ import {
   shouldCancelScheduledFollowUpDuringBackfill,
   shouldInvalidateLeadForSupersession,
   shouldRequireBackfillNoteSnapshot,
+  sourceExternalIdentityKey,
   stageAfterSupersession,
 } from "../../../scripts/unified-lead-lifecycle-safety";
 
@@ -21,6 +22,13 @@ const backfillSource = readFileSync(
 const reconcileSource = readFileSync(
   new URL(
     "../../../scripts/reconcile-unified-lead-lifecycle.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const constraintSource = readFileSync(
+  new URL(
+    "../../../scripts/apply-unified-lead-constraints.ts",
     import.meta.url,
   ),
   "utf8",
@@ -414,4 +422,74 @@ test("migration derives WON only from immutable provider-bound first-payment pro
     reconcileSource,
     /UNVERIFIED_FIRST_PAYMENT_REQUIRES_REVIEW/,
   );
+});
+
+test("reconciliation identities are isolated by source and external ID", () => {
+  const google = sourceExternalIdentityKey("google_maps", "gplaces:shared");
+  const manual = sourceExternalIdentityKey("manual_outbound", "gplaces:shared");
+  assert.notEqual(google, manual);
+  assert.equal(
+    google,
+    sourceExternalIdentityKey("google_maps", "gplaces:shared"),
+  );
+  assert.equal(sourceExternalIdentityKey(null, "gplaces:shared"), null);
+  assert.equal(sourceExternalIdentityKey("google_maps", null), null);
+  assert.match(
+    reconcileSource,
+    /sourceExternalIdentityKey\(\s*lead\.sourceKey,\s*lead\.externalLeadId,\s*\)/,
+  );
+  assert.match(
+    reconcileSource,
+    /sourceExternalIdentityKey\(\s*"google_maps",\s*expectedExternalId,\s*\)/,
+  );
+});
+
+test("post-hardening migration scripts never write nullable canonical identity", () => {
+  assert.match(
+    constraintSource,
+    /FROM "ContactSubmission"[\s\S]*?"intentLevel" IS NULL[\s\S]*?"sourceKey" IS NULL[\s\S]*?"stage" IS NULL/,
+  );
+  assert.doesNotMatch(
+    backfillSource,
+    /intentLevel:\s*safeSource\?\.intentLevel\s*\?\?\s*null/,
+  );
+  assert.doesNotMatch(
+    backfillSource,
+    /sourceKey:\s*safeSource\?\.sourceKey\s*\?\?\s*null/,
+  );
+  assert.doesNotMatch(
+    backfillSource,
+    /OR:\s*\[[\s\S]*?\{\s*sourceKey:\s*"google_maps",\s*externalLeadId\s*\}[\s\S]*?\{\s*externalLeadId\s*\}/,
+  );
+  assert.match(
+    constraintSource,
+    /GROUP BY "sourceKey", "externalLeadId"/,
+  );
+  assert.match(
+    backfillSource,
+    /if \(!safeSource \|\| !stage\) \{[\s\S]*?throw new Error/,
+  );
+  assert.match(
+    backfillSource,
+    /data:\s*\{[\s\S]*?intentLevel:\s*safeSource\.intentLevel,[\s\S]*?sourceKey:\s*safeSource\.sourceKey,[\s\S]*?stage,/,
+  );
+  assert.match(
+    backfillSource,
+    /sourceKey_externalLeadId:\s*\{[\s\S]*?sourceKey:\s*"google_maps",[\s\S]*?externalLeadId/,
+  );
+  assert.match(
+    backfillSource,
+    /id:\s*\{\s*not:\s*lead\.id\s*\},[\s\S]*?sourceKey:\s*"google_maps",[\s\S]*?externalLeadId:\s*expectedExternalLeadId/,
+  );
+  const promotedCreateData =
+    backfillSource.match(
+      /const created = await transaction\.contactSubmission\.create\(\{\s*data:\s*\{([\s\S]*?)\n\s*\},\n\s*\}\);/,
+    )?.[1] ?? "";
+  assert.match(
+    promotedCreateData,
+    /migrationReviewReason:\s*"PROSPECT_SOURCE_CONTEXT_PENDING"/,
+  );
+  assert.match(promotedCreateData, /intentLevel:\s*"OUTBOUND"/);
+  assert.match(promotedCreateData, /sourceKey:\s*"google_maps"/);
+  assert.match(promotedCreateData, /stage:\s*"NEW"/);
 });

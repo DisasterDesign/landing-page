@@ -52,6 +52,15 @@ interface HistoricalLeadFieldPlan {
   phoneProvenance: LeadPhoneProvenance | null;
 }
 
+export function sourceExternalIdentityKey(
+  sourceKey: string | null,
+  externalLeadId: string | null,
+): string | null {
+  return sourceKey && externalLeadId
+    ? JSON.stringify([sourceKey, externalLeadId])
+    : null;
+}
+
 export function historicalLeadFieldPlan(
   input: HistoricalLeadFieldPlanInput,
 ): HistoricalLeadFieldPlan {

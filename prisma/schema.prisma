@@ -465,12 +465,12 @@ model ContactSubmission {
   tags                    String[]
   source                  String?
   acquisitionChannel      AcquisitionChannel?
-  intentLevel             LeadIntentLevel?
-  sourceKey               String?
+  intentLevel             LeadIntentLevel
+  sourceKey               String
   sourceSnapshot          Json?
   phoneProvenance         LeadPhoneProvenance?
-  stage                   LeadStage?
-  externalLeadId          String?              @unique
+  stage                   LeadStage
+  externalLeadId          String?
   externalFormId          String?
   externalFormName        String?
   externalCampaignId      String?

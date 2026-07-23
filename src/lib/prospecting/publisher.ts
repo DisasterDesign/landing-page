@@ -160,12 +160,6 @@ export async function publishProspectAsLead(
     },
     select: { id: true },
   });
-  const existing = existingPair
-    ? existingPair
-    : await transaction.contactSubmission.findFirst({
-        where: { externalLeadId, sourceKey: null },
-        select: { id: true },
-      });
   const scoringVersion = input.prospect.scoringVersion ?? 1;
   const result = await createLeadInTransaction(transaction, {
     intentLevel: "OUTBOUND",
@@ -223,7 +217,7 @@ export async function publishProspectAsLead(
       prospectId: input.prospect.id,
     },
   });
-  return { leadId: result.lead.id, created: existing === null };
+  return { leadId: result.lead.id, created: existingPair === null };
 }
 
 function settingString(value: unknown): string | null {

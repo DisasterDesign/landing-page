@@ -28,15 +28,13 @@ type StoredLead = Record<string, unknown> & {
 function fakeIngestionStore(options: {
   admins?: string[];
   suppressed?: boolean;
-  seed?: StoredLead[];
-  globalExternalIdUnique?: boolean;
 } = {}): LeadCreationStore & {
   leads: StoredLead[];
   events: Array<Record<string, unknown>>;
   notifications: LeadPostCommitEffect[];
   createdCount: number;
 } {
-  const leads = options.seed ?? [];
+  const leads: StoredLead[] = [];
   const events: Array<Record<string, unknown>> = [];
   const notifications: LeadPostCommitEffect[] = [];
   let createdCount = 0;
@@ -61,29 +59,11 @@ function fakeIngestionStore(options: {
         }
         return null;
       },
-      async findFirst({ where }: { where: Record<string, unknown> }) {
-        if (typeof where.externalLeadId === "string") {
-          const filtersSourceKey = Object.prototype.hasOwnProperty.call(
-            where,
-            "sourceKey",
-          );
-          return (
-            leads.find(
-              (lead) =>
-                lead.externalLeadId === where.externalLeadId &&
-                (!filtersSourceKey || lead.sourceKey === where.sourceKey),
-            ) ??
-            null
-          );
-        }
-        return null;
-      },
       async createMany({ data }: { data: Record<string, unknown> }) {
         const exists = leads.some(
           (lead) =>
             lead.externalLeadId === data.externalLeadId &&
-            (options.globalExternalIdUnique ||
-              lead.sourceKey === data.sourceKey),
+            lead.sourceKey === data.sourceKey,
         );
         if (exists) return { count: 0 };
         createdCount += 1;
@@ -330,21 +310,6 @@ test("forced review and permanent suppression notify admins instead of sellers",
   );
 });
 
-test("legacy Meta row is reused during canonical source upgrade", async () => {
-  const legacy = {
-    ...fakeLeadSeed("legacy-1", null, "meta-1"),
-    stage: null,
-    intentLevel: null,
-    migrationReviewRequired: true,
-  };
-  const legacyStore = fakeIngestionStore({ seed: [legacy] });
-  const upgraded = await createLeadFromSource(metaInput, { store: legacyStore });
-  assert.equal(upgraded.id, "legacy-1");
-  assert.equal(legacyStore.createdCount, 0);
-  assert.equal(upgraded.sourceKey, "meta_lead_ads");
-  assert.equal(upgraded.migrationReviewRequired, true);
-});
-
 test("the same raw external ID creates distinct leads for distinct sources after hardening", async () => {
   const store = fakeIngestionStore();
   const meta = await createLeadFromSource(metaInput, { store });
@@ -397,57 +362,6 @@ test("the same raw external ID creates distinct leads for distinct sources after
   assert.equal(retry.id, googleSearch.id);
   assert.equal(store.createdCount, 2);
 });
-
-test("the transitional global external ID constraint still fails closed across sources", async () => {
-  const store = fakeIngestionStore({
-    globalExternalIdUnique: true,
-    seed: [fakeLeadSeed("other-1", "website", "meta-1")],
-  });
-
-  await assert.rejects(
-    createLeadFromSource(metaInput, { store }),
-    /rollout|occupied/i,
-  );
-  assert.equal(store.createdCount, 0);
-  assert.equal(store.leads.length, 1);
-});
-
-function fakeLeadSeed(
-  id: string,
-  sourceKey: string | null,
-  externalLeadId: string | null,
-): StoredLead {
-  return {
-    id,
-    name: null,
-    company: null,
-    email: null,
-    phone: null,
-    message: null,
-    sourceKey,
-    externalLeadId,
-    intentLevel: sourceKey === "website" ? "INBOUND" : null,
-    sourceSnapshot: null,
-    migrationReviewRequired: sourceKey === null,
-    migrationReviewReason: null,
-    phoneProvenance: null,
-    createdAt: new Date("2026-07-01T00:00:00.000Z"),
-    stage: null,
-    status: "NEW",
-    ownerId: null,
-    eligibleSellerId: "seller-1",
-    source: null,
-    acquisitionChannel: null,
-    externalFormId: null,
-    externalFormName: null,
-    externalCampaignId: null,
-    externalAdId: null,
-    nextFollowUpAt: null,
-    lastContactedAt: null,
-    closedAt: null,
-    assignees: [],
-  };
-}
 
 test("Meta timing policy distinguishes live, historical and invalid source time", () => {
   const now = new Date("2026-07-23T10:00:00.000Z");

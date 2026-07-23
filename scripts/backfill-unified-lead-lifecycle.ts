@@ -480,6 +480,7 @@ async function synchronizeLockedLead(
       const collision = await transaction.contactSubmission.findFirst({
         where: {
           id: { not: lead.id },
+          sourceKey: "google_maps",
           externalLeadId: expectedExternalLeadId,
         },
         select: { id: true },
@@ -580,7 +581,12 @@ async function synchronizeLockedLead(
 
   const safeSource =
     sourceMapping && snapshot ? sourceMapping : null;
-  const mirror = safeSource ? legacySourceMirror(safeSource.sourceKey) : null;
+  if (!safeSource || !stage) {
+    throw new Error(
+      `Lead ${lead.id} is missing canonical source or stage and requires resolution before backfill`,
+    );
+  }
+  const mirror = legacySourceMirror(safeSource.sourceKey);
   const { slaAlertedAt, slaEscalatedAt, phoneProvenance } =
     historicalLeadFieldPlan({
       historicalBackfillAt,
@@ -610,10 +616,9 @@ async function synchronizeLockedLead(
       : stage === "LOST"
         ? lead.closedAt ?? latestProspectInteraction?.createdAt ?? null
         : lead.closedAt;
-  const status = stage ? legacyStatusForStage(stage) : lead.status;
-  const source = mirror?.source ?? lead.source;
-  const acquisitionChannel =
-    mirror?.acquisitionChannel ?? lead.acquisitionChannel;
+  const status = legacyStatusForStage(stage);
+  const source = mirror.source;
+  const acquisitionChannel = mirror.acquisitionChannel;
   const finalFingerprint = legacyLeadStateHash({
     status,
     assigneeIds: plannedAssigneeIds,
@@ -709,8 +714,8 @@ async function synchronizeLockedLead(
   const canonicalMatches =
     lead.legacyStateHash === finalFingerprint &&
     legacyFingerprint === finalFingerprint &&
-    lead.intentLevel === (safeSource?.intentLevel ?? null) &&
-    lead.sourceKey === (safeSource?.sourceKey ?? null) &&
+    lead.intentLevel === safeSource.intentLevel &&
+    lead.sourceKey === safeSource.sourceKey &&
     lead.stage === stage &&
     lead.ownerId === ownerId &&
     lead.eligibleSellerId === eligibleSellerId &&
@@ -759,8 +764,8 @@ async function synchronizeLockedLead(
   await transaction.contactSubmission.update({
     where: { id: lead.id },
     data: {
-      intentLevel: safeSource?.intentLevel ?? null,
-      sourceKey: safeSource?.sourceKey ?? null,
+      intentLevel: safeSource.intentLevel,
+      sourceKey: safeSource.sourceKey,
       sourceSnapshot: snapshot
         ? (snapshot as Prisma.InputJsonValue)
         : Prisma.DbNull,
@@ -956,12 +961,12 @@ async function ensurePublishedProspectLead(
     const externalLeadId = `gplaces:${prospect.placeId}`;
     const matched = prospect.promotedLeadId
       ? { id: prospect.promotedLeadId }
-      : await transaction.contactSubmission.findFirst({
+      : await transaction.contactSubmission.findUnique({
           where: {
-            OR: [
-              { sourceKey: "google_maps", externalLeadId },
-              { externalLeadId },
-            ],
+            sourceKey_externalLeadId: {
+              sourceKey: "google_maps",
+              externalLeadId,
+            },
           },
           select: { id: true },
         });
@@ -995,6 +1000,10 @@ async function ensurePublishedProspectLead(
           tags: [],
           source: mirror.source,
           acquisitionChannel: mirror.acquisitionChannel,
+          intentLevel: "OUTBOUND",
+          sourceKey: "google_maps",
+          sourceSnapshot: Prisma.DbNull,
+          stage: "NEW",
           externalLeadId,
           eligibleSellerId: sellerId,
           migrationReviewRequired: true,

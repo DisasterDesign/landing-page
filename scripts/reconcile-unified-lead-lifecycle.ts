@@ -8,6 +8,7 @@ import {
   missingBaselineLeadIds,
   parseMigrationBaseline,
   shouldRequireBackfillNoteSnapshot,
+  sourceExternalIdentityKey,
 } from "./unified-lead-lifecycle-safety";
 
 const prisma = new PrismaClient();
@@ -153,18 +154,28 @@ async function main(): Promise<void> {
     baseline?.contactSubmissionIds ?? [],
   );
   const leadsById = new Map(leads.map((lead) => [lead.id, lead]));
-  const leadsByExternalId = new Map<string, typeof leads>();
+  const leadsBySourceExternalId = new Map<string, typeof leads>();
   for (const lead of leads) {
-    if (!lead.externalLeadId) continue;
-    const bucket = leadsByExternalId.get(lead.externalLeadId) ?? [];
+    const identityKey = sourceExternalIdentityKey(
+      lead.sourceKey,
+      lead.externalLeadId,
+    );
+    if (!identityKey) continue;
+    const bucket = leadsBySourceExternalId.get(identityKey) ?? [];
     bucket.push(lead);
-    leadsByExternalId.set(lead.externalLeadId, bucket);
+    leadsBySourceExternalId.set(identityKey, bucket);
   }
 
   let badPublishedProspects = 0;
   for (const prospect of prospects) {
     const expectedExternalId = `gplaces:${prospect.placeId}`;
-    const matches = leadsByExternalId.get(expectedExternalId) ?? [];
+    const expectedIdentityKey = sourceExternalIdentityKey(
+      "google_maps",
+      expectedExternalId,
+    );
+    const matches = expectedIdentityKey
+      ? leadsBySourceExternalId.get(expectedIdentityKey) ?? []
+      : [];
     const promoted = prospect.promotedLeadId
       ? leadsById.get(prospect.promotedLeadId)
       : null;

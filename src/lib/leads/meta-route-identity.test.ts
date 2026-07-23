@@ -16,9 +16,9 @@ test("Meta sync accounting resolves existing leads by source and external ID", (
       /contactSubmission\.findUnique\(\{[\s\S]*?sourceKey_externalLeadId:[\s\S]*?sourceKey:\s*"meta_lead_ads"[\s\S]*?externalLeadId:\s*lead\.id/,
       route,
     );
-    assert.match(
+    assert.doesNotMatch(
       source,
-      /contactSubmission\.findFirst\(\{[\s\S]*?externalLeadId:\s*lead\.id[\s\S]*?sourceKey:\s*null/,
+      /sourceKey:\s*null/,
       route,
     );
   }

@@ -68,20 +68,11 @@ export async function GET(req: NextRequest) {
             },
             select: { id: true },
           });
-          const existing =
-            existingPair ??
-            (await prisma.contactSubmission.findFirst({
-              where: {
-                externalLeadId: lead.id,
-                sourceKey: null,
-              },
-              select: { id: true },
-            }));
           await ingestMetaLead(lead, {
             mode: "CRON_SYNC",
             eligibleSellerId,
           });
-          if (existing) result.updated++;
+          if (existingPair) result.updated++;
           else result.created++;
         } catch (err) {
           console.error(
