@@ -24,9 +24,12 @@ import { legacyStatusForStage } from "@/lib/leads/stage-machine";
 import { hashSuppressionValue, normalizeDomain } from "@/lib/prospecting/suppression";
 import {
   captureMigrationBaseline,
+  historicalLeadFieldPlan,
+  parseMigrationBaseline,
   shouldCancelScheduledFollowUpDuringBackfill,
   shouldInvalidateLeadForSupersession,
   stageAfterSupersession,
+  type UnifiedLeadMigrationBaseline,
 } from "./unified-lead-lifecycle-safety";
 
 const prisma = new PrismaClient();
@@ -322,6 +325,10 @@ function sameIds(
   );
 }
 
+function sameNullableDate(left: Date | null, right: Date | null): boolean {
+  return left?.getTime() === right?.getTime();
+}
+
 function noteHistoryHash(
   notes: readonly { id: string; authorId: string; createdAt: Date }[],
 ): string {
@@ -342,6 +349,8 @@ async function synchronizeLockedLead(
   transaction: Prisma.TransactionClient,
   leadId: string,
   defaultSellerId: string | null,
+  historicalBackfillAt: Date,
+  historicalAtBaseline: boolean,
 ): Promise<LeadSyncResult> {
   const lead = await transaction.contactSubmission.findUnique({
     where: { id: leadId },
@@ -572,6 +581,19 @@ async function synchronizeLockedLead(
   const safeSource =
     sourceMapping && snapshot ? sourceMapping : null;
   const mirror = safeSource ? legacySourceMirror(safeSource.sourceKey) : null;
+  const { slaAlertedAt, slaEscalatedAt, phoneProvenance } =
+    historicalLeadFieldPlan({
+      historicalBackfillAt,
+      historicalByOrigin: historicalAtBaseline,
+      intentLevel: lead.intentLevel,
+      sourceKey: lead.sourceKey,
+      stage: lead.stage,
+      phone: lead.phone,
+      phoneProvenance: lead.phoneProvenance,
+      validatedSourceKey: safeSource?.sourceKey ?? null,
+      slaAlertedAt: lead.slaAlertedAt,
+      slaEscalatedAt: lead.slaEscalatedAt,
+    });
   const candidateFollowUpAt =
     lead.prospect?.nextFollowUpAt ?? lead.nextFollowUpAt;
   const nextFollowUpAt =
@@ -692,6 +714,9 @@ async function synchronizeLockedLead(
     lead.stage === stage &&
     lead.ownerId === ownerId &&
     lead.eligibleSellerId === eligibleSellerId &&
+    sameNullableDate(lead.slaAlertedAt, slaAlertedAt) &&
+    sameNullableDate(lead.slaEscalatedAt, slaEscalatedAt) &&
+    lead.phoneProvenance === phoneProvenance &&
     lead.migrationReviewRequired === migrationReviewRequired &&
     sameIds(legacyAssigneeIds, plannedAssigneeIds) &&
     missingLegacyInteractions === 0 &&
@@ -751,6 +776,9 @@ async function synchronizeLockedLead(
         : null,
       firstContactedAt: lead.firstContactedAt ?? firstInteractionAt,
       lastContactedAt,
+      slaAlertedAt,
+      slaEscalatedAt,
+      phoneProvenance,
       doNotContactAt,
       nextFollowUpAt,
       closedAt,
@@ -874,10 +902,18 @@ async function synchronizeLockedLead(
 async function processLead(
   leadId: string,
   defaultSellerId: string | null,
+  historicalBackfillAt: Date,
+  historicalAtBaseline: boolean,
 ): Promise<void> {
   const result = await serializableRow("LEAD", leadId, async (transaction) => {
     await lockLead(transaction, leadId);
-    return synchronizeLockedLead(transaction, leadId, defaultSellerId);
+    return synchronizeLockedLead(
+      transaction,
+      leadId,
+      defaultSellerId,
+      historicalBackfillAt,
+      historicalAtBaseline,
+    );
   });
   counters.examined += 1;
   if (!result) return;
@@ -890,6 +926,8 @@ async function processLead(
 async function ensurePublishedProspectLead(
   prospectId: string,
   defaultSellerId: string | null,
+  historicalLeadIds: ReadonlySet<string>,
+  historicalBackfillAt: Date,
 ): Promise<string | null> {
   const result = await serializableRow(
     "PROSPECT",
@@ -982,6 +1020,8 @@ async function ensurePublishedProspectLead(
       transaction,
       leadId,
       defaultSellerId,
+      historicalBackfillAt,
+      createdByBackfill || historicalLeadIds.has(leadId),
     );
     if (apply && createdByBackfill) {
       await appendLeadEventOnce(transaction, {
@@ -1164,15 +1204,52 @@ async function resolveDefaultSellerId(): Promise<string | null> {
   return null;
 }
 
-async function ensureMigrationBaseline(): Promise<void> {
-  if (!apply) return;
-  await prisma.$transaction(
+function requireMigrationBaseline(value: unknown): UnifiedLeadMigrationBaseline {
+  const baseline = parseMigrationBaseline(value);
+  if (!baseline || baseline.version !== MIGRATION_VERSION) {
+    throw new Error(`Invalid unified lifecycle migration baseline v${MIGRATION_VERSION}`);
+  }
+  return baseline;
+}
+
+async function ensureMigrationBaseline(): Promise<UnifiedLeadMigrationBaseline> {
+  if (!apply) {
+    const existing = await prisma.keyValue.findUnique({
+      where: { key: BASELINE_KEY },
+      select: { value: true },
+    });
+    if (existing) return requireMigrationBaseline(existing.value);
+    return captureMigrationBaseline(
+      {
+        async loadLeadIds() {
+          const leads = await prisma.contactSubmission.findMany({
+            select: { id: true },
+            orderBy: { id: "asc" },
+          });
+          return leads.map(({ id }) => id);
+        },
+        async loadNotes() {
+          return prisma.contactNote.findMany({
+            select: {
+              id: true,
+              contactId: true,
+              authorId: true,
+              createdAt: true,
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          });
+        },
+      },
+      { version: MIGRATION_VERSION },
+    );
+  }
+  return prisma.$transaction(
     async (transaction) => {
       const existing = await transaction.keyValue.findUnique({
         where: { key: BASELINE_KEY },
-        select: { key: true },
+        select: { value: true },
       });
-      if (existing) return;
+      if (existing) return requireMigrationBaseline(existing.value);
       const baseline = await captureMigrationBaseline(
         {
           async loadLeadIds() {
@@ -1202,6 +1279,7 @@ async function ensureMigrationBaseline(): Promise<void> {
           value: baseline as unknown as Prisma.InputJsonValue,
         },
       });
+      return baseline;
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -1213,7 +1291,9 @@ async function ensureMigrationBaseline(): Promise<void> {
 
 async function main(): Promise<void> {
   console.log(`mode: ${apply ? "APPLY" : "DRY RUN"}`);
-  await ensureMigrationBaseline();
+  const baseline = await ensureMigrationBaseline();
+  const historicalLeadIds = new Set(baseline.contactSubmissionIds);
+  const historicalBackfillAt = new Date(baseline.capturedAt);
   const [leadIds, prospectIds, agreementIds, commissionIds, notesBefore] =
     await Promise.all([
       prisma.contactSubmission.findMany({
@@ -1258,11 +1338,23 @@ async function main(): Promise<void> {
 
   const prospectLeadIds = new Set<string>();
   for (const { id } of prospectIds) {
-    const leadId = await ensurePublishedProspectLead(id, defaultSellerId);
+    const leadId = await ensurePublishedProspectLead(
+      id,
+      defaultSellerId,
+      historicalLeadIds,
+      historicalBackfillAt,
+    );
     if (leadId) prospectLeadIds.add(leadId);
   }
   for (const { id } of leadIds) {
-    if (!prospectLeadIds.has(id)) await processLead(id, defaultSellerId);
+    if (!prospectLeadIds.has(id)) {
+      await processLead(
+        id,
+        defaultSellerId,
+        historicalBackfillAt,
+        historicalLeadIds.has(id),
+      );
+    }
   }
   for (const { id } of agreementIds) await backfillAgreementCredit(id);
   for (const { id } of commissionIds) await backfillCommissionLink(id);

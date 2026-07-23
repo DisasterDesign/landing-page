@@ -61,10 +61,24 @@ export async function POST(req: Request) {
 
     for (const lead of leads) {
       try {
-        const existing = await prisma.contactSubmission.findFirst({
-          where: { externalLeadId: lead.id },
+        const existingPair = await prisma.contactSubmission.findUnique({
+          where: {
+            sourceKey_externalLeadId: {
+              sourceKey: "meta_lead_ads",
+              externalLeadId: lead.id,
+            },
+          },
           select: { id: true },
         });
+        const existing =
+          existingPair ??
+          (await prisma.contactSubmission.findFirst({
+            where: {
+              externalLeadId: lead.id,
+              sourceKey: null,
+            },
+            select: { id: true },
+          }));
         await ingestMetaLead(lead, {
           mode: "MANUAL_SYNC",
           eligibleSellerId,

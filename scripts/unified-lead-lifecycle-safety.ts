@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import type { LeadStage } from "@prisma/client";
+import type {
+  LeadIntentLevel,
+  LeadPhoneProvenance,
+  LeadStage,
+} from "@prisma/client";
 
 export interface MigrationNoteSnapshot {
   id: string;
@@ -26,6 +30,55 @@ interface SupersessionSafetyInput {
   legacyAssigneeCount: number;
   canonicalInteractionCount: number;
   prospectInteractionCount: number;
+}
+
+interface HistoricalLeadFieldPlanInput {
+  historicalBackfillAt: Date;
+  historicalByOrigin: boolean;
+  intentLevel: LeadIntentLevel | null;
+  sourceKey: string | null;
+  stage: LeadStage | null;
+  phone: string | null;
+  phoneProvenance: LeadPhoneProvenance | null;
+  validatedSourceKey: string | null;
+  slaAlertedAt: Date | null;
+  slaEscalatedAt: Date | null;
+}
+
+interface HistoricalLeadFieldPlan {
+  isHistoricalLead: boolean;
+  slaAlertedAt: Date | null;
+  slaEscalatedAt: Date | null;
+  phoneProvenance: LeadPhoneProvenance | null;
+}
+
+export function historicalLeadFieldPlan(
+  input: HistoricalLeadFieldPlanInput,
+): HistoricalLeadFieldPlan {
+  const isHistoricalLead =
+    input.historicalByOrigin ||
+    !input.intentLevel ||
+    !input.sourceKey ||
+    !input.stage;
+  const phoneProvenance =
+    isHistoricalLead &&
+    input.phone?.trim() &&
+    !input.phoneProvenance
+      ? input.validatedSourceKey === "website"
+        ? "FIRST_PARTY_FORM"
+        : "MIGRATED"
+      : input.phoneProvenance;
+
+  return {
+    isHistoricalLead,
+    slaAlertedAt: isHistoricalLead
+      ? input.slaAlertedAt ?? input.historicalBackfillAt
+      : input.slaAlertedAt,
+    slaEscalatedAt: isHistoricalLead
+      ? input.slaEscalatedAt ?? input.historicalBackfillAt
+      : input.slaEscalatedAt,
+    phoneProvenance,
+  };
 }
 
 export function shouldInvalidateLeadForSupersession(

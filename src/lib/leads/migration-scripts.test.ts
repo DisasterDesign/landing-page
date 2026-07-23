@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   baselineNoteHistoryIsIntact,
   captureMigrationBaseline,
+  historicalLeadFieldPlan,
   missingBaselineLeadIds,
   parseMigrationBaseline,
   shouldCancelScheduledFollowUpDuringBackfill,
@@ -112,6 +113,129 @@ test("backfill preserves an overdue scheduled follow-up on an active Lead", () =
     }),
     true,
   );
+});
+
+test("historical lead field planning suppresses only migration-era rows", () => {
+  const backfillAt = new Date("2026-07-23T16:00:00.000Z");
+  const canonical = {
+    historicalBackfillAt: backfillAt,
+    historicalByOrigin: false,
+    intentLevel: "AD_RESPONSE" as const,
+    sourceKey: "meta_lead_ads",
+    stage: "NEW" as const,
+    phone: "0501234567",
+    phoneProvenance: null,
+    validatedSourceKey: "meta_lead_ads",
+    slaAlertedAt: null,
+    slaEscalatedAt: null,
+  };
+
+  assert.deepEqual(historicalLeadFieldPlan(canonical), {
+    isHistoricalLead: false,
+    slaAlertedAt: null,
+    slaEscalatedAt: null,
+    phoneProvenance: null,
+  });
+  assert.deepEqual(
+    historicalLeadFieldPlan({
+      ...canonical,
+      historicalByOrigin: true,
+      validatedSourceKey: "website",
+    }),
+    {
+      isHistoricalLead: true,
+      slaAlertedAt: backfillAt,
+      slaEscalatedAt: backfillAt,
+      phoneProvenance: "FIRST_PARTY_FORM",
+    },
+  );
+  assert.deepEqual(
+    historicalLeadFieldPlan({
+      ...canonical,
+      intentLevel: null,
+      sourceKey: null,
+      stage: null,
+    }),
+    {
+      isHistoricalLead: true,
+      slaAlertedAt: backfillAt,
+      slaEscalatedAt: backfillAt,
+      phoneProvenance: "MIGRATED",
+    },
+  );
+});
+
+test("historical lead field planning preserves evidence and is idempotent", () => {
+  const backfillAt = new Date("2026-07-23T16:00:00.000Z");
+  const alertedAt = new Date("2026-07-01T08:00:00.000Z");
+  const escalatedAt = new Date("2026-07-01T09:00:00.000Z");
+  const preserved = historicalLeadFieldPlan({
+    historicalBackfillAt: backfillAt,
+    historicalByOrigin: true,
+    intentLevel: "INBOUND",
+    sourceKey: "website",
+    stage: "CONTACTING",
+    phone: "0501234567",
+    phoneProvenance: "SELLER_CONFIRMED",
+    validatedSourceKey: "website",
+    slaAlertedAt: alertedAt,
+    slaEscalatedAt: escalatedAt,
+  });
+  assert.deepEqual(preserved, {
+    isHistoricalLead: true,
+    slaAlertedAt: alertedAt,
+    slaEscalatedAt: escalatedAt,
+    phoneProvenance: "SELLER_CONFIRMED",
+  });
+
+  const first = historicalLeadFieldPlan({
+    historicalBackfillAt: backfillAt,
+    historicalByOrigin: true,
+    intentLevel: null,
+    sourceKey: null,
+    stage: null,
+    phone: "0501234567",
+    phoneProvenance: null,
+    validatedSourceKey: "meta_lead_ads",
+    slaAlertedAt: null,
+    slaEscalatedAt: null,
+  });
+  const second = historicalLeadFieldPlan({
+    historicalBackfillAt: backfillAt,
+    historicalByOrigin: false,
+    intentLevel: "AD_RESPONSE",
+    sourceKey: "meta_lead_ads",
+    stage: "NEW",
+    phone: "0501234567",
+    phoneProvenance: first.phoneProvenance,
+    validatedSourceKey: "meta_lead_ads",
+    slaAlertedAt: first.slaAlertedAt,
+    slaEscalatedAt: first.slaEscalatedAt,
+  });
+  assert.deepEqual(second, {
+    isHistoricalLead: false,
+    slaAlertedAt: backfillAt,
+    slaEscalatedAt: backfillAt,
+    phoneProvenance: "MIGRATED",
+  });
+
+  for (const phone of [null, "", "   "]) {
+    assert.equal(
+      historicalLeadFieldPlan({
+        historicalBackfillAt: backfillAt,
+        historicalByOrigin: true,
+        intentLevel: "INBOUND",
+        sourceKey: "website",
+        stage: "NEW",
+        phone,
+        phoneProvenance: null,
+        validatedSourceKey: "website",
+        slaAlertedAt: null,
+        slaEscalatedAt: null,
+      }).phoneProvenance,
+      null,
+    );
+  }
 });
 
 test("baseline capture timestamps before reading IDs and hashes original notes", async () => {
@@ -228,11 +352,47 @@ test("canonical post-rollout Leads do not require a backfill MIGRATED snapshot",
   );
 });
 
+test("backfill routes historical SLA and phone fields through the tested plan", () => {
+  assert.match(
+    backfillSource,
+    /const historicalLeadIds = new Set\(baseline\.contactSubmissionIds\)/,
+  );
+  assert.match(
+    backfillSource,
+    /createdByBackfill \|\| historicalLeadIds\.has\(leadId\)/,
+  );
+  assert.match(
+    backfillSource,
+    /synchronizeLockedLead\([\s\S]*?historicalBackfillAt,[\s\S]*?historicalLeadIds\.has\(id\)/,
+  );
+  assert.match(
+    backfillSource,
+    /historicalLeadFieldPlan\(\{[\s\S]*?historicalByOrigin: historicalAtBaseline[\s\S]*?intentLevel: lead\.intentLevel[\s\S]*?sourceKey: lead\.sourceKey[\s\S]*?stage: lead\.stage[\s\S]*?phone: lead\.phone[\s\S]*?validatedSourceKey: safeSource\?\.sourceKey \?\? null/,
+  );
+
+  const canonicalMatches =
+    backfillSource.match(
+      /const canonicalMatches =([\s\S]*?)if \(canonicalMatches\)/,
+    )?.[1] ?? "";
+  assert.match(canonicalMatches, /lead\.slaAlertedAt/);
+  assert.match(canonicalMatches, /lead\.slaEscalatedAt/);
+
+  const canonicalUpdate =
+    backfillSource.match(
+      /await transaction\.contactSubmission\.update\(\{[\s\S]*?data: \{([\s\S]*?)\n\s*},\n\s*}\);/,
+    )?.[1] ?? "";
+  assert.match(canonicalUpdate, /\bslaAlertedAt\b/);
+  assert.match(canonicalUpdate, /\bslaEscalatedAt\b/);
+  assert.match(canonicalMatches, /lead\.phoneProvenance/);
+  assert.match(canonicalUpdate, /\bphoneProvenance\b/);
+});
+
 test("migration scripts route safety decisions through the tested helpers", () => {
   for (const helper of [
     "stageAfterSupersession",
     "shouldCancelScheduledFollowUpDuringBackfill",
     "captureMigrationBaseline",
+    "historicalLeadFieldPlan",
   ]) {
     assert.match(backfillSource, new RegExp(`\\b${helper}\\s*\\(`));
   }

@@ -98,8 +98,10 @@ test("publication excludes missing names and existing canonical Place IDs", () =
   assert.deepEqual(selected.map(({ id }) => id), ["new"]);
 });
 
-function fakePublicationTransaction() {
-  const leads: Array<Record<string, unknown> & { id: string }> = [];
+function fakePublicationTransaction(
+  seed: Array<Record<string, unknown> & { id: string }> = [],
+) {
+  const leads = [...seed];
   const events: Array<Record<string, unknown> & { id: string }> = [];
   const prospect = { id: "prospect-1", promotedLeadId: null as string | null };
   return {
@@ -120,17 +122,26 @@ function fakePublicationTransaction() {
               ) ?? null
             : null;
         },
-        async findFirst({ where }: { where: { externalLeadId: string } }) {
+        async findFirst({
+          where,
+        }: {
+          where: { externalLeadId: string; sourceKey?: string | null };
+        }) {
           return (
             leads.find(
-              (lead) => lead.externalLeadId === where.externalLeadId,
+              (lead) =>
+                lead.externalLeadId === where.externalLeadId &&
+                (!Object.prototype.hasOwnProperty.call(where, "sourceKey") ||
+                  lead.sourceKey === where.sourceKey),
             ) ?? null
           );
         },
         async createMany({ data }: { data: Record<string, unknown> }) {
           if (
             leads.some(
-              (lead) => lead.externalLeadId === data.externalLeadId,
+              (lead) =>
+                lead.sourceKey === data.sourceKey &&
+                lead.externalLeadId === data.externalLeadId,
             )
           ) {
             return { count: 0 };
@@ -233,6 +244,44 @@ test("publishing the same prospect twice creates and links one canonical outboun
     fake.events.filter((event) => event.type === "PUBLISHED").length,
     1,
   );
+});
+
+test("publication reports a new Google Maps lead when another source uses the same raw external ID", async () => {
+  const fake = fakePublicationTransaction([
+    {
+      id: "other-source-lead",
+      sourceKey: "manual_outbound",
+      externalLeadId: "gplaces:place-1",
+    },
+  ]);
+
+  const published = await publishProspectAsLead(fake.transaction as never, {
+    prospect: {
+      id: "prospect-1",
+      placeId: "place-1",
+      promotedLeadId: null,
+      websiteStatus: "ACTIVE",
+      auditedDomain: "old.example",
+      businessShape: "SERVICE",
+      businessShapeVersion: 1,
+      qualityScore: 2,
+      scoringVersion: 3,
+      opportunitySummary: "אתר איטי עם SEO חלש",
+      callAngles: ["מהירות", "SEO"],
+    },
+    displayName: "סטודיו נועה",
+    territory: "רחוב הרצל, יבנה",
+    cycleId: "cycle-1",
+    batchId: "batch-1",
+    weekStart: new Date("2026-07-20T00:00:00.000Z"),
+    sellerId: "seller-1",
+    publishedAt: new Date("2026-07-23T08:00:00.000Z"),
+  });
+
+  assert.equal(published.created, true);
+  assert.equal(fake.leads.length, 2);
+  assert.equal(fake.leads[1]?.sourceKey, "google_maps");
+  assert.equal(fake.leads[1]?.externalLeadId, "gplaces:place-1");
 });
 
 test("no-site legacy business classification publishes with safe versioned fallback", async () => {

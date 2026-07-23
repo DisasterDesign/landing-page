@@ -899,16 +899,13 @@ export async function createLeadInTransaction(
     }
 
     const transitional = await transaction.contactSubmission.findFirst({
-      where: { externalLeadId: input.externalLeadId },
+      where: {
+        externalLeadId: input.externalLeadId,
+        sourceKey: null,
+      },
       include: { assignees: { select: { id: true } } },
     });
-    if (transitional?.sourceKey && transitional.sourceKey !== input.sourceKey) {
-      throw new LeadDomainError(
-        "CONFLICT",
-        "External lead ID is occupied by another source during rollout",
-      );
-    }
-    if (transitional && transitional.sourceKey === null) {
+    if (transitional) {
       const mirror = legacySourceMirror(input.sourceKey);
       const unresolved =
         transitional.stage === null ||

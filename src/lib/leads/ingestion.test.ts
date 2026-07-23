@@ -29,6 +29,7 @@ function fakeIngestionStore(options: {
   admins?: string[];
   suppressed?: boolean;
   seed?: StoredLead[];
+  globalExternalIdUnique?: boolean;
 } = {}): LeadCreationStore & {
   leads: StoredLead[];
   events: Array<Record<string, unknown>>;
@@ -62,8 +63,16 @@ function fakeIngestionStore(options: {
       },
       async findFirst({ where }: { where: Record<string, unknown> }) {
         if (typeof where.externalLeadId === "string") {
+          const filtersSourceKey = Object.prototype.hasOwnProperty.call(
+            where,
+            "sourceKey",
+          );
           return (
-            leads.find((lead) => lead.externalLeadId === where.externalLeadId) ??
+            leads.find(
+              (lead) =>
+                lead.externalLeadId === where.externalLeadId &&
+                (!filtersSourceKey || lead.sourceKey === where.sourceKey),
+            ) ??
             null
           );
         }
@@ -72,9 +81,9 @@ function fakeIngestionStore(options: {
       async createMany({ data }: { data: Record<string, unknown> }) {
         const exists = leads.some(
           (lead) =>
-            lead.externalLeadId === data.externalLeadId ||
-            (lead.sourceKey === data.sourceKey &&
-              lead.externalLeadId === data.externalLeadId),
+            lead.externalLeadId === data.externalLeadId &&
+            (options.globalExternalIdUnique ||
+              lead.sourceKey === data.sourceKey),
         );
         if (exists) return { count: 0 };
         createdCount += 1;
@@ -321,7 +330,7 @@ test("forced review and permanent suppression notify admins instead of sellers",
   );
 });
 
-test("legacy Meta row is reused while a canonical other-source raw ID conflicts", async () => {
+test("legacy Meta row is reused during canonical source upgrade", async () => {
   const legacy = {
     ...fakeLeadSeed("legacy-1", null, "meta-1"),
     stage: null,
@@ -334,14 +343,73 @@ test("legacy Meta row is reused while a canonical other-source raw ID conflicts"
   assert.equal(legacyStore.createdCount, 0);
   assert.equal(upgraded.sourceKey, "meta_lead_ads");
   assert.equal(upgraded.migrationReviewRequired, true);
+});
 
-  const occupied = fakeIngestionStore({
+test("the same raw external ID creates distinct leads for distinct sources after hardening", async () => {
+  const store = fakeIngestionStore();
+  const meta = await createLeadFromSource(metaInput, { store });
+  const googleSearch = await createLeadFromSource(
+    {
+      intentLevel: "INBOUND",
+      sourceKey: "google_search_ads",
+      externalLeadId: "meta-1",
+      sourceSnapshot: {
+        campaignId: "google-campaign-1",
+        landingPage: "/contact",
+        receivedAt: "2026-07-23T08:00:00.000Z",
+      },
+      eligibleSellerId: "seller-1",
+      name: "יובל",
+      email: "yuval@example.com",
+      phone: "0521234567",
+    },
+    { store },
+  );
+
+  assert.notEqual(meta.id, googleSearch.id);
+  assert.equal(store.createdCount, 2);
+  assert.deepEqual(
+    store.leads.map(({ sourceKey, externalLeadId }) => ({
+      sourceKey,
+      externalLeadId,
+    })),
+    [
+      { sourceKey: "meta_lead_ads", externalLeadId: "meta-1" },
+      { sourceKey: "google_search_ads", externalLeadId: "meta-1" },
+    ],
+  );
+
+  const retry = await createLeadFromSource(
+    {
+      intentLevel: "INBOUND",
+      sourceKey: "google_search_ads",
+      externalLeadId: "meta-1",
+      sourceSnapshot: {
+        campaignId: "google-campaign-1",
+        landingPage: "/contact",
+        receivedAt: "2026-07-23T08:00:00.000Z",
+      },
+      eligibleSellerId: "seller-1",
+      name: "יובל",
+    },
+    { store },
+  );
+  assert.equal(retry.id, googleSearch.id);
+  assert.equal(store.createdCount, 2);
+});
+
+test("the transitional global external ID constraint still fails closed across sources", async () => {
+  const store = fakeIngestionStore({
+    globalExternalIdUnique: true,
     seed: [fakeLeadSeed("other-1", "website", "meta-1")],
   });
+
   await assert.rejects(
-    createLeadFromSource(metaInput, { store: occupied }),
-    /another source|rollout|occupied/i,
+    createLeadFromSource(metaInput, { store }),
+    /rollout|occupied/i,
   );
+  assert.equal(store.createdCount, 0);
+  assert.equal(store.leads.length, 1);
 });
 
 function fakeLeadSeed(

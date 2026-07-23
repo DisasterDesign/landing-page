@@ -395,6 +395,7 @@ export default function LeadWorkspace({
             <LeadContactActions
               phone={lead.phone}
               phoneSource={lead.phoneSource}
+              phoneProvenance={lead.phoneProvenance}
               website={lead.website}
               mapUrl={lead.mapUrl}
               doNotContactAt={lead.doNotContactAt}
