@@ -6,7 +6,10 @@ import toast from "react-hot-toast";
 
 import CallOutcomeSheet from "@/components/seller/CallOutcomeSheet";
 import ColdLeadCard from "@/components/seller/ColdLeadCard";
-import type { SellerColdLead } from "@/components/seller/cold-lead-types";
+import type {
+  SellerColdLead,
+  SellerLeadInteractionInput,
+} from "@/components/seller/cold-lead-types";
 
 interface ColdLeadResponse {
   batch: {
@@ -46,7 +49,7 @@ export default function SellerColdLeadsPage() {
     load();
   }, [load]);
 
-  const saveOutcome = async (input: { outcome: string; note?: string; nextFollowUpAt?: string }) => {
+  const saveOutcome = async (input: SellerLeadInteractionInput) => {
     if (!selected) return;
     setBusy(true);
     try {

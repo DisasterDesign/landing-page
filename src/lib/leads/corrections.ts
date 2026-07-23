@@ -230,6 +230,9 @@ export async function updateLeadContactDetails(
     });
     if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
     assertCommercialLeadReady(existing);
+    if (existing.doNotContactAt) {
+      throw new LeadDomainError("FORBIDDEN", "Lead may not be contacted");
+    }
 
     if (input.actor.role === "SELLER") {
       await assertPersistedRole(transaction, input.actor.userId, "SELLER");

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   claimLead,
+  qualifyLeadFromLegacyClosed,
   releaseOrReassignLead,
   transitionLeadStage,
   type LeadLifecycleStore,
@@ -172,6 +173,9 @@ function fakeLifecycleStore(
       },
     },
     leadFollowUp: {
+      async findFirst() {
+        return followUps[0] ?? null;
+      },
       async findMany() {
         return followUps;
       },
@@ -317,4 +321,64 @@ test("admin stage transition records structured loss and never closes as won", a
   assert.equal(store.lead.status, "LOST");
   assert.equal(store.lead.lossReason, "NO_BUDGET");
   assert.equal(store.events.at(-1)?.type, "LOST");
+});
+
+test("terminal transitions cancel the active follow-up in the same transaction", async () => {
+  const store = fakeLifecycleStore(
+    makeLead({
+      ownerId: "seller-1",
+      stage: "CONTACTING",
+      status: "IN_PROGRESS",
+      nextFollowUpAt: new Date(Date.now() + 60_000),
+      assignees: [{ id: "seller-1" }],
+    }),
+    {
+      scheduledFollowUps: [
+        { id: "follow-up-1", ownerId: "seller-1", reminderSentAt: null },
+      ],
+    },
+  );
+
+  await transitionLeadStage(
+    {
+      leadId: "lead-1",
+      toStage: "LOST",
+      lossReason: "NO_BUDGET",
+      actor: { userId: "admin-1", role: "ADMIN" },
+    },
+    { store },
+  );
+
+  assert.equal(store.lead.nextFollowUpAt, null);
+  assert.equal(store.events.at(-1)?.type, "LOST");
+  assert.deepEqual(store.events.at(-1)?.metadata, {
+    lossReason: "NO_BUDGET",
+    cancelledFollowUpId: "follow-up-1",
+  });
+});
+
+test("legacy CLOSED qualifies only the authenticated current owner", async () => {
+  const store = fakeLifecycleStore(
+    makeLead({
+      ownerId: "seller-1",
+      stage: "CONTACTING",
+      status: "IN_PROGRESS",
+      assignees: [{ id: "seller-1" }],
+    }),
+    { actorRoles: { "seller-1": "SELLER" } },
+  );
+
+  await qualifyLeadFromLegacyClosed(
+    {
+      leadId: "lead-1",
+      actor: { userId: "seller-1", role: "SELLER" },
+    },
+    { store },
+  );
+
+  assert.equal(store.lead.stage, "QUALIFIED");
+  assert.equal(store.lead.status, "IN_PROGRESS");
+  assert.deepEqual(store.events.at(-1)?.metadata, {
+    legacyRequestedClosed: true,
+  });
 });

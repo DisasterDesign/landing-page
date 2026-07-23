@@ -1,82 +1,68 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
 
-// A seller may only add/remove THEMSELVES (claim/release) — never set an
-// arbitrary assignee list — and move the status. This avoids the last-write
-// clobber and arbitrary-id assignment a full `set` would allow.
-const patchSchema = z.object({
-  action: z.enum(["claim", "release"]).optional(),
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
-});
+import { auth } from "@/lib/auth";
+import { LeadDomainError } from "@/lib/leads/errors";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
+import {
+  claimLead,
+  qualifyLeadFromLegacyClosed,
+} from "@/lib/leads/lifecycle";
 
-// PATCH - a seller claims a lead (assigneeIds) and/or moves its status.
+const patchSchema = z
+  .object({
+    action: z.enum(["claim", "release"]).optional(),
+    status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
+  })
+  .strict()
+  .refine((value) => Number(Boolean(value.action)) + Number(Boolean(value.status)) === 1, {
+    message: "Exactly one legacy action is required",
+  });
+
 export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const parsed = patchSchema.safeParse(
+    await request.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
 
+  try {
     const { id } = await params;
-    const body = await request.json();
-    const parsed = patchSchema.safeParse(body);
-    if (!parsed.success) {
+    if (parsed.data.action === "release") {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
-        { status: 400 }
+        { error: "Seller release is not allowed" },
+        { status: 405 },
       );
     }
-
-    const before = await prisma.contactSubmission.findUnique({
-      where: { id },
-      select: { status: true, closedAt: true },
-    });
-    if (!before) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const data: Prisma.ContactSubmissionUpdateInput = {};
-
-    if (parsed.data.status !== undefined) {
-      data.status = parsed.data.status;
-      if (parsed.data.status !== "NEW") data.isRead = true;
-      // Stamp closedAt on first transition into CLOSED.
-      if (
-        parsed.data.status === "CLOSED" &&
-        before.status !== "CLOSED" &&
-        !before.closedAt
-      ) {
-        data.closedAt = new Date();
-      }
-    }
-
-    // Additive/idempotent: connect or disconnect only the caller — concurrent
-    // claims by other sellers are never clobbered.
     if (parsed.data.action === "claim") {
-      data.assignees = { connect: { id: session.user.id } };
-    } else if (parsed.data.action === "release") {
-      data.assignees = { disconnect: { id: session.user.id } };
+      return NextResponse.json(
+        await claimLead({ leadId: id, sellerId: session.user.id }),
+      );
     }
-
-    const updated = await prisma.contactSubmission.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        status: true,
-        assignees: { select: { id: true, name: true } },
-      },
-    });
-
-    return NextResponse.json(updated);
+    if (parsed.data.status === "CLOSED") {
+      return NextResponse.json(
+        await qualifyLeadFromLegacyClosed({
+          leadId: id,
+          actor: { userId: session.user.id, role: "SELLER" },
+        }),
+      );
+    }
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Use the canonical interaction or stage action for this status",
+    );
   } catch (error) {
-    console.error("Error updating seller lead:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return leadDomainErrorResponse(error);
   }
 }

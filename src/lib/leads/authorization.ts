@@ -1,6 +1,12 @@
-import type { LeadIntentLevel, LeadStage, Prisma } from "@prisma/client";
+import type {
+  LeadIntentLevel,
+  LeadStage,
+  Prisma,
+  Role,
+} from "@prisma/client";
 
 import { LeadDomainError } from "./errors";
+import type { AuthenticatedLeadActor } from "./types";
 
 interface SellerReadableLead {
   ownerId: string | null;
@@ -74,4 +80,28 @@ export function assertCommercialLeadReady(
   ) {
     throw new LeadDomainError("FORBIDDEN", "Lead requires admin review");
   }
+}
+
+export async function assertActorCanMutateLead(
+  transaction: Pick<Prisma.TransactionClient, "user">,
+  actor: AuthenticatedLeadActor,
+  lead: CommercialLead & { ownerId: string | null },
+): Promise<Role> {
+  assertCommercialLeadReady(lead);
+  const persisted = await transaction.user.findUnique({
+    where: { id: actor.userId },
+    select: { role: true },
+  });
+  if (!persisted || persisted.role !== actor.role) {
+    throw new LeadDomainError(
+      "FORBIDDEN",
+      "Authenticated lead actor no longer has the required role",
+    );
+  }
+  if (persisted.role === "SELLER") {
+    assertSellerOwnsLead(actor.userId, lead);
+  } else if (persisted.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Lead mutation is not authorized");
+  }
+  return persisted.role;
 }

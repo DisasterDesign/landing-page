@@ -14,7 +14,11 @@ import { prisma } from "@/lib/prisma";
 import { getLeadLifecycleConfig } from "./config";
 import { hashSuppressionValue } from "@/lib/prospecting/suppression";
 
-import { assertCommercialLeadReady, canSellerReadLead } from "./authorization";
+import {
+  assertActorCanMutateLead,
+  assertCommercialLeadReady,
+  canSellerReadLead,
+} from "./authorization";
 import { LeadDomainError } from "./errors";
 import { appendLeadEvent, appendLeadEventOnce } from "./events";
 import { legacyLeadStateHash } from "./legacy-compat";
@@ -598,22 +602,32 @@ export async function transitionLeadStageInTransaction(
     const status = legacyStatusForStage(input.toStage);
     const reopening =
       existing.stage === "LOST" && input.toStage === "CONTACTING";
-    const closedAt =
-      input.toStage === "WON" ||
-      input.toStage === "LOST" ||
-      input.toStage === "SPAM"
-        ? now
-        : reopening
-          ? null
-          : existing.closedAt;
+    const terminalTransition = terminalStages.includes(input.toStage);
+    const activeFollowUp = terminalTransition
+      ? await transaction.leadFollowUp.findFirst({
+          where: { leadId: input.leadId, status: "SCHEDULED" },
+          select: { id: true },
+        })
+      : null;
+    if (activeFollowUp) {
+      await transaction.leadFollowUp.updateMany({
+        where: { leadId: input.leadId, status: "SCHEDULED" },
+        data: { status: "CANCELLED", cancelledAt: now },
+      });
+    }
+    const closedAt = input.toStage === "WON" ? now : null;
+    const nextFollowUpAt = terminalTransition
+      ? null
+      : existing.nextFollowUpAt;
     const data: Prisma.ContactSubmissionUpdateInput = {
       stage: input.toStage,
       status,
       closedAt,
+      nextFollowUpAt,
       legacyStateHash: legacyHashForLead(
         existing,
         existing.assignees.map(({ id }) => id),
-        { status, closedAt },
+        { status, closedAt, nextFollowUpAt },
       ),
     };
     if (input.toStage === "QUALIFIED") data.qualifiedAt = now;
@@ -646,6 +660,9 @@ export async function transitionLeadStageInTransaction(
         ...(input.lossReasonDetails
           ? { lossReasonDetails: input.lossReasonDetails.trim() }
           : {}),
+        ...(activeFollowUp
+          ? { cancelledFollowUpId: activeFollowUp.id }
+          : {}),
       },
     });
   return updated;
@@ -659,6 +676,71 @@ export async function transitionLeadStage(
   return store.transaction((transaction) =>
     transitionLeadStageInTransaction(transaction, input),
   );
+}
+
+export async function qualifyLeadFromLegacyClosed(
+  input: {
+    leadId: string;
+    actor: AuthenticatedLeadActor;
+  },
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const existing = await transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+      include: { assignees: { select: { id: true } } },
+    });
+    if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+    if (input.actor.role !== "SELLER") {
+      throw new LeadDomainError(
+        "FORBIDDEN",
+        "Legacy CLOSED requires the current seller owner",
+      );
+    }
+    await assertActorCanMutateLead(transaction, input.actor, existing);
+    if (
+      existing.stage === "QUALIFIED" ||
+      existing.stage === "AGREEMENT_DRAFT" ||
+      existing.stage === "AGREEMENT_SENT" ||
+      existing.stage === "AGREEMENT_SIGNED"
+    ) {
+      return existing;
+    }
+    if (existing.stage !== "CONTACTING") {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Legacy CLOSED is valid only for an owned contacting lead",
+      );
+    }
+
+    const occurredAt = new Date();
+    const status = legacyStatusForStage("QUALIFIED");
+    const updated = await transaction.contactSubmission.update({
+      where: { id: input.leadId },
+      data: {
+        stage: "QUALIFIED",
+        status,
+        qualifiedAt: existing.qualifiedAt ?? occurredAt,
+        legacyStateHash: legacyHashForLead(
+          existing,
+          existing.assignees.map(({ id }) => id),
+          { status },
+        ),
+      },
+    });
+    await appendLeadEventOnce(transaction, {
+      leadId: input.leadId,
+      type: "QUALIFIED",
+      actor: userActor(input.actor),
+      fromStage: "CONTACTING",
+      toStage: "QUALIFIED",
+      occurredAt,
+      dedupeKey: `lead:${input.leadId}:legacy-closed-qualified`,
+      metadata: { legacyRequestedClosed: true },
+    });
+    return updated;
+  });
 }
 
 export async function markLeadRead(

@@ -267,6 +267,33 @@ test("seller-confirmed contact data receives provenance without leaking values t
   );
 });
 
+test("do-not-contact blocks seller and admin contact updates", async () => {
+  for (const actor of [
+    { userId: "seller-1", role: "SELLER" as const },
+    { userId: "admin-1", role: "ADMIN" as const },
+  ]) {
+    const store = fakeCorrectionStore(
+      canonicalLead({ doNotContactAt: new Date() }),
+      { roles: { "seller-1": "SELLER", "admin-1": "ADMIN" } },
+    );
+    await assert.rejects(
+      updateLeadContactDetails(
+        {
+          leadId: "lead-1",
+          details: { phone: "0501234567" },
+          confirmation:
+            actor.role === "SELLER"
+              ? "SELLER_CONFIRMED"
+              : "ADMIN_CONFIRMED",
+          actor,
+        },
+        { store },
+      ),
+      /contact/i,
+    );
+  }
+});
+
 test("migration resolution is admin-only, complete, collision-safe and payment-aware", async () => {
   const unresolved = canonicalLead({
     ownerId: null,

@@ -1,185 +1,130 @@
 export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { createNotification, notifyAllAdmins } from "@/lib/notifications";
 
-const patchSchema = z.object({
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
-  nextFollowUpAt: z.string().nullable().optional(), // ISO date or null
-  isRead: z.boolean().optional(),
-  // Self-claim only: a user may take or release a lead for THEMSELVES.
-  // Assigning other users is deliberately impossible (same rule as the
-  // seller API) — the lead's holder is whoever pressed "קח לטיפול".
-  action: z.enum(["claim", "release"]).optional(),
-});
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { auth } from "@/lib/auth";
+import { LeadDomainError } from "@/lib/leads/errors";
+import {
+  rescheduleFollowUp,
+  scheduleFollowUp,
+} from "@/lib/leads/follow-ups";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
+import { markLeadRead } from "@/lib/leads/lifecycle";
+import { prisma } from "@/lib/prisma";
+
+const patchSchema = z
+  .object({
+    status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
+    nextFollowUpAt: z.string().datetime({ offset: true }).nullable().optional(),
+    isRead: z.boolean().optional(),
+    action: z.enum(["claim", "release"]).optional(),
+  })
+  .strict();
 
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const lead = await prisma.contactSubmission.findUnique({
-      where: { id },
-      include: {
-        notes: {
-          orderBy: { createdAt: "asc" },
-          include: { author: { select: { id: true, name: true } } },
-        },
-        assignees: { select: { id: true, name: true } },
-      },
-    });
-    if (!lead) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    return NextResponse.json(lead);
-  } catch (error) {
-    console.error("Lead get error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { id } = await params;
+  const role = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (role?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const lead = await prisma.contactSubmission.findUnique({
+    where: { id },
+    include: {
+      notes: {
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, name: true } } },
+      },
+      assignees: { select: { id: true, name: true } },
+    },
+  });
+  return lead
+    ? NextResponse.json(lead)
+    : NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
 export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const parsed = patchSchema.safeParse(
+    await request.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  const mutationCount = [
+    parsed.data.status !== undefined,
+    parsed.data.nextFollowUpAt !== undefined,
+    parsed.data.isRead !== undefined,
+    parsed.data.action !== undefined,
+  ].filter(Boolean).length;
+  if (mutationCount !== 1) {
+    return NextResponse.json(
+      { error: "Exactly one legacy action is required" },
+      { status: 400 },
+    );
+  }
 
+  try {
     const { id } = await params;
-    const parsed = patchSchema.safeParse(await req.json());
-    if (!parsed.success) {
+    const actor = { userId: session.user.id, role: "ADMIN" as const };
+    if (parsed.data.isRead !== undefined) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
-        { status: 400 }
+        await markLeadRead({ leadId: id, isRead: parsed.data.isRead, actor }),
       );
     }
-
-    // Load the previous state so we can decide whether the follow-up date
-    // actually changed (and thus whether to fire a notification), and whether
-    // this PATCH is transitioning the lead INTO CLOSED for the first time.
-    const before = await prisma.contactSubmission.findUnique({
-      where: { id },
-      select: { nextFollowUpAt: true, name: true, status: true, closedAt: true },
-    });
-    if (!before) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (parsed.data.nextFollowUpAt) {
+      const active = await prisma.leadFollowUp.findFirst({
+        where: { leadId: id, status: "SCHEDULED" },
+        select: { id: true },
+      });
+      const dueAt = new Date(parsed.data.nextFollowUpAt);
+      const reason = "פולואפ שהוגדר בממשק הישן";
+      const followUp = active
+        ? await rescheduleFollowUp({
+            leadId: id,
+            followUpId: active.id,
+            dueAt,
+            reason,
+            actor,
+          })
+        : await scheduleFollowUp({ leadId: id, dueAt, reason, actor });
+      return NextResponse.json({ followUp });
     }
-
-    const data: Record<string, unknown> = {};
-    if (parsed.data.status !== undefined) {
-      data.status = parsed.data.status;
-      if (parsed.data.status !== "NEW") data.isRead = true;
-      // Stamp closedAt the moment a lead transitions into CLOSED so the
-      // "נסגרו החודש" summary card has a real timestamp to filter on.
-      // Reverting out of CLOSED leaves closedAt as-is (history of last close).
-      if (
-        parsed.data.status === "CLOSED" &&
-        before.status !== "CLOSED" &&
-        !before.closedAt
-      ) {
-        data.closedAt = new Date();
-      }
-    }
-    if (parsed.data.isRead !== undefined) data.isRead = parsed.data.isRead;
-    if (parsed.data.nextFollowUpAt !== undefined) {
-      data.nextFollowUpAt = parsed.data.nextFollowUpAt
-        ? new Date(parsed.data.nextFollowUpAt)
-        : null;
-    }
-    // Additive/idempotent connect-disconnect of the caller only — concurrent
-    // claims by other users are never clobbered.
-    if (parsed.data.action === "claim") {
-      data.assignees = { connect: { id: session.user.id } };
-    } else if (parsed.data.action === "release") {
-      data.assignees = { disconnect: { id: session.user.id } };
-    }
-
-    const lead = await prisma.contactSubmission.update({
-      where: { id },
-      data,
-      include: { assignees: { select: { id: true, name: true } } },
-    });
-
-    // Fire LEAD_FOLLOWUP only when nextFollowUpAt was set or rescheduled.
-    // (Pure assignee changes stay silent — user spec.)
-    const incomingDate = parsed.data.nextFollowUpAt;
-    if (incomingDate !== undefined) {
-      const beforeMs = before.nextFollowUpAt
-        ? new Date(before.nextFollowUpAt).getTime()
-        : null;
-      const afterMs = incomingDate ? new Date(incomingDate).getTime() : null;
-      const dateChanged = beforeMs !== afterMs;
-      if (dateChanged && afterMs !== null) {
-        const title = `פולואפ: ${lead.name}`;
-        const body = `תאריך: ${new Date(afterMs).toLocaleDateString("he-IL")}`;
-        const actorId = session.user.id;
-        if (lead.assignees.length > 0) {
-          await Promise.all(
-            lead.assignees.map((a) =>
-              createNotification(
-                {
-                  recipientId: a.id,
-                  type: "LEAD_FOLLOWUP",
-                  title,
-                  body,
-                  leadId: lead.id,
-                },
-                actorId
-              )
-            )
-          );
-        } else {
-          await notifyAllAdmins(
-            {
-              type: "LEAD_FOLLOWUP",
-              title,
-              body,
-              leadId: lead.id,
-            },
-            actorId
-          );
-        }
-      }
-    }
-
-    return NextResponse.json(lead);
-  } catch (error) {
-    console.error("Lead patch error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+    throw new LeadDomainError(
+      "CONFLICT",
+      parsed.data.action
+        ? "Use the reasoned ownership endpoint"
+        : parsed.data.nextFollowUpAt === null
+          ? "Complete or reschedule the active follow-up explicitly"
+          : "Use the canonical stage endpoint",
     );
+  } catch (error) {
+    return leadDomainErrorResponse(error);
   }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const { id } = await params;
-    await prisma.contactSubmission.delete({ where: { id } });
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Lead delete error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
+export function DELETE() {
+  return NextResponse.json(
+    { error: "Leads are permanent CRM history" },
+    { status: 405 },
+  );
 }

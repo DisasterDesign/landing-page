@@ -126,3 +126,37 @@ export interface TransitionLeadStageInput {
   lossReasonDetails?: string;
   actor: AuthenticatedLeadActor | LeadActor;
 }
+
+export interface ScheduleFollowUpInput {
+  leadId: string;
+  dueAt: Date;
+  reason: string;
+  actor: AuthenticatedLeadActor;
+}
+
+export interface RescheduleFollowUpInput {
+  leadId: string;
+  followUpId: string;
+  dueAt: Date;
+  reason: string;
+  actor: AuthenticatedLeadActor;
+}
+
+export interface CompleteFollowUpInput {
+  leadId: string;
+  followUpId: string;
+  actor: AuthenticatedLeadActor;
+  occurredAt?: Date;
+}
+
+export interface AddLeadNoteInput {
+  leadId: string;
+  body: string;
+  actor: AuthenticatedLeadActor;
+}
+
+export interface LegacyColdInteractionInput {
+  prospectId: string;
+  actor: AuthenticatedLeadActor;
+  interaction: Omit<RecordLeadInteractionInput, "leadId" | "actor">;
+}

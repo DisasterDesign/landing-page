@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
-import { recordLegacyColdInteraction } from "@/lib/leads/interactions";
+import { recordInteraction } from "@/lib/leads/interactions";
 import { prisma } from "@/lib/prisma";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
@@ -28,24 +28,18 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const prospect = await prisma.prospect.findFirst({
+    const trustedLead = await prisma.contactSubmission.findFirst({
       where: {
         id,
-        assignedSellerId: session.user.id,
-        qualityScore: { lte: 4 },
+        ownerId: session.user.id,
+        migrationReviewRequired: false,
       },
-      select: { placeId: true, promotedLeadId: true },
+      select: { prospect: { select: { placeId: true } } },
     });
-    if (!prospect?.promotedLeadId) {
-      return NextResponse.json(
-        { error: "Published cold lead not found" },
-        { status: 404 },
-      );
-    }
-
-    const config = getProspectingConfig();
     let livePhone: string | null = null;
+    const config = getProspectingConfig();
     if (
+      trustedLead?.prospect &&
       (parsed.data.outcome === "DO_NOT_CALL" ||
         parsed.data.outcome === "WRONG_NUMBER") &&
       config.placesApiKey
@@ -57,30 +51,27 @@ export async function POST(
               apiKey: config.placesApiKey,
               maxDiscoveredPerCycle: 1,
               maxPlacesCallsPerCycle: 1,
-            }).getLiveDetails([prospect.placeId])
-          ).get(prospect.placeId)?.nationalPhoneNumber ?? null;
+            }).getLiveDetails([trustedLead.prospect.placeId])
+          ).get(trustedLead.prospect.placeId)?.nationalPhoneNumber ?? null;
       } catch {
         livePhone = null;
       }
     }
-
-    const result = await recordLegacyColdInteraction(
+    const result = await recordInteraction(
       {
-        prospectId: id,
+        leadId: id,
         actor: { userId: session.user.id, role: "SELLER" },
-        interaction: {
-          channel: parsed.data.channel,
-          outcome: parsed.data.outcome,
-          decisionMakerReached: parsed.data.decisionMakerReached,
-          note: parsed.data.note,
-          followUpAction: parsed.data.followUpAction,
-          followUpAt: parsed.data.followUpAt
-            ? new Date(parsed.data.followUpAt)
-            : undefined,
-          lossReason: parsed.data.lossReason,
-          lossReasonDetails: parsed.data.lossReasonDetails,
-          usedCallAngleIds: parsed.data.usedCallAngleIds,
-        },
+        channel: parsed.data.channel,
+        outcome: parsed.data.outcome,
+        decisionMakerReached: parsed.data.decisionMakerReached,
+        note: parsed.data.note,
+        followUpAction: parsed.data.followUpAction,
+        followUpAt: parsed.data.followUpAt
+          ? new Date(parsed.data.followUpAt)
+          : undefined,
+        lossReason: parsed.data.lossReason,
+        lossReasonDetails: parsed.data.lossReasonDetails,
+        usedCallAngleIds: parsed.data.usedCallAngleIds,
       },
       { livePhone, hashSecret: config.hashSecret },
     );
