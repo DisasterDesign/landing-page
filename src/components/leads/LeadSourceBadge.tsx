@@ -1,11 +1,37 @@
 import type { LeadIntentLevel } from "@prisma/client";
 
-import Badge from "@/components/ui/Badge";
-
-const intentLabels: Record<LeadIntentLevel, string> = {
-  OUTBOUND: "פנייה קרה",
-  AD_RESPONSE: "השאירו פרטים בפרסומת",
-  INBOUND: "פנייה יזומה של הלקוח",
+/**
+ * The lead-temperature doctrine (Elad, 24.7.2026): every lead has one of
+ * three temperatures, and temperature is the FIRST thing a human should see —
+ * before name, before source.
+ *
+ *   🧊 קר    (OUTBOUND)    — we initiated: the Google-Maps prospecting engine
+ *   🌤 בינוני (AD_RESPONSE) — they left quick details on one of our ads (Meta)
+ *   🔥 חם    (INBOUND)     — they came looking for us (word of mouth today,
+ *                            Google search tomorrow)
+ *
+ * The technical channel (sourceKey) is open-ended; every new channel maps
+ * onto one of these three temperatures instead of inventing a new lead type.
+ */
+export const LEAD_TEMPERATURES: Record<
+  LeadIntentLevel,
+  { label: string; emoji: string; chipClass: string }
+> = {
+  OUTBOUND: {
+    label: "ליד קר",
+    emoji: "🧊",
+    chipClass: "bg-cyan/10 text-cyan border-cyan/40",
+  },
+  AD_RESPONSE: {
+    label: "ליד בינוני",
+    emoji: "🌤️",
+    chipClass: "bg-amber-400/10 text-amber-300 border-amber-400/40",
+  },
+  INBOUND: {
+    label: "ליד חם",
+    emoji: "🔥",
+    chipClass: "bg-red-500/10 text-red-400 border-red-500/40",
+  },
 };
 
 const sourceLabels: Record<string, string> = {
@@ -36,6 +62,7 @@ export default function LeadSourceBadge({
   sourceLabel?: string;
   sourceContext?: Record<string, string | number | null>;
 }) {
+  const temperature = intentLevel ? LEAD_TEMPERATURES[intentLevel] : null;
   const context = preferredContextKeys
     .flatMap((key) => {
       const value = sourceContext?.[key];
@@ -47,17 +74,16 @@ export default function LeadSourceBadge({
 
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="מקור הליד">
-      <Badge
-        variant={
-          intentLevel === "OUTBOUND"
-            ? "yellow"
-            : intentLevel === "INBOUND"
-              ? "green"
-              : "pink"
-        }
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold ${
+          temperature
+            ? temperature.chipClass
+            : "border-gray-600 bg-gray-500/10 text-gray-300"
+        }`}
       >
-        {intentLevel ? intentLabels[intentLevel] : "דורש סיווג"}
-      </Badge>
+        <span aria-hidden="true">{temperature?.emoji ?? "❔"}</span>
+        {temperature?.label ?? "דורש סיווג"}
+      </span>
       <span className="text-sm text-gray-300">
         {sourceKey
           ? sourceLabels[sourceKey] ?? sourceLabel ?? sourceKey
