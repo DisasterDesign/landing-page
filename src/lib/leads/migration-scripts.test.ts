@@ -14,6 +14,14 @@ import {
   sourceExternalIdentityKey,
   stageAfterSupersession,
 } from "../../../scripts/unified-lead-lifecycle-safety";
+import {
+  assertActiveNameRepairApplyConfirmation,
+  assertActiveNameRepairTargetCount,
+  expectedActiveNameRepairTargetCount,
+  hasPublishedProspectLeadCreatedMetadata,
+  safeActiveNameRepairSummary,
+  validPublicPlaceCompanyName,
+} from "../../../scripts/public-place-name-repair";
 
 const backfillSource = readFileSync(
   new URL("../../../scripts/backfill-unified-lead-lifecycle.ts", import.meta.url),
@@ -31,6 +39,23 @@ const constraintSource = readFileSync(
     "../../../scripts/apply-unified-lead-constraints.ts",
     import.meta.url,
   ),
+  "utf8",
+);
+const activeNameRepairSource = (() => {
+  try {
+    return readFileSync(
+      new URL(
+        "../../../scripts/repair-production-outbound-names.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+  } catch {
+    return "";
+  }
+})();
+const activeNameRepairHelperSource = readFileSync(
+  new URL("../../../scripts/public-place-name-repair.ts", import.meta.url),
   "utf8",
 );
 
@@ -492,4 +517,99 @@ test("post-hardening migration scripts never write nullable canonical identity",
   assert.match(promotedCreateData, /intentLevel:\s*"OUTBOUND"/);
   assert.match(promotedCreateData, /sourceKey:\s*"google_maps"/);
   assert.match(promotedCreateData, /stage:\s*"NEW"/);
+});
+
+test("active historical outbound name repair is fail-closed and limits its production write set", () => {
+  const repairSources = `${activeNameRepairSource}\n${activeNameRepairHelperSource}`;
+  assert.match(repairSources, /EXPECTED_(ACTIVE_NAME_REPAIR_)?TARGET_COUNT\s*=\s*11/);
+  assert.match(repairSources, /CONFIRM_ACTIVE_NAME_REPAIR/);
+  assert.match(repairSources, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(repairSources, /FOR UPDATE/);
+  assert.match(repairSources, /contactSubmission\.updateMany/);
+  assert.match(repairSources, /name:\s*null/);
+  assert.match(repairSources, /company:\s*null/);
+  assert.match(repairSources, /PUBLIC_PLACE_COMPANY_NAME_BACKFILLED/);
+  assert.match(repairSources, /prospect-created-by-backfill:v1/);
+  assert.match(repairSources, /public-place-company-name-backfill:v1/);
+  assert.match(repairSources, /validateSourceSnapshot\(\s*"google_maps"/);
+  assert.match(repairSources, /migrationReviewRequired\s*!==\s*false/);
+  assert.match(repairSources, /CLOSED_PERMANENTLY/);
+  assert.match(repairSources, /getLiveDetails/);
+  assert.match(repairSources, /post-check/i);
+});
+
+test("active name repair output is restricted to aggregate counts and the manifest hash", () => {
+  assert.deepEqual(
+    safeActiveNameRepairSummary({
+      expected: 11,
+      total: 11,
+      pending: 3,
+      alreadyRepaired: 8,
+      updated: 0,
+      eventsCreated: 0,
+      manifestHash: "a".repeat(64),
+      mode: "dry-run",
+      ignored: "must-not-appear",
+    }),
+    {
+      expected: 11,
+      total: 11,
+      pending: 3,
+      alreadyRepaired: 8,
+      updated: 0,
+      eventsCreated: 0,
+      manifestHash: "a".repeat(64),
+      mode: "dry-run",
+    },
+  );
+});
+
+test("historical backfill provenance accepts its immutable context and rejects a mismatched Prospect", () => {
+  const metadata = {
+    action: "PUBLISHED_PROSPECT_LEAD_CREATED",
+    version: 1,
+    prospectId: "prospect-1",
+    cycleId: "cycle-1",
+  };
+  assert.equal(hasPublishedProspectLeadCreatedMetadata(metadata, "prospect-1"), true);
+  assert.equal(hasPublishedProspectLeadCreatedMetadata(metadata, "prospect-2"), false);
+  assert.equal(
+    hasPublishedProspectLeadCreatedMetadata({ ...metadata, cycleId: "" }, "prospect-1"),
+    false,
+  );
+});
+
+test("active name repair requires an explicit, exact apply confirmation", () => {
+  assert.equal(assertActiveNameRepairApplyConfirmation({}), false);
+  assert.throws(
+    () => assertActiveNameRepairApplyConfirmation({ APPLY: "1" }),
+    /CONFIRM_ACTIVE_NAME_REPAIR/,
+  );
+  assert.equal(
+    assertActiveNameRepairApplyConfirmation({
+      APPLY: "1",
+      CONFIRM_ACTIVE_NAME_REPAIR: "11",
+    }),
+    true,
+  );
+});
+
+test("active name repair refuses any target count other than the audited eleven", () => {
+  assert.equal(expectedActiveNameRepairTargetCount({}), 11);
+  assert.equal(expectedActiveNameRepairTargetCount({ ACTIVE_NAME_REPAIR_TARGET_COUNT: "11" }), 11);
+  assert.throws(
+    () => expectedActiveNameRepairTargetCount({ ACTIVE_NAME_REPAIR_TARGET_COUNT: "0" }),
+    /positive integer/,
+  );
+  assert.throws(
+    () => assertActiveNameRepairTargetCount({ ACTIVE_NAME_REPAIR_TARGET_COUNT: "12" }),
+    /must be exactly 11/,
+  );
+});
+
+test("public Google business names are trimmed and bounded without becoming contact-person names", () => {
+  assert.equal(validPublicPlaceCompanyName("  עסק  "), "עסק");
+  assert.equal(validPublicPlaceCompanyName("x"), null);
+  assert.equal(validPublicPlaceCompanyName("x".repeat(200)), "x".repeat(200));
+  assert.equal(validPublicPlaceCompanyName("x".repeat(201)), null);
 });
