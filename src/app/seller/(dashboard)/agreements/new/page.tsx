@@ -37,8 +37,11 @@ export default function SellerNewAgreementPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [paramsLoaded, setParamsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
+  const [markingSent, setMarkingSent] = useState(false);
+  const [markedSent, setMarkedSent] = useState(false);
 
   // Prefill from the lead (query params) without needing a Suspense boundary.
   useEffect(() => {
@@ -48,6 +51,7 @@ export default function SellerNewAgreementPage() {
     if (p.get("email")) setEmail(p.get("email")!);
     if (p.get("business")) setBusinessName(p.get("business")!);
     if (p.get("lead")) setLeadId(p.get("lead"));
+    setParamsLoaded(true);
   }, []);
 
   const pickTier = (t: TierChoice) => {
@@ -75,8 +79,32 @@ export default function SellerNewAgreementPage() {
     }
   };
 
+  const markSent = async () => {
+    if (!created || markedSent) return;
+    setMarkingSent(true);
+    try {
+      const response = await fetch(`/api/agreements/${created.id}/sent`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "סימון השליחה נכשל");
+      }
+      setMarkedSent(true);
+      toast.success("החוזה סומן כנשלח");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "סימון השליחה נכשל");
+    } finally {
+      setMarkingSent(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!leadId) {
+      toast.error("חוזה של איש מכירות חייב להיפתח מתוך ליד מוכשר");
+      return;
+    }
     const monthly = parseFloat(monthlyPrice);
     if (!Number.isFinite(monthly) || monthly <= 0) {
       toast.error("הזן מחיר חודשי תקין");
@@ -101,7 +129,7 @@ export default function SellerNewAgreementPage() {
           businessName: businessName.trim() || undefined,
           phone: phone.trim(),
           email: email.trim(),
-          leadId: leadId || undefined,
+          leadId,
         }),
       });
       if (!res.ok) {
@@ -144,6 +172,18 @@ export default function SellerNewAgreementPage() {
                 שלח בוואטסאפ
               </a>
             )}
+            <button
+              type="button"
+              onClick={markSent}
+              disabled={markingSent || markedSent}
+              className="px-4 py-2 rounded-xl border border-cyan/40 bg-cyan/10 text-cyan hover:bg-cyan/20 font-bold text-sm disabled:opacity-60"
+            >
+              {markedSent
+                ? "סומן כנשלח"
+                : markingSent
+                  ? "מסמן..."
+                  : "סמן כנשלח"}
+            </button>
             <Link href="/seller/sales" className="px-4 py-2 rounded-xl bg-gray-800 text-white hover:bg-gray-700 font-bold text-sm">
               לעסקאות שלי
             </Link>
@@ -159,6 +199,16 @@ export default function SellerNewAgreementPage() {
   return (
     <div dir="rtl" className="max-w-xl mx-auto space-y-5">
       <h1 className="text-2xl font-bold text-white">הוצאת חוזה חדש</h1>
+
+      {paramsLoaded && !leadId && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          חוזה של איש מכירות נפתח מתוך ליד מוכשר, כדי לשמור בעלות, מקור
+          ועמלה באותה עסקה.{" "}
+          <Link href="/seller/leads" className="font-bold text-pink hover:underline">
+            חזרה ללידים
+          </Link>
+        </div>
+      )}
 
       <form onSubmit={submit} className="bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-5">
         <div>
@@ -250,7 +300,7 @@ export default function SellerNewAgreementPage() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || (paramsLoaded && !leadId)}
           className="w-full bg-pink hover:bg-pink-dark text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
         >
           {submitting ? "יוצר..." : "צור חוזה וקבל קישור לשליחה"}

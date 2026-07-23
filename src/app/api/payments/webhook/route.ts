@@ -9,8 +9,13 @@ import {
 import { encrypt } from "@/lib/crypto";
 import { withVat } from "@/lib/vat";
 import { applyPaymentToProduct } from "@/lib/client-products";
-import { notifyAllAdmins, createNotification } from "@/lib/notifications";
+import { notifyAllAdmins } from "@/lib/notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
+import {
+  applyPaymentFailure,
+  applyPaymentSuccess,
+  runLeadPostCommitEffects,
+} from "@/lib/leads/agreement-lifecycle";
 
 export const maxDuration = 60;
 
@@ -100,12 +105,12 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       monthlyPrice: true,
       clientId: true,
       cardcomRecurringId: true,
+      cardcomDealId: true,
+      paymentId: true,
       email: true,
       phone: true,
       locale: true,
       vatExempt: true,
-      createdBy: true,
-      isSellerDeal: true,
     },
   });
   if (!agreement) {
@@ -113,14 +118,28 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     return;
   }
 
-  // Idempotency: don't re-process a completed payment
-  if (agreement.paymentStatus === "COMPLETED") return;
-
   if (!isWebhookSuccess(payload)) {
-    await prisma.agreement.update({
-      where: { id: agreementId },
-      data: { paymentStatus: "FAILED" },
-    });
+    const providerAttemptId =
+      payload.LowProfileId != null
+        ? String(payload.LowProfileId).trim()
+        : agreement.paymentId?.trim() ?? "";
+    if (!providerAttemptId) {
+      console.warn(
+        `Cardcom webhook: failure for agreement ${agreementId} has no stable attempt ID`,
+      );
+      return;
+    }
+    const failed = await prisma.$transaction((transaction) =>
+      applyPaymentFailure(transaction, {
+        agreementId,
+        providerAttemptId,
+        occurredAt: new Date(),
+        actor: { type: "INTEGRATION" },
+      }),
+    );
+    await runLeadPostCommitEffects(failed.effects).catch((error) =>
+      console.error("payment failure notification failed:", error),
+    );
     return;
   }
 
@@ -136,15 +155,32 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     payload.DocumentNumber != null ? String(payload.DocumentNumber) : null;
 
   const paidAt = new Date();
+  const providerTransactionId =
+    cardcomDealId ??
+    lowProfileId ??
+    agreement.cardcomDealId ??
+    agreement.paymentId;
+  if (!providerTransactionId?.trim()) {
+    console.warn(
+      `Cardcom webhook: success for agreement ${agreementId} has no stable transaction ID`,
+    );
+    return;
+  }
 
-  await prisma.$transaction(async (tx) => {
+  const lifecycle = await prisma.$transaction(async (tx) => {
+    const result = await applyPaymentSuccess(tx, {
+      agreementId,
+      providerTransactionId,
+      paidAt,
+      paidAmount: paidAmount ?? agreement.monthlyPrice,
+      actor: { type: "INTEGRATION", occurredAt: paidAt },
+    });
+
+    // These are Cardcom/document details, not lifecycle state. They can be
+    // repaired by a retry without repeating revenue or commission writes.
     await tx.agreement.update({
       where: { id: agreementId },
       data: {
-        paymentStatus: "COMPLETED",
-        paidAt,
-        paidAmount: paidAmount ?? agreement.monthlyPrice,
-        ...(cardcomDealId ? { cardcomDealId } : {}),
         ...(cardcomTokenEncrypted ? { cardcomToken: cardcomTokenEncrypted } : {}),
         ...(lowProfileId ? { cardcomLowProfileId: lowProfileId } : {}),
         ...(invoiceNumber ? { invoiceNumber } : {}),
@@ -158,7 +194,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     // agreement covers and the client rollup re-derived — writing it straight
     // onto the client would overwrite a multi-product client's total with one
     // product's price (מקורות ₪363 → ₪69 on Aquatis's next charge).
-    if (agreement.clientId) {
+    if (result.paymentRecorded && agreement.clientId) {
       const grossMonthly = agreement.vatExempt
         ? agreement.monthlyPrice
         : withVat(agreement.monthlyPrice);
@@ -171,19 +207,22 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       });
       await applyPaymentToProduct(tx, agreement.clientId, agreement.id, grossMonthly, paidAt);
     }
+    return result;
   });
+
+  await runLeadPostCommitEffects(lifecycle.effects).catch((error) =>
+    console.error("lead payment notification failed:", error),
+  );
+
+  // Retries still repair canonical WON/event/commission truth above, but do
+  // not repeat revenue, email, admin fan-out or recurring-order creation.
+  if (!lifecycle.paymentRecorded) return;
 
   notifyAllAdmins({
     type: "AGREEMENT_SIGNED",
     title: `תשלום התקבל — ${agreement.customerName}`,
     body: `סכום: ${paidAmount ?? "?"} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after payment failed:", e));
-
-  // If a SELLER created this agreement, record their first-month commission
-  // (idempotent: SellerCommission.agreementId is unique).
-  recordSellerCommission(agreement).catch((e) =>
-    console.error("record seller commission failed:", e)
-  );
 
   sendPaymentReceivedEmail({
     customerName: agreement.customerName,
@@ -260,54 +299,6 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       hasExistingRecurring: !!agreement.cardcomRecurringId,
     });
   }
-}
-
-/**
- * When a SELLER-created agreement is paid, credit the seller their first-month
- * commission (the monthly price the deal closed at). Idempotent via the unique
- * agreementId on SellerCommission.
- */
-async function recordSellerCommission(agreement: {
-  id: string;
-  createdBy: string;
-  customerName: string;
-  monthlyPrice: number;
-  isSellerDeal: boolean;
-}): Promise<void> {
-  // Eligibility is fixed at deal CREATION (isSellerDeal) so the commission is
-  // owed regardless of any later role change to the creator.
-  if (!agreement.isSellerDeal || !agreement.createdBy || agreement.monthlyPrice <= 0) {
-    return;
-  }
-
-  const existing = await prisma.sellerCommission.findUnique({
-    where: { agreementId: agreement.id },
-    select: { id: true },
-  });
-  if (existing) return;
-
-  try {
-    await prisma.sellerCommission.create({
-      data: {
-        sellerId: agreement.createdBy,
-        agreementId: agreement.id,
-        clientName: agreement.customerName,
-        amount: agreement.monthlyPrice,
-      },
-    });
-  } catch (err) {
-    // Unique-violation race under a webhook retry → already recorded.
-    console.warn("seller commission already recorded:", err);
-    return;
-  }
-
-  await createNotification({
-    recipientId: agreement.createdBy,
-    type: "AGREEMENT_SIGNED",
-    title: `🎉 העסקה שולמה! ${agreement.customerName}`,
-    body: `עמלה: ${agreement.monthlyPrice} ₪ נרשמה לך. לחץ למילוי דוח למפתח.`,
-    url: `/seller/report/${agreement.id}`,
-  });
 }
 
 async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {

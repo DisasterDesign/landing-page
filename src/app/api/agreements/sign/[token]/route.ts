@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
+import { applyAgreementEventInTransaction } from "@/lib/leads/agreement-lifecycle";
 
 export const maxDuration = 30;
 
@@ -84,105 +86,138 @@ export async function POST(
       );
     }
 
-    const existing = await prisma.agreement.findUnique({
-      where: { signToken: token },
-    });
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    if (existing.status !== "DRAFT" && existing.status !== "SENT") {
-      return NextResponse.json(
-        { error: "Agreement is not signable", status: existing.status },
-        { status: 410 }
-      );
-    }
-
     const { customerName, businessName, idNumber, phone, email, signatureData } = parsed.data;
     const signedAt = new Date();
     const signedIp = getClientIp(request);
     const signedUserAgent = request.headers.get("user-agent");
 
-    const locale = existing.locale === "en" ? "en" : "he";
-    const finalContent = renderAgreement(existing.tier, {
-      customerName,
-      businessName,
-      idNumber,
-      phone,
-      email,
-      monthlyPrice: existing.monthlyPrice,
-      oneTimeFee: existing.oneTimeFee,
-      tier: existing.tier,
-      additionalServices: existing.additionalServices,
-      date: signedAt.toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
-      signatureData,
-      signedAt: signedAt.toISOString(),
-      signedIp: signedIp ?? undefined,
-      signedUserAgent: signedUserAgent ?? undefined,
-      locale,
-      vatExempt: existing.vatExempt,
-      // One-off custom proposals (e.g. Ormat video) render their own legal body.
-      customBodyHtml: existing.customBodyHtml ?? undefined,
-    });
+    const signed = await prisma.$transaction(async (transaction) => {
+      const lockRows = await transaction.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Agreement" WHERE "signToken" = ${token} FOR UPDATE
+      `;
+      if (lockRows.length === 0) return { outcome: "NOT_FOUND" as const };
 
-    const linkedClientId = await ensureClientForAgreement({
-      currentClientId: existing.clientId,
-      customerName,
-      businessName,
-      idNumber,
-      phone,
-      email,
-    });
+      const existing = await transaction.agreement.findUnique({
+        where: { signToken: token },
+      });
+      if (!existing) return { outcome: "NOT_FOUND" as const };
+      if (existing.status === "CANCELLED") {
+        return { outcome: "CANCELLED" as const };
+      }
+      if (existing.status === "SIGNED") {
+        return {
+          outcome: "SIGNED" as const,
+          newlySigned: false,
+          agreement: existing,
+        };
+      }
 
-    await prisma.agreement.update({
-      where: { signToken: token },
-      data: {
+      const locale = existing.locale === "en" ? "en" : "he";
+      const finalContent = renderAgreement(existing.tier, {
         customerName,
-        businessName: businessName || null,
-        idNumber: idNumber || null,
+        businessName,
+        idNumber,
         phone,
         email,
+        monthlyPrice: existing.monthlyPrice,
+        oneTimeFee: existing.oneTimeFee,
+        tier: existing.tier,
+        additionalServices: existing.additionalServices,
+        date: signedAt.toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
         signatureData,
-        signedAt,
-        signedIp: signedIp ?? null,
-        signedUserAgent: signedUserAgent ?? null,
-        documentVersion: AGREEMENT_DOCUMENT_VERSION,
-        status: "SIGNED",
-        content: finalContent,
-        ...(linkedClientId ? { clientId: linkedClientId } : {}),
-      },
+        signedAt: signedAt.toISOString(),
+        signedIp: signedIp ?? undefined,
+        signedUserAgent: signedUserAgent ?? undefined,
+        locale,
+        vatExempt: existing.vatExempt,
+        // One-off custom proposals (e.g. Ormat video) render their own legal body.
+        customBodyHtml: existing.customBodyHtml ?? undefined,
+      });
+
+      const linkedClientId = await ensureClientForAgreement(transaction, {
+        currentClientId: existing.clientId,
+        customerName,
+        businessName,
+        idNumber,
+        phone,
+        email,
+      });
+
+      const updated = await transaction.agreement.update({
+        where: { id: existing.id },
+        data: {
+          customerName,
+          businessName: businessName || null,
+          idNumber: idNumber || null,
+          phone,
+          email,
+          signatureData,
+          signedAt,
+          signedIp: signedIp ?? null,
+          signedUserAgent: signedUserAgent ?? null,
+          documentVersion: AGREEMENT_DOCUMENT_VERSION,
+          content: finalContent,
+          ...(linkedClientId ? { clientId: linkedClientId } : {}),
+        },
+      });
+
+      await applyAgreementEventInTransaction(transaction, {
+        agreementId: existing.id,
+        type: "SIGNED",
+        actor: {
+          type: "INTEGRATION",
+          occurredAt: signedAt,
+        },
+      });
+
+      // Derive VAT status from all signed agreements inside the same commit as
+      // the legal document and lifecycle event.
+      if (linkedClientId) {
+        await recomputeClientVatExempt(transaction, linkedClientId);
+      }
+
+      return {
+        outcome: "SIGNED" as const,
+        newlySigned: true,
+        agreement: { ...updated, status: "SIGNED" as const },
+      };
     });
 
-    // Derive the client's VAT status from ALL its signed agreements (not a
-    // sticky per-agreement flag): a client's revenue is zero-rated only when
-    // every signed agreement is VAT-exempt. A mixed Hebrew+foreign client
-    // therefore stays non-exempt, so the partner report keeps backing out VAT
-    // on the (gross) Israeli revenue.
-    if (linkedClientId) {
-      await recomputeClientVatExempt(linkedClientId);
+    if (signed.outcome === "NOT_FOUND") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (signed.outcome === "CANCELLED") {
+      return NextResponse.json(
+        { error: "Agreement is not signable", status: "CANCELLED" },
+        { status: 410 },
+      );
     }
 
-    const tierLabel = existing.tier === "LANDING"
+    const agreement = signed.agreement;
+    const tierLabel = agreement.tier === "LANDING"
       ? "דף נחיתה"
-      : existing.tier === "BASIC"
+      : agreement.tier === "BASIC"
       ? "בסיס"
-      : existing.tier === "ADVANCED"
+      : agreement.tier === "ADVANCED"
       ? "מתקדם"
-      : existing.tier === "PREMIUM"
+      : agreement.tier === "PREMIUM"
       ? "פרימיום"
       : "מותאם אישית";
 
-    await notifyAllAdmins({
-      type: "AGREEMENT_SIGNED",
-      title: `הסכם נחתם — ${customerName}`,
-      body: `מסלול ${tierLabel} · ${existing.monthlyPrice.toLocaleString("he-IL")} ₪/חודש`,
-    });
+    if (signed.newlySigned) {
+      await notifyAllAdmins({
+        type: "AGREEMENT_SIGNED",
+        title: `הסכם נחתם — ${agreement.customerName}`,
+        body: `מסלול ${tierLabel} · ${agreement.monthlyPrice.toLocaleString("he-IL")} ₪/חודש`,
+      });
+    }
 
     // Best-effort: create a Cardcom payment page so the client can pay
     // immediately after signing. If this fails (Cardcom down, missing creds),
     // we still return success — the admin can resend the payment link later.
     let paymentUrl: string | null = null;
     try {
-      const result = await ensurePaymentUrlForAgreement(existing.id);
+      const result = await ensurePaymentUrlForAgreement(agreement.id);
       paymentUrl = result?.url ?? null;
     } catch (err) {
       console.error("Failed to create Cardcom payment page after sign:", err);
@@ -198,7 +233,7 @@ export async function POST(
   }
 }
 
-async function ensureClientForAgreement(input: {
+async function ensureClientForAgreement(transaction: Prisma.TransactionClient, input: {
   currentClientId: string | null;
   customerName: string;
   businessName?: string;
@@ -213,7 +248,7 @@ async function ensureClientForAgreement(input: {
   const normalizedEmail = input.email.trim().toLowerCase();
   const normalizedPhone = input.phone.replace(/\D/g, "");
 
-  const existing = await prisma.client.findFirst({
+  const existing = await transaction.client.findFirst({
     where: {
       OR: [
         { email: { equals: normalizedEmail, mode: "insensitive" } },
@@ -225,7 +260,7 @@ async function ensureClientForAgreement(input: {
   });
 
   if (existing) {
-    await prisma.client.update({
+    await transaction.client.update({
       where: { id: existing.id },
       data: {
         name: existing.name || input.customerName,
@@ -238,7 +273,7 @@ async function ensureClientForAgreement(input: {
     return existing.id;
   }
 
-  const created = await prisma.client.create({
+  const created = await transaction.client.create({
     data: {
       name: input.customerName,
       email: normalizedEmail,
@@ -258,13 +293,16 @@ async function ensureClientForAgreement(input: {
  * report never zero-rates a client who also has a gross (VAT-bearing) Israeli
  * agreement.
  */
-async function recomputeClientVatExempt(clientId: string): Promise<void> {
-  const signed = await prisma.agreement.findMany({
+async function recomputeClientVatExempt(
+  transaction: Prisma.TransactionClient,
+  clientId: string,
+): Promise<void> {
+  const signed = await transaction.agreement.findMany({
     where: { clientId, status: "SIGNED" },
     select: { vatExempt: true },
   });
   const vatExempt = signed.length > 0 && signed.every((a) => a.vatExempt);
-  await prisma.client.update({
+  await transaction.client.update({
     where: { id: clientId },
     data: { vatExempt },
   });

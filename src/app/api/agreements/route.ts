@@ -5,6 +5,12 @@ import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { withVat } from "@/lib/vat";
 import type { AgreementStatus, AgreementTier } from "@prisma/client";
+import {
+  createAgreementForLead,
+  createStandaloneAgreement,
+} from "@/lib/leads/agreement-lifecycle";
+import { updateLeadContactDetails } from "@/lib/leads/corrections";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +69,7 @@ export async function POST(request: NextRequest) {
       phone,
       email,
       clientId,
+      leadId,
       productId,
       newProductName,
       locale,
@@ -110,8 +117,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const agreement = await prisma.agreement.create({
-      data: {
+    if (leadId) {
+      await updateLeadContactDetails({
+        leadId,
+        details: {
+          name: customerName,
+          company: businessName || undefined,
+          phone,
+          email,
+        },
+        confirmation: "ADMIN_CONFIRMED",
+        actor: { userId: session.user.id, role: "ADMIN" },
+      });
+    }
+    const agreementDraft = {
         tier: tier ?? null,
         additionalServices: cleanedExtras,
         monthlyPrice,
@@ -125,10 +144,18 @@ export async function POST(request: NextRequest) {
         locale,
         vatExempt,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
-        createdBy: session.user.id,
-        ...(clientId ? { clientId } : {}),
-      },
-    });
+        clientId: clientId ?? null,
+      } as const;
+    const agreement = leadId
+      ? await createAgreementForLead({
+          leadId,
+          actor: { userId: session.user.id, role: "ADMIN" },
+          agreement: agreementDraft,
+        })
+      : await createStandaloneAgreement({
+          actor: { userId: session.user.id, role: "ADMIN" },
+          agreement: agreementDraft,
+        });
 
     // Wire the agreement to the product it pays for. This is the link the
     // Cardcom webhook resolves by — with it in place, the first verified
@@ -157,9 +184,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(agreement, { status: 201 });
   } catch (error) {
     console.error("Error creating agreement:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return leadDomainErrorResponse(error);
   }
 }

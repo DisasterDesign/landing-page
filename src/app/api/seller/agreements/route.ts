@@ -3,8 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
+import {
+  createAgreementForLead,
+} from "@/lib/leads/agreement-lifecycle";
+import { updateLeadContactDetails } from "@/lib/leads/corrections";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
 
-// GET - the seller's OWN agreements (created by them), with commission status.
+// GET - agreements currently credited to this seller. Legacy rows fall back to
+// the creator only while no canonical credit has been frozen.
 export async function GET() {
   try {
     const session = await auth();
@@ -12,7 +18,12 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const agreements = await prisma.agreement.findMany({
-      where: { createdBy: session.user.id },
+      where: {
+        OR: [
+          { creditedSellerId: session.user.id },
+          { creditedSellerId: null, createdBy: session.user.id },
+        ],
+      },
       select: {
         id: true,
         tier: true,
@@ -35,9 +46,20 @@ export async function GET() {
     // "deal closed → ₪X" + whether a brief was already sent.
     const commissions = await prisma.sellerCommission.findMany({
       where: { sellerId: session.user.id },
-      select: { agreementId: true, amount: true, status: true, briefTaskId: true },
+      select: {
+        agreementId: true,
+        agreementRefId: true,
+        amount: true,
+        status: true,
+        briefTaskId: true,
+      },
     });
-    const byAgreement = new Map(commissions.map((c) => [c.agreementId, c]));
+    const byAgreement = new Map(
+      commissions.map((commission) => [
+        commission.agreementRefId ?? commission.agreementId,
+        commission,
+      ]),
+    );
 
     const data = agreements.map((a) => ({
       ...a,
@@ -83,14 +105,11 @@ export async function POST(request: NextRequest) {
       leadId,
     } = parsed.data;
 
-    if (leadId) {
-      const ownedLead = await prisma.contactSubmission.findFirst({
-        where: { id: leadId, assignees: { some: { id: sellerId } } },
-        select: { id: true },
-      });
-      if (!ownedLead) {
-        return NextResponse.json({ error: "Lead is not assigned to this seller" }, { status: 403 });
-      }
+    if (!leadId) {
+      return NextResponse.json(
+        { error: "יצירת חוזה למוכר דורשת ליד מוכשר" },
+        { status: 400 },
+      );
     }
 
     const cleanedExtras = (additionalServices ?? [])
@@ -112,8 +131,22 @@ export async function POST(request: NextRequest) {
       vatExempt: false,
     });
 
-    const agreement = await prisma.agreement.create({
-      data: {
+    await updateLeadContactDetails({
+      leadId,
+      details: {
+        name: customerName,
+        company: businessName || undefined,
+        phone,
+        email,
+      },
+      confirmation: "SELLER_CONFIRMED",
+      actor: { userId: sellerId, role: "SELLER" },
+    });
+
+    const agreement = await createAgreementForLead({
+      leadId,
+      actor: { userId: sellerId, role: "SELLER" },
+      agreement: {
         tier: tier ?? null,
         additionalServices: cleanedExtras,
         monthlyPrice,
@@ -126,17 +159,20 @@ export async function POST(request: NextRequest) {
         content,
         locale: "he",
         vatExempt: false,
-        isSellerDeal: true,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
-        createdBy: sellerId,
-        leadId: leadId ?? null,
       },
-      select: { id: true, signToken: true, customerName: true },
     });
 
-    return NextResponse.json(agreement, { status: 201 });
+    return NextResponse.json(
+      {
+        id: agreement.id,
+        signToken: agreement.signToken,
+        customerName: agreement.customerName,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Error creating seller agreement:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return leadDomainErrorResponse(error);
   }
 }

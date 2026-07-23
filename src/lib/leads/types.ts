@@ -1,4 +1,5 @@
 import type {
+  AgreementTier,
   ContactSubmission,
   LeadActorType,
   LeadIntentLevel,
@@ -159,4 +160,56 @@ export interface LegacyColdInteractionInput {
   prospectId: string;
   actor: AuthenticatedLeadActor;
   interaction: Omit<RecordLeadInteractionInput, "leadId" | "actor">;
+}
+
+export interface ValidatedAgreementDraft {
+  tier: AgreementTier | null;
+  additionalServices: string[];
+  monthlyPrice: number;
+  oneTimeFee: number | null;
+  customerName: string;
+  businessName: string | null;
+  idNumber: string | null;
+  phone: string;
+  email: string;
+  content: string;
+  locale: "he" | "en";
+  vatExempt: boolean;
+  documentVersion: number;
+  clientId?: string | null;
+}
+
+export interface CreateAgreementForLeadInput {
+  leadId: string;
+  actor: AuthenticatedLeadActor;
+  agreement: ValidatedAgreementDraft;
+}
+
+export interface ChangeAgreementCreditInput {
+  agreementId: string;
+  creditedSellerId: string;
+  reason: string;
+  actor: AuthenticatedLeadActor;
+}
+
+export interface ApplyAgreementEventInput {
+  agreementId: string;
+  type: "SENT" | "SIGNED" | "CANCELLED";
+  actor: AuthenticatedLeadActor | LeadActor;
+  reason?: string;
+}
+
+export interface PaymentSuccessInput {
+  agreementId: string;
+  providerTransactionId: string;
+  paidAt: Date;
+  paidAmount: number;
+  actor: LeadActor;
+}
+
+export interface PaymentFailureInput {
+  agreementId: string;
+  providerAttemptId: string;
+  occurredAt: Date;
+  actor: LeadActor;
 }
