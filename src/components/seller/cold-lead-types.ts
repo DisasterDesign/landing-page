@@ -32,8 +32,16 @@ export interface SellerLeadInteractionInput {
   usedCallAngleIds: string[];
 }
 
+export interface SellerCompanyNote {
+  id: string;
+  body: string;
+  createdAt: string;
+  author?: { id: string; name: string };
+}
+
 export interface SellerColdLead {
   id: string;
+  leadId?: string;
   status: string;
   websiteStatus: string;
   auditedDomain: string | null;
@@ -42,6 +50,7 @@ export interface SellerColdLead {
   auditConfidence: number | null;
   opportunitySummary: string | null;
   callAngles: string[];
+  callAngleIds?: string[];
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
   liveStatus: "READY" | "UNAVAILABLE" | "NO_PHONE";
@@ -73,6 +82,8 @@ export interface SellerColdLead {
     visual: number | null;
     commercial: number | null;
   } | null;
+  companyNotesCount: number;
+  canManageCompanyNotes: boolean;
   interactions: Array<{
     id: string;
     outcome: string;

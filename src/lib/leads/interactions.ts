@@ -120,7 +120,9 @@ export function planInteraction(
     );
   }
   if (
-    (input.outcome === "DO_NOT_CALL" || input.outcome === "WRONG_NUMBER") &&
+    (input.outcome === "NOT_INTERESTED" ||
+      input.outcome === "DO_NOT_CALL" ||
+      input.outcome === "WRONG_NUMBER") &&
     schedule
   ) {
     throw new LeadDomainError(
@@ -248,14 +250,35 @@ async function persistSuppression(
     ...(domainHash ? [{ domainHash }] : []),
   ];
   if (filters.length === 0) return;
-  const existing = await transaction.prospectSuppression.findFirst({
+  const existing = await transaction.prospectSuppression.findMany({
     where: { OR: filters },
-    select: { id: true },
+    select: {
+      id: true,
+      placeId: true,
+      phoneHash: true,
+      domainHash: true,
+      sourceProspectId: true,
+    },
   });
-  if (existing) {
+  if (existing.length > 0) {
+    const primary = existing[0]!;
     await transaction.prospectSuppression.update({
-      where: { id: existing.id },
-      data: { reason: input.reason },
+      where: { id: primary.id },
+      data: {
+        reason: input.reason,
+        ...(placeId && !existing.some((row) => row.placeId === placeId)
+          ? { placeId }
+          : {}),
+        ...(phoneHash && !existing.some((row) => row.phoneHash === phoneHash)
+          ? { phoneHash }
+          : {}),
+        ...(domainHash && !existing.some((row) => row.domainHash === domainHash)
+          ? { domainHash }
+          : {}),
+        ...(!primary.sourceProspectId && input.prospect?.id
+          ? { sourceProspectId: input.prospect.id }
+          : {}),
+      },
     });
   } else {
     await transaction.prospectSuppression.create({

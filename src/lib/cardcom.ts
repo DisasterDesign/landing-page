@@ -283,6 +283,215 @@ export function extractWebhookAmount(p: CardcomWebhookPayload): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+interface LowProfileResultResponse {
+  ResponseCode?: number | string;
+  Description?: string;
+  LowProfileId?: string;
+  ReturnValue?: string;
+  TranzactionId?: number | string;
+  TransactionId?: number | string;
+  DocumentInfo?: {
+    DocumentNumber?: number | string;
+  };
+  TokenInfo?: {
+    Token?: string;
+  };
+  TranzactionInfo?: {
+    ResponseCode?: number | string;
+    Amount?: number | string;
+    CreateDate?: string;
+    TranzactionId?: number | string;
+    TransactionId?: number | string;
+  };
+  TransactionInfo?: {
+    ResponseCode?: number | string;
+    Amount?: number | string;
+    CreateDate?: string;
+    TranzactionId?: number | string;
+    TransactionId?: number | string;
+  };
+}
+
+interface VerifiedLowProfilePaymentBase {
+  lowProfileId: string;
+  agreementId: string;
+  token: string | null;
+  invoiceNumber: string | null;
+  occurredAt: Date;
+}
+
+export type VerifiedLowProfilePayment =
+  | (VerifiedLowProfilePaymentBase & {
+      success: true;
+      transactionId: string;
+      amount: number;
+    })
+  | (VerifiedLowProfilePaymentBase & {
+      success: false;
+      transactionId: null;
+      amount: null;
+    });
+
+interface LowProfileVerificationDependencies {
+  config?: ReturnType<typeof getCardcomConfig>;
+  request?: (path: string, payload: object) => Promise<unknown>;
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+/**
+ * Pulls LowProfile truth back from Cardcom before any local payment mutation.
+ * Cardcom explicitly requires this server-to-server read to prevent spoofed
+ * webhook bodies. Callback fields are used only to identify the stored
+ * LowProfile attempt; payment status, amount, token and transaction ID all
+ * come from this authenticated provider response.
+ */
+export async function verifyLowProfilePayment(
+  input: {
+    lowProfileId: string;
+    agreementId: string;
+    expectedAmount: number;
+  },
+  dependencies: LowProfileVerificationDependencies = {},
+): Promise<VerifiedLowProfilePayment> {
+  const lowProfileId = input.lowProfileId.trim();
+  const agreementId = input.agreementId.trim();
+  if (
+    !lowProfileId ||
+    !agreementId ||
+    !Number.isFinite(input.expectedAmount) ||
+    input.expectedAmount <= 0
+  ) {
+    throw new CardcomError("Invalid LowProfile verification input");
+  }
+
+  const config =
+    Object.prototype.hasOwnProperty.call(dependencies, "config")
+      ? dependencies.config
+      : getCardcomConfig();
+  if (!config) {
+    throw new CardcomError("Cardcom credentials not configured");
+  }
+  const request = dependencies.request ?? cardcomGetWithBody;
+  const response = (await request(
+    "/api/v11/LowProfile/GetLpResult",
+    {
+      TerminalNumber: config.terminal,
+      ApiName: config.apiName,
+      LowProfileId: lowProfileId,
+    },
+  )) as LowProfileResultResponse;
+
+  const providerLowProfileId = nonEmptyString(response.LowProfileId);
+  if (
+    providerLowProfileId !== null &&
+    providerLowProfileId !== lowProfileId
+  ) {
+    throw new CardcomError(
+      "Cardcom LowProfile result does not match the stored payment attempt",
+      undefined,
+      response,
+    );
+  }
+  const providerAgreementId = nonEmptyString(response.ReturnValue);
+  if (providerAgreementId !== agreementId) {
+    throw new CardcomError(
+      "Cardcom ReturnValue does not match the agreement",
+      undefined,
+      response,
+    );
+  }
+
+  const topLevelCode = finiteNumber(response.ResponseCode);
+  const transactionInfo =
+    response.TranzactionInfo ?? response.TransactionInfo ?? null;
+  const transactionCode = finiteNumber(transactionInfo?.ResponseCode);
+  const success =
+    topLevelCode === 0 &&
+    (transactionCode === null ||
+      transactionCode === 0 ||
+      transactionCode === 700 ||
+      transactionCode === 701);
+
+  if (!success) {
+    return {
+      success: false,
+      lowProfileId,
+      agreementId,
+      transactionId: null,
+      amount: null,
+      token: null,
+      invoiceNumber: null,
+      occurredAt: new Date(),
+    };
+  }
+
+  if (providerLowProfileId !== lowProfileId) {
+    throw new CardcomError(
+      "Successful Cardcom result does not match the stored payment attempt",
+      undefined,
+      response,
+    );
+  }
+  const amount = finiteNumber(transactionInfo?.Amount);
+  if (
+    amount === null ||
+    Math.abs(amount - input.expectedAmount) > 0.01
+  ) {
+    throw new CardcomError(
+      "Cardcom amount does not match the expected first charge",
+      undefined,
+      response,
+    );
+  }
+  const transactionId =
+    response.TranzactionId ??
+    response.TransactionId ??
+    transactionInfo?.TranzactionId ??
+    transactionInfo?.TransactionId;
+  const normalizedTransactionId =
+    transactionId == null ? null : String(transactionId).trim() || null;
+  if (!normalizedTransactionId) {
+    throw new CardcomError(
+      "Successful Cardcom result has no transaction ID",
+      undefined,
+      response,
+    );
+  }
+  const providerDate = nonEmptyString(transactionInfo?.CreateDate);
+  const parsedDate = providerDate ? new Date(providerDate) : null;
+
+  return {
+    success: true,
+    lowProfileId,
+    agreementId,
+    transactionId: normalizedTransactionId,
+    amount,
+    token: nonEmptyString(response.TokenInfo?.Token),
+    invoiceNumber:
+      response.DocumentInfo?.DocumentNumber == null
+        ? null
+        : String(response.DocumentInfo.DocumentNumber).trim() || null,
+    occurredAt:
+      parsedDate && !Number.isNaN(parsedDate.getTime())
+        ? parsedDate
+        : new Date(),
+  };
+}
+
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

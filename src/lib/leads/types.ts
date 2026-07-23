@@ -80,6 +80,7 @@ export interface UpdateLeadContactDetailsInput {
     phone?: string;
   };
   confirmation: "SELLER_CONFIRMED" | "ADMIN_CONFIRMED";
+  reason?: string;
   actor: AuthenticatedLeadActor;
 }
 

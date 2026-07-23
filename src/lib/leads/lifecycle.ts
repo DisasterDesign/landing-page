@@ -806,6 +806,50 @@ export async function markLeadsRead(
   });
 }
 
+export async function markLeadSlaAlertedInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    leadId: string;
+    eligibleSellerId: string;
+    alertedAt: Date;
+  },
+): Promise<boolean> {
+  const marked = await transaction.contactSubmission.updateMany({
+    where: {
+      id: input.leadId,
+      stage: "NEW",
+      ownerId: null,
+      eligibleSellerId: input.eligibleSellerId,
+      migrationReviewRequired: false,
+      slaAlertedAt: null,
+    },
+    data: { slaAlertedAt: input.alertedAt },
+  });
+  return marked.count === 1;
+}
+
+export async function markLeadSlaEscalatedInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    leadId: string;
+    eligibleSellerId: string;
+    escalatedAt: Date;
+  },
+): Promise<boolean> {
+  const marked = await transaction.contactSubmission.updateMany({
+    where: {
+      id: input.leadId,
+      stage: "NEW",
+      ownerId: null,
+      eligibleSellerId: input.eligibleSellerId,
+      migrationReviewRequired: false,
+      slaEscalatedAt: null,
+    },
+    data: { slaEscalatedAt: input.escalatedAt },
+  });
+  return marked.count === 1;
+}
+
 export async function createLeadInTransaction(
   transaction: Prisma.TransactionClient,
   input: CreateLeadFromSourceInput,

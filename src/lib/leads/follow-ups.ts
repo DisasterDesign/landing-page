@@ -10,6 +10,7 @@ import { LeadDomainError } from "./errors";
 import { appendLeadEventOnce } from "./events";
 import { legacyHashForLead } from "./lifecycle";
 import type {
+  AuthenticatedLeadActor,
   CompleteFollowUpInput,
   RescheduleFollowUpInput,
   ScheduleFollowUpInput,
@@ -289,6 +290,26 @@ export async function completeFollowUp(
   );
 }
 
+export async function markFollowUpReminderSentInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    followUpId: string;
+    ownerId: string;
+    reminderSentAt: Date;
+  },
+): Promise<boolean> {
+  const marked = await transaction.leadFollowUp.updateMany({
+    where: {
+      id: input.followUpId,
+      ownerId: input.ownerId,
+      status: "SCHEDULED",
+      reminderSentAt: null,
+    },
+    data: { reminderSentAt: input.reminderSentAt },
+  });
+  return marked.count === 1;
+}
+
 export async function cancelActiveFollowUps(
   transaction: Prisma.TransactionClient,
   input: {
@@ -311,4 +332,99 @@ export async function cancelActiveFollowUps(
     data: { nextFollowUpAt: null },
   });
   return result.count;
+}
+
+export async function cancelDuplicateFollowUpForMigrationInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    followUpId: string;
+    reason: string;
+    actor: AuthenticatedLeadActor;
+  },
+): Promise<LeadFollowUp> {
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Migration resolution reason is required",
+    );
+  }
+  if (input.actor.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+  const persistedActor = await transaction.user.findUnique({
+    where: { id: input.actor.userId },
+    select: { role: true },
+  });
+  if (persistedActor?.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+
+  const duplicate = await transaction.leadFollowUp.findUnique({
+    where: { id: input.followUpId },
+  });
+  if (!duplicate) {
+    throw new LeadDomainError("NOT_FOUND", "Follow-up not found");
+  }
+  const retained = await transaction.leadFollowUp.findFirst({
+    where: {
+      leadId: duplicate.leadId,
+      status: "SCHEDULED",
+      id: { not: duplicate.id },
+    },
+  });
+  if (!retained) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "A retained scheduled duplicate follow-up is required",
+    );
+  }
+  if (duplicate.status === "CANCELLED") return duplicate;
+  if (duplicate.status !== "SCHEDULED") {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Only a scheduled duplicate follow-up may be cancelled",
+    );
+  }
+  const lead = await transaction.contactSubmission.findUnique({
+    where: { id: duplicate.leadId },
+    include: { assignees: { select: { id: true } } },
+  });
+  if (!lead) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+
+  const occurredAt = new Date();
+  const cancelled = await transaction.leadFollowUp.update({
+    where: { id: duplicate.id },
+    data: { status: "CANCELLED", cancelledAt: occurredAt },
+  });
+  await transaction.contactSubmission.update({
+    where: { id: lead.id },
+    data: {
+      nextFollowUpAt: retained.dueAt,
+      legacyStateHash: legacyHashForLead(
+        lead,
+        lead.assignees.map(({ id }) => id),
+        { nextFollowUpAt: retained.dueAt },
+      ),
+    },
+  });
+  await appendLeadEventOnce(transaction, {
+    leadId: lead.id,
+    type: "MIGRATED",
+    actor: {
+      type: "USER",
+      userId: input.actor.userId,
+      role: input.actor.role,
+    },
+    fromStage: lead.stage,
+    toStage: lead.stage,
+    occurredAt,
+    dedupeKey: `lead:${lead.id}:migration-follow-up-duplicate:${duplicate.id}:${retained.id}`,
+    metadata: {
+      cancelledFollowUpId: duplicate.id,
+      retainedFollowUpId: retained.id,
+      reason,
+    },
+  });
+  return cancelled;
 }

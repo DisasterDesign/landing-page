@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
           email,
         },
         confirmation: "ADMIN_CONFIRMED",
+        reason: "Agreement creation contact synchronization",
         actor: { userId: session.user.id, role: "ADMIN" },
       });
     }

@@ -7,6 +7,11 @@ import {
   recordLegacyColdInteraction,
   type InteractionStore,
 } from "./interactions";
+import {
+  hashSuppressionValue,
+  normalizeDomain,
+  normalizePhone,
+} from "../prospecting/suppression";
 
 const baseInput = {
   leadId: "lead-1",
@@ -121,6 +126,18 @@ test("outcome rules never invent a follow-up and enforce decision-maker truth", 
       }),
     /decision maker/i,
   );
+  assert.throws(
+    () =>
+      planInteraction("CONTACTING", {
+        ...baseInput,
+        outcome: "NOT_INTERESTED",
+        decisionMakerReached: true,
+        followUpAction: "SCHEDULE",
+        followUpAt: new Date(Date.now() + 60_000),
+        lossReason: "NO_INTEREST",
+      }),
+    /follow-up|schedule/i,
+  );
 });
 
 function fakeInteractionStore(options: {
@@ -130,14 +147,17 @@ function fakeInteractionStore(options: {
   doNotContactAt?: Date | null;
   stage?: "NEW" | "PREPARING" | "CONTACTING";
   prospectLeadId?: string | null;
+  suppressions?: Array<Record<string, unknown>>;
 } = {}): InteractionStore & {
   interactions: Array<Record<string, unknown>>;
   events: Array<Record<string, unknown>>;
   lead: Record<string, unknown>;
+  suppressions: Array<Record<string, unknown>>;
 } {
   const interactions: Array<Record<string, unknown>> = [];
   const events: Array<Record<string, unknown>> = [];
   const followUps: Array<Record<string, unknown>> = [];
+  const suppressions = options.suppressions ?? [];
   const lead: Record<string, unknown> = {
     id: "lead-1",
     ownerId: options.ownerId === undefined ? "seller-1" : options.ownerId,
@@ -168,6 +188,11 @@ function fakeInteractionStore(options: {
     externalAdId: null,
     closedAt: null,
     assignees: [{ id: "seller-1" }],
+    prospect: {
+      id: "prospect-1",
+      placeId: "place-1",
+      auditedDomain: "https://example.com",
+    },
   };
   const transaction = {
     user: {
@@ -267,14 +292,48 @@ function fakeInteractionStore(options: {
       },
     },
     prospectSuppression: {
-      async findFirst() {
-        return null;
+      async findFirst({ where }: { where: { OR: Array<Record<string, unknown>> } }) {
+        return (
+          suppressions.find((suppression) =>
+            where.OR.some((filter) =>
+              Object.entries(filter).every(
+                ([key, value]) => suppression[key] === value,
+              ),
+            ),
+          ) ?? null
+        );
       },
-      async create() {
-        return { id: "suppression-1" };
+      async findMany({ where }: { where: { OR: Array<Record<string, unknown>> } }) {
+        return suppressions.filter((suppression) =>
+          where.OR.some((filter) =>
+            Object.entries(filter).every(
+              ([key, value]) => suppression[key] === value,
+            ),
+          ),
+        );
       },
-      async update() {
-        return { id: "suppression-1" };
+      async create({ data }: { data: Record<string, unknown> }) {
+        const suppression = {
+          id: `suppression-${suppressions.length + 1}`,
+          placeId: null,
+          phoneHash: null,
+          domainHash: null,
+          ...data,
+        };
+        suppressions.push(suppression);
+        return suppression;
+      },
+      async update({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) {
+        const suppression = suppressions.find((item) => item.id === where.id);
+        if (!suppression) throw new Error("suppression not found");
+        Object.assign(suppression, data);
+        return suppression;
       },
     },
   };
@@ -282,6 +341,7 @@ function fakeInteractionStore(options: {
     interactions,
     events,
     lead,
+    suppressions,
     async transaction(callback) {
       return callback(transaction as never);
     },
@@ -369,4 +429,38 @@ test("legacy cold interaction auto-claims the canonical lead and never writes le
     1,
   );
   assert.equal(store.lead.stage, "QUALIFIED");
+});
+
+test("do-not-call enriches an existing phone suppression with permanent place and domain keys", async () => {
+  const secret = "suppression-secret";
+  const phone = "050-123-4567";
+  const phoneHash = hashSuppressionValue(normalizePhone(phone), secret);
+  const store = fakeInteractionStore({
+    suppressions: [
+      {
+        id: "suppression-existing",
+        placeId: null,
+        phoneHash,
+        domainHash: null,
+        reason: "WRONG_NUMBER",
+      },
+    ],
+  });
+
+  await recordInteraction(
+    {
+      ...baseInput,
+      outcome: "DO_NOT_CALL",
+      note: "ביקש שלא ניצור קשר",
+    },
+    { store, livePhone: phone, hashSecret: secret },
+  );
+
+  assert.equal(store.suppressions.length, 1);
+  assert.equal(store.suppressions[0]?.placeId, "place-1");
+  assert.equal(store.suppressions[0]?.phoneHash, phoneHash);
+  assert.equal(
+    store.suppressions[0]?.domainHash,
+    hashSuppressionValue(normalizeDomain("https://example.com"), secret),
+  );
 });

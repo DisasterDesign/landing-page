@@ -19,6 +19,15 @@ interface AgreementLite {
   commission: { briefTaskId: string | null } | null;
 }
 
+interface DueFollowUp {
+  id: string;
+  dueAt: string;
+  reason: string;
+  leadId: string;
+  leadName: string;
+  url: string;
+}
+
 const fmt = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
 
 export default function SellerDashboard() {
@@ -26,15 +35,17 @@ export default function SellerDashboard() {
   const [openDeals, setOpenDeals] = useState(0);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [pendingReports, setPendingReports] = useState<AgreementLite[]>([]);
+  const [dueFollowUps, setDueFollowUps] = useState<DueFollowUp[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [cRes, aRes, meRes] = await Promise.all([
+        const [cRes, aRes, meRes, followUpsRes] = await Promise.all([
           fetch("/api/seller/commissions", { cache: "no-store" }),
           fetch("/api/seller/agreements", { cache: "no-store" }),
           fetch("/api/seller/me", { cache: "no-store" }),
+          fetch("/api/seller/follow-ups", { cache: "no-store" }),
         ]);
         if (cRes.ok) setSummary((await cRes.json()).summary);
         if (aRes.ok) {
@@ -50,6 +61,9 @@ export default function SellerDashboard() {
         }
         if (meRes.ok) {
           setMustChangePassword((await meRes.json()).mustChangePassword ?? false);
+        }
+        if (followUpsRes.ok) {
+          setDueFollowUps((await followUpsRes.json()).followUps ?? []);
         }
       } catch {
         toast.error("שגיאה בטעינת הנתונים");
@@ -84,6 +98,33 @@ export default function SellerDashboard() {
         </Link>
       ))}
 
+      {dueFollowUps.length > 0 && (
+        <section className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
+          <h2 className="font-bold text-amber-200">
+            פולואפים שהגיע זמנם ({dueFollowUps.length})
+          </h2>
+          <div className="mt-3 space-y-2">
+            {dueFollowUps.slice(0, 5).map((followUp) => (
+              <Link
+                key={followUp.id}
+                href={followUp.url}
+                className="flex flex-col gap-1 rounded-xl border border-amber-400/20 bg-gray-900/60 p-3 transition hover:border-amber-300/40 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <span>
+                  <strong className="text-white">{followUp.leadName}</strong>
+                  <span className="mr-2 text-sm text-gray-300">
+                    {followUp.reason}
+                  </span>
+                </span>
+                <time className="text-xs text-amber-200">
+                  {new Date(followUp.dueAt).toLocaleString("he-IL")}
+                </time>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-white">שלום 👋</h1>
         <p className="text-sm text-gray-400 mt-1">
@@ -106,10 +147,10 @@ export default function SellerDashboard() {
           📋 לטיפול בלידים
         </Link>
         <Link
-          href="/seller/agreements/new"
+          href="/seller/leads"
           className="bg-gray-900 hover:bg-gray-800 border border-gray-700 text-white font-bold rounded-2xl p-5 text-center transition-colors"
         >
-          📝 הוצאת חוזה חדש
+          📝 המשך מליד מוכשר לחוזה
         </Link>
         <Link
           href="/seller/sales"

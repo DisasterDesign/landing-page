@@ -78,9 +78,19 @@ Seller views remain source-specific because the work differs: outbound leads req
 
 Ownership is exclusive and claimed atomically. A lead is `WON` only after the first successful payment; agreement creation, sending and signing remain separate stages. Notes are company CRM data rather than private seller notes. Every material transition is written to an append-only lead event log.
 
+Cardcom callback bodies are untrusted notifications, not payment proof. A first-charge callback is mapped only through the stored LowProfile attempt, then the server pulls the result from Cardcom’s authenticated `LowProfile/GetLpResult` endpoint and verifies the LowProfile ID, agreement `ReturnValue`, charged amount and provider transaction ID before writing `COMPLETED`, `WON` or commission data. A provider-read failure is retryable and never falls back to callback values.
+
+Source ingestion is idempotent by the composite identity `(sourceKey, externalLeadId)`, so the same raw provider ID may legitimately exist under two different channels without collision. Historical Meta sync preserves the provider occurrence time and suppresses fresh-lead notifications and SLA escalation; a sync replay cannot masquerade as a new inquiry.
+
+Lead, note, interaction, follow-up, Agreement and commission lifecycle writes are restricted to an explicit domain-writer allow-list. Product routes delegate to those writers, destructive deletes return `405`, and migration-only repair primitives are callable only from the audited resolver script. UI rollback flags are read on the server and switch interfaces only; canonical write invariants remain active in both legacy and unified views.
+
+Ambiguous legacy source, stage or ownership is never inferred. Such rows remain `migrationReviewRequired`, admin-only and excluded from seller queues until an admin supplies a complete reasoned resolution. Database hardening is two-phase: additive nullable columns and compatibility indexes first, then idempotent backfill/reconciliation and only afterward composite uniqueness, partial indexes and required canonical fields. The final Prisma nullability/schema sync is a separate commit after every deployed database is hardened.
+
 ### User experience
 
 The seller sees only the final assigned cold list and does not participate in research approval or scoring. Public business phone and the existing website are actionable in both seller and admin interfaces. Google phone data remains live by Place ID rather than being persisted; first-party or seller-confirmed contact data may be stored with provenance. Cold-lead preparation shows source context, the current site, the Fuzion audit and concrete call angles before dialing.
+
+The canonical-Lead design narrowly supersedes the earlier no-storage rule for Google’s public business `displayName`: publication persists it as `ContactSubmission.company` so the Lead retains a stable business identity and remains understandable during a Google outage. Google phone, address, category, opening hours, ratings and raw payload remain live and non-persisted.
 
 The feature changes information hierarchy and behavior only. It reuses the existing admin/seller shell, components, RTL behavior and existing pink/cyan/gray tokens. The admin and seller root layouts keep their current Heebo runtime font; components that already opt into Birzia/Meruba/Anomalia retain those local classes. It does not introduce a new visual language or modify global design tokens.
 
@@ -90,4 +100,4 @@ Promoting a prospect only after interest splits one sales journey across two rec
 
 ### Reversibility
 
-Schema changes are additive and the new UI and domain flow remain behind independent feature flags. Legacy fields and routes are retained through the migration window. Disabling the flags restores the prior interface without deleting the new audit history.
+Schema changes are additive and the new UI and domain flow remain behind independent server-only feature flags. Legacy fields and routes are retained through the migration window. Disabling the flags restores the prior interface without deleting the new audit history or bypassing canonical writers. Code must never be rolled back to a version that does not understand the additive schema; the ordered rollout and recovery gates are defined in `docs/LEAD_LIFECYCLE_RUNBOOK.md`.

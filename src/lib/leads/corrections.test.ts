@@ -267,6 +267,39 @@ test("seller-confirmed contact data receives provenance without leaking values t
   );
 });
 
+test("admin contact correction requires and audits a reason", async () => {
+  const store = fakeCorrectionStore(canonicalLead(), {
+    roles: { "admin-1": "ADMIN" },
+  });
+  await assert.rejects(
+    updateLeadContactDetails(
+      {
+        leadId: "lead-1",
+        details: { email: "new@example.com" },
+        confirmation: "ADMIN_CONFIRMED",
+        actor: { userId: "admin-1", role: "ADMIN" },
+      },
+      { store },
+    ),
+    /reason/i,
+  );
+  await updateLeadContactDetails(
+    {
+      leadId: "lead-1",
+      details: { email: "new@example.com" },
+      confirmation: "ADMIN_CONFIRMED",
+      reason: "Verified with the customer",
+      actor: { userId: "admin-1", role: "ADMIN" },
+    },
+    { store },
+  );
+  assert.deepEqual(store.events.at(-1)?.metadata, {
+    changedFields: ["email"],
+    confirmation: "ADMIN_CONFIRMED",
+    reason: "Verified with the customer",
+  });
+});
+
 test("do-not-contact blocks seller and admin contact updates", async () => {
   for (const actor of [
     { userId: "seller-1", role: "SELLER" as const },

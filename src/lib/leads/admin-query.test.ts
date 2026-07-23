@@ -17,7 +17,7 @@ test("admin filter parser validates every supported dimension", () => {
       to: "2026-07-31T23:59:59.000Z",
       territory: "יבנה",
       minScore: "1",
-      maxScore: "4",
+      maxScore: "5",
       businessCategory: "SERVICE",
       dateField: "lastActivityAt",
       overdue: "true",
@@ -34,6 +34,7 @@ test("admin filter parser validates every supported dimension", () => {
   assert.equal(filters.overdue, true);
   assert.equal(filters.reviewRequired, false);
   assert.equal(filters.limit, 75);
+  assert.equal(filters.maxScore, 5);
   assert.equal(filters.from?.toISOString(), "2026-07-01T00:00:00.000Z");
 });
 

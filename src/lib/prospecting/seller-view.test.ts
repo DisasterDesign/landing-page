@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { serializeSellerProspect } from "./seller-view";
+import {
+  serializeCanonicalSellerProspect,
+  serializeSellerProspect,
+} from "./seller-view";
 import type { LivePlaceDetails } from "./types";
 
 function prospect(overrides: Record<string, unknown> = {}) {
@@ -113,4 +116,46 @@ test("unsafe audited-domain fallback and no-site prospects never create website 
   );
   assert.equal(unsafeLive.business.website, "https://local-business.co.il/");
   assert.equal(unsafeLive.business.websiteSource, "AUDITED_DOMAIN");
+});
+
+test("audit failure statuses preserve the website that was actually inspected", () => {
+  for (const websiteStatus of ["BLOCKED", "UNREACHABLE", "UNKNOWN"]) {
+    const result = serializeSellerProspect(
+      prospect({ websiteStatus }),
+      undefined,
+    );
+
+    assert.equal(
+      result.business.website,
+      "https://local-business.co.il/",
+      websiteStatus,
+    );
+    assert.equal(result.business.websiteSource, "AUDITED_DOMAIN", websiteStatus);
+  }
+});
+
+test("legacy canonical cold view exposes company-note count and canonical write capability", () => {
+  const result = serializeCanonicalSellerProspect({
+    id: "lead-1",
+    stage: "CONTACTING",
+    company: "סטודיו נועה",
+    name: "נועה",
+    phone: "03-1234567",
+    address: null,
+    website: null,
+    websiteSource: "NONE",
+    mapUrl: null,
+    category: null,
+    noteCount: 3,
+    capabilities: { canAddNote: true },
+    preparation: null,
+    nextAction: { kind: "NONE" },
+    nextFollowUpAt: null,
+    doNotContactAt: null,
+    interactions: [],
+  });
+
+  assert.equal(result.leadId, "lead-1");
+  assert.equal(result.companyNotesCount, 3);
+  assert.equal(result.canManageCompanyNotes, true);
 });

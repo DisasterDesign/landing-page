@@ -47,9 +47,7 @@ export function auditedDomainWebsite(
 ): string | null {
   if (
     !auditedDomain ||
-    ["NO_WEBSITE", "SOCIAL_ONLY", "UNREACHABLE", "BLOCKED", "UNKNOWN"].includes(
-      websiteStatus,
-    )
+    ["NO_WEBSITE", "SOCIAL_ONLY"].includes(websiteStatus)
   ) {
     return null;
   }
@@ -158,6 +156,8 @@ export function serializeSellerProspect(
           commercial: audit.commercialScore,
         }
       : null,
+    companyNotesCount: 0,
+    canManageCompanyNotes: false,
     interactions: prospect.interactions.map((interaction) => ({
       id: interaction.id,
       outcome: interaction.outcome,
@@ -170,7 +170,29 @@ export function serializeSellerProspect(
 
 export type SellerProspectView = ReturnType<typeof serializeSellerProspect>;
 
-function legacyProspectStatus(lead: SellerLeadDetail): string {
+type CanonicalSellerProspectLead = Pick<
+  SellerLeadDetail,
+  | "id"
+  | "stage"
+  | "doNotContactAt"
+  | "nextAction"
+  | "nextFollowUpAt"
+  | "interactions"
+  | "preparation"
+  | "company"
+  | "name"
+  | "phone"
+  | "address"
+  | "website"
+  | "websiteSource"
+  | "mapUrl"
+  | "category"
+  | "noteCount"
+> & {
+  capabilities: Pick<SellerLeadDetail["capabilities"], "canAddNote">;
+};
+
+function legacyProspectStatus(lead: CanonicalSellerProspectLead): string {
   if (lead.stage === "QUALIFIED" || lead.stage.startsWith("AGREEMENT_")) {
     return "QUALIFIED";
   }
@@ -187,7 +209,9 @@ function legacyProspectStatus(lead: SellerLeadDetail): string {
   return "PUBLISHED";
 }
 
-export function serializeCanonicalSellerProspect(lead: SellerLeadDetail) {
+export function serializeCanonicalSellerProspect(
+  lead: CanonicalSellerProspectLead,
+) {
   const preparation = lead.preparation;
   return {
     id: preparation?.prospectId ?? lead.id,
@@ -201,6 +225,8 @@ export function serializeCanonicalSellerProspect(lead: SellerLeadDetail) {
     opportunitySummary: preparation?.opportunitySummary ?? null,
     callAngles:
       preparation?.callAngles.map((callAngle) => callAngle.text) ?? [],
+    callAngleIds:
+      preparation?.callAngles.map((callAngle) => callAngle.id) ?? [],
     nextFollowUpAt: lead.nextFollowUpAt,
     lastContactedAt:
       lead.interactions.at(-1)?.occurredAt ?? null,
@@ -226,6 +252,8 @@ export function serializeCanonicalSellerProspect(lead: SellerLeadDetail) {
       evidence: [],
     },
     scoreBreakdown: preparation?.scoreBreakdown ?? null,
+    companyNotesCount: lead.noteCount,
+    canManageCompanyNotes: lead.capabilities.canAddNote,
     interactions: lead.interactions.map((interaction) => ({
       id: interaction.id,
       outcome: interaction.outcome,

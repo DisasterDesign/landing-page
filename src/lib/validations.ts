@@ -248,7 +248,9 @@ export const leadInteractionSchema = z
     }
 
     if (
-      (value.outcome === "DO_NOT_CALL" || value.outcome === "WRONG_NUMBER") &&
+      (value.outcome === "NOT_INTERESTED" ||
+        value.outcome === "DO_NOT_CALL" ||
+        value.outcome === "WRONG_NUMBER") &&
       value.followUpAction === "SCHEDULE"
     ) {
       context.addIssue({

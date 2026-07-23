@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { requirePersistedLeadReadRole } from "@/lib/leads/authorization";
 import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { LeadDomainError } from "@/lib/leads/errors";
 import {
@@ -33,15 +34,9 @@ export async function GET(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { id } = await params;
-  const role = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { role: true },
-  });
-  if (role?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   try {
+    await requirePersistedLeadReadRole(session.user.id, ["ADMIN"]);
+    const { id } = await params;
     const lead = await getAdminLeadDetail(id);
     if (getLeadLifecycleConfig().enabled) {
       return NextResponse.json(lead);
@@ -65,6 +60,7 @@ export async function GET(
       createdAt: lead.createdAt,
       assignees: lead.owner ? [lead.owner] : [],
       notes: lead.notes,
+      canonical: lead,
     });
   } catch (error) {
     return leadDomainErrorResponse(error);

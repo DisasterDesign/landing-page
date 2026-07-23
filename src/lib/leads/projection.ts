@@ -25,6 +25,10 @@ import type { LivePlaceDetails } from "@/lib/prospecting/types";
 
 import { sellerLeadScope } from "./authorization";
 import { LeadDomainError } from "./errors";
+import {
+  projectLeadResponseSla,
+  type LeadResponseSla,
+} from "./lead-sla";
 
 type DateValue = Date | string;
 type UserSummary = { id: string; name: string };
@@ -124,6 +128,7 @@ export interface LeadListItem {
   createdAt: string;
   lastActivityAt: string;
   nextFollowUpAt: string | null;
+  responseSla: LeadResponseSla | null;
   lastContactedAt: string | null;
   closedAt: string | null;
   doNotContactAt: string | null;
@@ -224,6 +229,7 @@ export interface SellerLeadListInput {
   cursor?: string;
   limit?: number;
   search?: string;
+  order?: "NEWEST" | "INCOMING_PRIORITY";
 }
 
 interface LeadNoteRecord {
@@ -469,13 +475,6 @@ function numberValue(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function sourceLabel(intentLevel: LeadIntentLevel | null): string {
-  if (intentLevel === "OUTBOUND") return "פנייה קרה";
-  if (intentLevel === "AD_RESPONSE") return "תגובה לפרסום";
-  if (intentLevel === "INBOUND") return "פנייה יזומה";
-  return "דורש סיווג";
-}
-
 function channelLabel(sourceKey: string | null): string {
   const labels: Record<string, string> = {
     google_maps: "Google Maps",
@@ -642,7 +641,7 @@ function computeCapabilities(
   const mayContact = canOperate && !contactBlocked;
 
   return {
-    canClaim: sellerEligible && !terminal,
+    canClaim: sellerEligible && !contactBlocked,
     canPrepare:
       lead.intentLevel === "OUTBOUND" &&
       !terminal &&
@@ -860,7 +859,7 @@ export function projectLeadRecord(
     legacyStatus: lead.status,
     intentLevel: lead.intentLevel,
     sourceKey: lead.sourceKey,
-    sourceLabel: sourceLabel(lead.intentLevel),
+    sourceLabel: channelLabel(lead.sourceKey),
     sourceContext: buildSourceContext(lead.sourceKey, snapshot),
     sourceSnapshot: snapshot,
     stage: lead.stage,
@@ -872,6 +871,14 @@ export function projectLeadRecord(
       lead.followUps.find((followUp) => followUp.status === "SCHEDULED")
         ?.dueAt ??
         lead.nextFollowUpAt,
+    ),
+    responseSla: projectLeadResponseSla(
+      {
+        intentLevel: lead.intentLevel,
+        createdAt: lead.createdAt,
+        firstClaimedAt: lead.firstClaimedAt,
+      },
+      options.now,
     ),
     lastContactedAt: iso(lead.lastContactedAt),
     closedAt: iso(lead.closedAt),
@@ -1004,7 +1011,10 @@ function sellerIntentWhere(
   const nonOutbound = intents.filter((intent) => intent !== "OUTBOUND");
   const choices: Prisma.ContactSubmissionWhereInput[] = [];
   if (nonOutbound.length > 0) {
-    choices.push({ intentLevel: { in: nonOutbound } });
+    choices.push({
+      intentLevel: { in: nonOutbound },
+      stage: { notIn: ["WON", "LOST", "SPAM"] },
+    });
   }
   if (intents.includes("OUTBOUND")) {
     choices.push({
@@ -1052,6 +1062,16 @@ export async function getSellerLeadList(
     ? Math.max(1, Math.min(Math.trunc(requestedLimit), 100))
     : 50;
   const cursor = input.cursor ? decodeLeadCursor(input.cursor) : null;
+  const incomingPriority = input.order === "INCOMING_PRIORITY";
+  const orderBy: Prisma.ContactSubmissionOrderByWithRelationInput[] =
+    incomingPriority
+      ? [
+          { intentLevel: "desc" },
+          { ownerId: { sort: "asc", nulls: "first" } },
+          { createdAt: "asc" },
+          { id: "asc" },
+        ]
+      : [{ createdAt: "desc" }, { id: "desc" }];
   const rows = (await db.contactSubmission.findMany({
     where: {
       AND: [
@@ -1084,11 +1104,14 @@ export async function getSellerLeadList(
               },
             ]
           : []),
-        ...(cursor ? [cursorWhere(cursor)] : []),
+        ...(cursor && !incomingPriority ? [cursorWhere(cursor)] : []),
       ],
     },
     include: leadProjectionInclude,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy,
+    ...(cursor && incomingPriority
+      ? { cursor: { id: cursor.id }, skip: 1 }
+      : {}),
     take: limit + 1,
   })) as unknown as LeadProjectionRecord[];
   const hasMore = rows.length > limit;

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createPaymentPage, getCardcomConfig, type CreatePaymentResult } from "@/lib/cardcom";
+import { recordAgreementPaymentPage } from "@/lib/leads/agreement-lifecycle";
 import { withVat } from "@/lib/vat";
 
 /**
@@ -111,13 +112,10 @@ export async function ensurePaymentUrlForAgreement(agreementId: string): Promise
     vatFree: agreement.vatExempt,
   });
 
-  await prisma.agreement.update({
-    where: { id: agreement.id },
-    data: {
-      paymentUrl: result.url,
-      paymentId: result.lowProfileId,
-      paymentStatus: "SENT",
-    },
+  await recordAgreementPaymentPage({
+    agreementId: agreement.id,
+    paymentUrl: result.url,
+    providerPaymentId: result.lowProfileId,
   });
 
   return { url: result.url };

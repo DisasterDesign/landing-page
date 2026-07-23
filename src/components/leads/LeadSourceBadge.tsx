@@ -59,8 +59,9 @@ export default function LeadSourceBadge({
         {intentLevel ? intentLabels[intentLevel] : "דורש סיווג"}
       </Badge>
       <span className="text-sm text-gray-300">
-        {sourceLabel ||
-          (sourceKey ? sourceLabels[sourceKey] ?? sourceKey : "מקור לא מסווג")}
+        {sourceKey
+          ? sourceLabels[sourceKey] ?? sourceLabel ?? sourceKey
+          : sourceLabel ?? "מקור לא מסווג"}
       </span>
       {context.length > 0 && (
         <span className="text-xs text-gray-500">{context.join(" · ")}</span>
@@ -68,4 +69,3 @@ export default function LeadSourceBadge({
     </div>
   );
 }
-

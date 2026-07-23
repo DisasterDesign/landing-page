@@ -8,9 +8,10 @@ export default function QualityScoreBadge({ score }: { score: number | null }) {
     "bg-amber-500/15 text-amber-300 border-amber-500/30",
     "bg-yellow-500/15 text-yellow-200 border-yellow-500/30",
     "bg-cyan/10 text-cyan border-cyan/30",
+    "bg-cyan/15 text-cyan border-cyan/40",
   ];
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-bold ${styles[score] ?? styles[4]}`}>
+    <span className={`rounded-full border px-3 py-1 text-xs font-bold ${styles[score] ?? styles[5]}`}>
       איכות אתר {score}/5
     </span>
   );

@@ -61,6 +61,18 @@ test("decision-maker outcomes and terminal outcomes enforce their invariants", (
   assert.equal(
     leadInteractionSchema.safeParse({
       channel: "PHONE",
+      outcome: "NOT_INTERESTED",
+      decisionMakerReached: true,
+      followUpAction: "SCHEDULE",
+      followUpAt: future,
+      lossReason: "NO_INTEREST",
+      usedCallAngleIds: [],
+    }).success,
+    false,
+  );
+  assert.equal(
+    leadInteractionSchema.safeParse({
+      channel: "PHONE",
       outcome: "DO_NOT_CALL",
       decisionMakerReached: true,
       followUpAction: "SCHEDULE",

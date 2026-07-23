@@ -9,10 +9,20 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { leadActionUrlFor, sellerLeadActionUrl } from "./action-url";
+import {
+  markLeadSlaAlertedInTransaction,
+  markLeadSlaEscalatedInTransaction,
+} from "./lifecycle";
 
 export interface LeadSlaMinutes {
   INBOUND: number;
   AD_RESPONSE: number;
+}
+
+export interface LeadResponseSla {
+  thresholdMinutes: number;
+  elapsedMinutes: number;
+  state: "ON_TIME" | "OVERDUE" | "MET" | "MISSED";
 }
 
 function positiveMinutes(value: string | undefined, fallback: number): number {
@@ -26,6 +36,45 @@ export function getLeadSlaMinutes(
   return {
     INBOUND: positiveMinutes(env.INBOUND_LEAD_SLA_MINUTES, 5),
     AD_RESPONSE: positiveMinutes(env.AD_RESPONSE_LEAD_SLA_MINUTES, 15),
+  };
+}
+
+export function projectLeadResponseSla(
+  lead: {
+    intentLevel: "OUTBOUND" | "AD_RESPONSE" | "INBOUND" | null;
+    createdAt: Date | string;
+    firstClaimedAt: Date | string | null;
+  },
+  now: Date = new Date(),
+  minutes: LeadSlaMinutes = getLeadSlaMinutes(),
+): LeadResponseSla | null {
+  if (
+    lead.intentLevel !== "INBOUND" &&
+    lead.intentLevel !== "AD_RESPONSE"
+  ) {
+    return null;
+  }
+  const thresholdMinutes = minutes[lead.intentLevel];
+  const createdAt = new Date(lead.createdAt).getTime();
+  const endAt = lead.firstClaimedAt
+    ? new Date(lead.firstClaimedAt).getTime()
+    : now.getTime();
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((endAt - createdAt) / 60_000),
+  );
+  const met = elapsedMinutes <= thresholdMinutes;
+
+  return {
+    thresholdMinutes,
+    elapsedMinutes,
+    state: lead.firstClaimedAt
+      ? met
+        ? "MET"
+        : "MISSED"
+      : met
+        ? "ON_TIME"
+        : "OVERDUE",
   };
 }
 
@@ -136,18 +185,12 @@ export async function dispatchLeadSlaAlerts(
           transaction.notification as unknown as NotificationPersistence,
           input,
         );
-        const marked = await transaction.contactSubmission.updateMany({
-          where: {
-            id: lead.id,
-            stage: "NEW",
-            ownerId: null,
-            eligibleSellerId: lead.eligibleSellerId,
-            migrationReviewRequired: false,
-            slaAlertedAt: null,
-          },
-          data: { slaAlertedAt: now },
+        const marked = await markLeadSlaAlertedInTransaction(transaction, {
+          leadId: lead.id,
+          eligibleSellerId: lead.eligibleSellerId,
+          alertedAt: now,
         });
-        if (marked.count !== 1) {
+        if (!marked) {
           throw new Error("Lead changed while dispatching its SLA alert");
         }
         if (persisted.created) createdEffects.push(input);
@@ -175,17 +218,12 @@ export async function dispatchLeadSlaAlerts(
             );
             if (persisted.created) createdEffects.push(input);
           }
-          const marked = await transaction.contactSubmission.updateMany({
-            where: {
-              id: lead.id,
-              stage: "NEW",
-              ownerId: null,
-              migrationReviewRequired: false,
-              slaEscalatedAt: null,
-            },
-            data: { slaEscalatedAt: now },
+          const marked = await markLeadSlaEscalatedInTransaction(transaction, {
+            leadId: lead.id,
+            eligibleSellerId: lead.eligibleSellerId,
+            escalatedAt: now,
           });
-          if (marked.count !== 1) {
+          if (!marked) {
             throw new Error("Lead changed while escalating its SLA alert");
           }
         }

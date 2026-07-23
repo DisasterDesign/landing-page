@@ -4,6 +4,7 @@ import {
   isWebhookSuccess,
   extractWebhookAmount,
   createRecurringOrderNTV,
+  verifyLowProfilePayment,
   type CardcomWebhookPayload,
 } from "@/lib/cardcom";
 import { encrypt } from "@/lib/crypto";
@@ -24,9 +25,9 @@ export const maxDuration = 60;
  * doesn't retry. Heavy work is kept minimal (one DB transaction + one
  * notify fan-out).
  *
- * Cardcom does NOT sign webhooks, so we trust the body's status code +
- * ReturnValue. The agreement.id we put in ReturnValue is a server-generated
- * cuid and not enumerable by an attacker, so this is reasonably safe.
+ * Cardcom does not sign first-charge callbacks. The callback identifies only
+ * the stored LowProfile attempt; every payment fact is pulled back from
+ * Cardcom's GetLpResult API before local state changes.
  *
  * Two flavors of webhook land here:
  *   1. First charge (LowProfile) — has ReturnValue=agreementId, no RecurringId.
@@ -68,11 +69,10 @@ export async function POST(request: NextRequest) {
   }
 
   console.log("Cardcom webhook received:", {
-    ReturnValue: payload.ReturnValue,
     DealResponse: payload.DealResponse,
     ResponseCode: payload.ResponseCode,
     InternalDealNumber: payload.InternalDealNumber,
-    Token: payload.Token,
+    hasToken: typeof payload.Token === "string" && payload.Token.length > 0,
     LowProfileId: payload.LowProfileId,
     RecurringId: payload.RecurringId,
   });
@@ -82,8 +82,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  await handleFirstCharge(payload);
-  return NextResponse.json({ ok: true });
+  try {
+    await handleFirstCharge(payload);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Cardcom first-charge verification failed:", error);
+    return NextResponse.json(
+      { ok: false, retry: true },
+      { status: 503 },
+    );
+  }
 }
 
 // Cardcom may also GET the URL during setup checks; respond OK
@@ -92,20 +100,28 @@ export async function GET() {
 }
 
 async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> {
-  const agreementId = typeof payload.ReturnValue === "string" ? payload.ReturnValue : null;
-  if (!agreementId) return;
+  const lowProfileId =
+    typeof payload.LowProfileId === "string"
+      ? payload.LowProfileId.trim()
+      : "";
+  if (!lowProfileId) return;
 
-  const agreement = await prisma.agreement.findUnique({
-    where: { id: agreementId },
+  const matchingAgreements = await prisma.agreement.findMany({
+    where: { paymentId: lowProfileId },
+    take: 2,
     select: {
       id: true,
       tier: true,
       paymentStatus: true,
       customerName: true,
       monthlyPrice: true,
+      oneTimeFee: true,
       clientId: true,
       cardcomRecurringId: true,
       cardcomDealId: true,
+      cardcomToken: true,
+      cardcomLowProfileId: true,
+      invoiceNumber: true,
       paymentId: true,
       email: true,
       phone: true,
@@ -113,28 +129,35 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       vatExempt: true,
     },
   });
-  if (!agreement) {
-    console.warn(`Cardcom webhook: agreement ${agreementId} not found`);
+  if (matchingAgreements.length !== 1) {
+    console.warn(
+      `Cardcom webhook: expected one agreement for LowProfileId=${lowProfileId}, found ${matchingAgreements.length}`,
+    );
     return;
   }
+  const agreement = matchingAgreements[0];
+  const agreementId = agreement.id;
+  const firstChargeNet =
+    agreement.monthlyPrice + (agreement.oneTimeFee ?? 0);
+  const expectedAmount = agreement.vatExempt
+    ? firstChargeNet
+    : withVat(firstChargeNet);
+  const verified = await verifyLowProfilePayment({
+    lowProfileId,
+    agreementId,
+    expectedAmount,
+  });
 
-  if (!isWebhookSuccess(payload)) {
-    const providerAttemptId =
-      payload.LowProfileId != null
-        ? String(payload.LowProfileId).trim()
-        : agreement.paymentId?.trim() ?? "";
-    if (!providerAttemptId) {
-      console.warn(
-        `Cardcom webhook: failure for agreement ${agreementId} has no stable attempt ID`,
-      );
-      return;
-    }
+  if (!verified.success) {
     const failed = await prisma.$transaction((transaction) =>
       applyPaymentFailure(transaction, {
         agreementId,
-        providerAttemptId,
-        occurredAt: new Date(),
-        actor: { type: "INTEGRATION" },
+        providerAttemptId: verified.lowProfileId,
+        occurredAt: verified.occurredAt,
+        actor: {
+          type: "INTEGRATION",
+          occurredAt: verified.occurredAt,
+        },
       }),
     );
     await runLeadPostCommitEffects(failed.effects).catch((error) =>
@@ -143,36 +166,20 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     return;
   }
 
-  const paidAmount = extractWebhookAmount(payload);
-  const cardcomDealId =
-    payload.InternalDealNumber != null ? String(payload.InternalDealNumber) : null;
-  const cardcomToken = typeof payload.Token === "string" ? payload.Token : null;
+  const paidAmount = verified.amount;
+  const cardcomToken = verified.token;
   // Encrypt before persisting; raw token kept only for legacy SOAP fallback.
   const cardcomTokenEncrypted = cardcomToken ? encrypt(cardcomToken) : null;
-  const lowProfileId =
-    typeof payload.LowProfileId === "string" ? payload.LowProfileId : null;
-  const invoiceNumber =
-    payload.DocumentNumber != null ? String(payload.DocumentNumber) : null;
-
-  const paidAt = new Date();
-  const providerTransactionId =
-    cardcomDealId ??
-    lowProfileId ??
-    agreement.cardcomDealId ??
-    agreement.paymentId;
-  if (!providerTransactionId?.trim()) {
-    console.warn(
-      `Cardcom webhook: success for agreement ${agreementId} has no stable transaction ID`,
-    );
-    return;
-  }
+  const invoiceNumber = verified.invoiceNumber;
+  const paidAt = verified.occurredAt;
+  const providerTransactionId = verified.transactionId;
 
   const lifecycle = await prisma.$transaction(async (tx) => {
     const result = await applyPaymentSuccess(tx, {
       agreementId,
       providerTransactionId,
       paidAt,
-      paidAmount: paidAmount ?? agreement.monthlyPrice,
+      paidAmount,
       actor: { type: "INTEGRATION", occurredAt: paidAt },
     });
 
@@ -181,9 +188,9 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     await tx.agreement.update({
       where: { id: agreementId },
       data: {
-        ...(cardcomTokenEncrypted ? { cardcomToken: cardcomTokenEncrypted } : {}),
-        ...(lowProfileId ? { cardcomLowProfileId: lowProfileId } : {}),
-        ...(invoiceNumber ? { invoiceNumber } : {}),
+        cardcomToken: cardcomTokenEncrypted ?? agreement.cardcomToken,
+        cardcomLowProfileId: lowProfileId,
+        invoiceNumber: invoiceNumber ?? agreement.invoiceNumber,
       },
     });
 
@@ -202,7 +209,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         where: { id: agreement.clientId },
         data: {
           paymentDate: paidAt,
-          ...(paidAmount != null ? { amount: { increment: paidAmount } } : {}),
+          amount: { increment: paidAmount },
         },
       });
       await applyPaymentToProduct(tx, agreement.clientId, agreement.id, grossMonthly, paidAt);
@@ -221,12 +228,12 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   notifyAllAdmins({
     type: "AGREEMENT_SIGNED",
     title: `תשלום התקבל — ${agreement.customerName}`,
-    body: `סכום: ${paidAmount ?? "?"} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
+    body: `סכום: ${paidAmount} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after payment failed:", e));
 
   sendPaymentReceivedEmail({
     customerName: agreement.customerName,
-    amount: paidAmount ?? agreement.monthlyPrice,
+    amount: paidAmount,
     invoiceNumber: invoiceNumber ?? undefined,
     agreementTier: agreement.tier,
   }).catch((e) => console.error("email after payment failed:", e));

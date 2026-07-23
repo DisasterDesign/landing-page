@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 // GET - Admin: all seller commissions + per-seller payout totals.
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!(await requireProspectingAdmin())) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const commissions = await prisma.sellerCommission.findMany({

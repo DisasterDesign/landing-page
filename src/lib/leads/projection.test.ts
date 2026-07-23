@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  encodeLeadCursor,
+  getSellerLeadList,
   getSellerLeadDetail,
   projectLeadRecord,
   type LeadProjectionRecord,
@@ -125,7 +127,8 @@ test("seller projection exposes canonical source and overlays live Google detail
 
   assert.equal(result.intentLevel, "OUTBOUND");
   assert.equal(result.sourceKey, "google_maps");
-  assert.equal(result.sourceLabel, "פנייה קרה");
+  assert.equal(result.sourceLabel, "Google Maps");
+  assert.equal(result.sourceContext.channel, "Google Maps");
   assert.equal(result.stage, "NEW");
   assert.equal(result.phone, "08-1234567");
   assert.equal(result.phoneSource, "GOOGLE");
@@ -153,6 +156,52 @@ test("Google outage preserves audited website and never invents live fields", ()
   assert.equal(result.preparation?.liveStatus, "UNAVAILABLE");
 });
 
+test("lead detail distinguishes an unavailable audit from no website", () => {
+  for (const websiteStatus of ["BLOCKED", "UNREACHABLE", "UNKNOWN"]) {
+    const result = projectLeadRecord(
+      lead({
+        sourceSnapshot: {
+          ...(lead().sourceSnapshot as Record<string, unknown>),
+          websiteStatus,
+        },
+        prospect: {
+          ...lead().prospect!,
+          websiteStatus,
+        },
+      }),
+      {
+        audience: "SELLER",
+        viewerId: "seller-1",
+        now: new Date("2026-07-23T10:00:00.000Z"),
+      },
+    );
+
+    assert.equal(result.website, "https://noa.co.il/", websiteStatus);
+    assert.equal(result.websiteSource, "AUDITED_DOMAIN", websiteStatus);
+  }
+
+  const noWebsite = projectLeadRecord(
+    lead({
+      sourceSnapshot: {
+        ...(lead().sourceSnapshot as Record<string, unknown>),
+        websiteStatus: "NO_WEBSITE",
+      },
+      prospect: {
+        ...lead().prospect!,
+        websiteStatus: "NO_WEBSITE",
+      },
+    }),
+    {
+      audience: "SELLER",
+      viewerId: "seller-1",
+      now: new Date("2026-07-23T10:00:00.000Z"),
+    },
+  );
+
+  assert.equal(noWebsite.website, null);
+  assert.equal(noWebsite.websiteSource, "NONE");
+});
+
 test("do-not-contact and review rows fail closed while admin retains review facts", () => {
   const blocked = projectLeadRecord(
     lead({
@@ -169,6 +218,18 @@ test("do-not-contact and review rows fail closed while admin retains review fact
   assert.equal(blocked.capabilities.canContact, false);
   assert.equal(blocked.capabilities.canRecordInteraction, false);
   assert.equal(blocked.capabilities.canScheduleFollowUp, false);
+
+  const blockedEligible = projectLeadRecord(
+    lead({
+      doNotContactAt: new Date("2026-07-22T10:00:00.000Z"),
+    }),
+    {
+      audience: "SELLER",
+      viewerId: "seller-1",
+      now: new Date("2026-07-23T10:00:00.000Z"),
+    },
+  );
+  assert.equal(blockedEligible.capabilities.canClaim, false);
 
   const review = projectLeadRecord(
     lead({
@@ -296,4 +357,52 @@ test("seller authorization is applied before live enrichment", async () => {
     /not found/i,
   );
   assert.equal(enriched, false);
+});
+
+test("incoming seller queue excludes terminal leads and uses stable priority pagination", async () => {
+  const captured: { query?: Record<string, unknown> } = {};
+  const db = {
+    contactSubmission: {
+      async findMany(input: Record<string, unknown>) {
+        captured.query = input;
+        return [];
+      },
+    },
+  };
+
+  await getSellerLeadList(
+    {
+      sellerId: "seller-1",
+      intents: ["INBOUND", "AD_RESPONSE"],
+      order: "INCOMING_PRIORITY",
+      cursor: encodeLeadCursor({
+        createdAt: "2026-07-20T08:00:00.000Z",
+        id: "lead-cursor",
+      }),
+      limit: 50,
+    },
+    {
+      db: db as never,
+      loadLiveDetails: async () => new Map(),
+    },
+  );
+
+  assert.ok(captured.query);
+  const query = captured.query;
+  const where = query.where as {
+    AND: Array<Record<string, unknown>>;
+  };
+  assert.deepEqual(where.AND[1], {
+    intentLevel: { in: ["INBOUND", "AD_RESPONSE"] },
+    stage: { notIn: ["WON", "LOST", "SPAM"] },
+  });
+  assert.deepEqual(query.orderBy, [
+    { intentLevel: "desc" },
+    { ownerId: { sort: "asc", nulls: "first" } },
+    { createdAt: "asc" },
+    { id: "asc" },
+  ]);
+  assert.deepEqual(query.cursor, { id: "lead-cursor" });
+  assert.equal(query.skip, 1);
+  assert.equal(query.take, 51);
 });

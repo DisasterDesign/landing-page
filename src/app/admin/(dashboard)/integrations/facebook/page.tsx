@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { confirmDanger } from "@/lib/confirm";
 
@@ -162,9 +163,9 @@ export default function FacebookIntegrationPage() {
         <h2 className="text-2xl font-bold mb-2">📘 Facebook Lead Ads</h2>
         <p className="text-sm text-gray-400 leading-relaxed">
           לידים מקמפיינים בפייסבוק יזרמו אוטומטית למסך{" "}
-          <a href="/admin/leads" className="text-cyan hover:underline">
+          <Link href="/admin/leads" className="text-cyan hover:underline">
             לידים
-          </a>{" "}
+          </Link>{" "}
           עם תיוג 📘 Facebook. בלי Zapier, בלי תשלום.
         </p>
       </div>

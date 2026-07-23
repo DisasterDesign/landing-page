@@ -21,6 +21,7 @@ function whatsappHref(phone: string) {
 
 export default function LeadContactActions({
   phone,
+  phoneSource,
   website,
   mapUrl,
   doNotContactAt,
@@ -28,6 +29,7 @@ export default function LeadContactActions({
   onScheduleFollowUp,
 }: {
   phone: string | null;
+  phoneSource: "CRM" | "GOOGLE" | "NONE";
   website: string | null;
   mapUrl: string | null;
   doNotContactAt: string | null;
@@ -38,6 +40,7 @@ export default function LeadContactActions({
   const [copyFallbackOpen, setCopyFallbackOpen] = useState(false);
   const actions = leadContactActionState({
     phone,
+    phoneSource,
     website,
     mapUrl,
     doNotContactAt,
@@ -46,7 +49,13 @@ export default function LeadContactActions({
 
   function copyPhone() {
     if (!phone) return;
-    void navigator.clipboard
+    const clipboard = navigator.clipboard;
+    if (!clipboard?.writeText) {
+      setCopyFallbackOpen(true);
+      requestAnimationFrame(() => fallbackInputRef.current?.select());
+      return;
+    }
+    void clipboard
       .writeText(phone)
       .then(() => toast.success("הועתק"))
       .catch(() => {
@@ -153,4 +162,3 @@ export default function LeadContactActions({
     </>
   );
 }
-

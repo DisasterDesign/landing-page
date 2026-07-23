@@ -48,7 +48,7 @@ test("Google Maps snapshots contain only durable audited evidence", () => {
   }
 });
 
-test("call angles are versioned objects and score five is not publishable", () => {
+test("call angles are versioned objects and the durable score scale is zero to five", () => {
   assert.throws(
     () =>
       validateSourceSnapshot("google_maps", {
@@ -57,8 +57,11 @@ test("call angles are versioned objects and score five is not publishable", () =
       }),
     /snapshot|invalid/i,
   );
+  assert.doesNotThrow(() =>
+    validateSourceSnapshot("google_maps", { ...googleSnapshot, qualityScore: 5 }),
+  );
   assert.throws(
-    () => validateSourceSnapshot("google_maps", { ...googleSnapshot, qualityScore: 5 }),
+    () => validateSourceSnapshot("google_maps", { ...googleSnapshot, qualityScore: 6 }),
     /snapshot|invalid/i,
   );
 });

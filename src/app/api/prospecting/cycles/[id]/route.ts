@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
+import { serializeAdminProspect } from "@/lib/prospecting/admin-view";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
 import type { LivePlaceDetails } from "@/lib/prospecting/types";
@@ -44,10 +45,12 @@ export async function GET(
   return NextResponse.json({
     cycle: {
       ...cycle,
-      prospects: cycle.prospects.map((prospect) => ({
-        ...prospect,
-        live: liveDetails.get(prospect.placeId) ?? null,
-      })),
+      prospects: cycle.prospects.map((prospect) =>
+        serializeAdminProspect(
+          prospect,
+          liveDetails.get(prospect.placeId),
+        ),
+      ),
     },
   });
 }

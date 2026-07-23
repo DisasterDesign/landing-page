@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 
-const patchSchema = z.object({
-  isRead: z.boolean().optional(),
-  status: z.enum(["NEW", "IN_PROGRESS", "CLOSED", "LOST", "SPAM"]).optional(),
-  tags: z.array(z.string().min(1)).optional(),
-});
+import { auth } from "@/lib/auth";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
+import { markLeadRead } from "@/lib/leads/lifecycle";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const patchSchema = z.object({ isRead: z.boolean() }).strict();
 
 export async function PATCH(
   request: NextRequest,
@@ -15,7 +14,7 @@ export async function PATCH(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -28,40 +27,28 @@ export async function PATCH(
         { status: 400 }
       );
     }
-
-    const contact = await prisma.contactSubmission.update({
-      where: { id },
-      data: parsed.data,
+    const persisted = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
     });
-
-    return NextResponse.json(contact);
-  } catch (error) {
-    console.error("Error updating contact:", error);
+    if (persisted?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      await markLeadRead({
+        leadId: id,
+        isRead: parsed.data.isRead,
+        actor: { userId: session.user.id, role: "ADMIN" },
+      }),
     );
+  } catch (error) {
+    return leadDomainErrorResponse(error);
   }
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    await prisma.contactSubmission.delete({ where: { id } });
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting contact:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
+export function DELETE() {
+  return NextResponse.json(
+    { error: "Leads are permanent CRM history" },
+    { status: 405 },
+  );
 }

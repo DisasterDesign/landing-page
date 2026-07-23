@@ -44,7 +44,7 @@ export default function LeadPrimaryAction({
         href={
           audience === "seller"
             ? `/seller/agreements/new?leadId=${encodeURIComponent(lead.id)}`
-            : `/admin/agreements?leadId=${encodeURIComponent(lead.id)}`
+            : `/admin/agreements?new=1&leadId=${encodeURIComponent(lead.id)}`
         }
         className="inline-flex min-h-11 items-center justify-center rounded-xl bg-pink px-5 py-2.5 text-sm font-bold text-white transition hover:bg-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink"
       >

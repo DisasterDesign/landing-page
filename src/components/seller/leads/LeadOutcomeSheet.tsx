@@ -8,7 +8,15 @@ import type {
 import { useMemo, useState } from "react";
 
 import Modal from "@/components/ui/Modal";
-import type { LeadDetail } from "@/lib/leads/projection";
+import { initialLeadOutcomeFormState } from "@/lib/leads/ui-state";
+
+export interface LeadOutcomeLead {
+  name: string | null;
+  company: string | null;
+  preparation: {
+    callAngles: Array<{ id: string; text: string; version: number }>;
+  } | null;
+}
 
 export interface LeadOutcomeInput {
   channel: LeadInteractionChannel;
@@ -51,25 +59,38 @@ export default function LeadOutcomeSheet({
   onClose,
   onSubmit,
 }: {
-  lead: LeadDetail;
+  lead: LeadOutcomeLead;
   isOpen: boolean;
   busy: boolean;
   onClose: () => void;
   onSubmit: (input: LeadOutcomeInput) => void;
 }) {
+  const initialState = initialLeadOutcomeFormState();
   const [channel, setChannel] =
-    useState<LeadInteractionChannel>("PHONE");
-  const [outcome, setOutcome] = useState<LeadInteractionOutcome | null>(null);
-  const [decisionMakerReached, setDecisionMakerReached] = useState(false);
-  const [note, setNote] = useState("");
+    useState<LeadInteractionChannel>(initialState.channel);
+  const [outcome, setOutcome] = useState<LeadInteractionOutcome | null>(
+    initialState.outcome,
+  );
+  const [decisionMakerReached, setDecisionMakerReached] = useState(
+    initialState.decisionMakerReached,
+  );
+  const [note, setNote] = useState(initialState.note);
   const [followUpAction, setFollowUpAction] = useState<
     "SCHEDULE" | "END_AS_LOST" | null
-  >(null);
-  const [followUpAt, setFollowUpAt] = useState("");
-  const [followUpIsFuture, setFollowUpIsFuture] = useState(false);
-  const [lossReason, setLossReason] = useState<LeadLossReason | null>(null);
-  const [lossReasonDetails, setLossReasonDetails] = useState("");
-  const [usedCallAngleIds, setUsedCallAngleIds] = useState<string[]>([]);
+  >(initialState.followUpAction);
+  const [followUpAt, setFollowUpAt] = useState(initialState.followUpAt);
+  const [followUpIsFuture, setFollowUpIsFuture] = useState(
+    initialState.followUpIsFuture,
+  );
+  const [lossReason, setLossReason] = useState<LeadLossReason | null>(
+    initialState.lossReason,
+  );
+  const [lossReasonDetails, setLossReasonDetails] = useState(
+    initialState.lossReasonDetails,
+  );
+  const [usedCallAngleIds, setUsedCallAngleIds] = useState<string[]>(
+    initialState.usedCallAngleIds,
+  );
 
   const callAngles = lead.preparation?.callAngles.slice(0, 3) ?? [];
   const explicitNextAction =
@@ -173,11 +194,16 @@ export default function LeadOutcomeSheet({
           </select>
         </label>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div
+          role="group"
+          aria-label="תוצאת השיחה"
+          className="mt-4 grid grid-cols-2 gap-2"
+        >
           {outcomes.map(([value, label]) => (
             <button
               key={value}
               type="button"
+              aria-pressed={outcome === value}
               onClick={() => selectOutcome(value)}
               className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink ${
                 outcome === value
@@ -209,9 +235,14 @@ export default function LeadOutcomeSheet({
         {explicitNextAction && (
           <div className="mt-4">
             <p className="mb-2 text-sm text-gray-300">מה הפעולה הבאה?</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div
+              role="group"
+              aria-label="הפעולה הבאה"
+              className="grid grid-cols-2 gap-2"
+            >
               <button
                 type="button"
+                aria-pressed={followUpAction === "SCHEDULE"}
                 onClick={() => setFollowUpAction("SCHEDULE")}
                 className={`rounded-xl border px-3 py-2.5 text-sm ${
                   followUpAction === "SCHEDULE"
@@ -223,6 +254,7 @@ export default function LeadOutcomeSheet({
               </button>
               <button
                 type="button"
+                aria-pressed={followUpAction === "END_AS_LOST"}
                 onClick={() => setFollowUpAction("END_AS_LOST")}
                 className={`rounded-xl border px-3 py-2.5 text-sm ${
                   followUpAction === "END_AS_LOST"

@@ -6,24 +6,30 @@ import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-tem
 import {
   createAgreementForLead,
 } from "@/lib/leads/agreement-lifecycle";
+import {
+  canSellerManageAgreement,
+  requirePersistedLeadReadRole,
+  sellerAgreementScope,
+} from "@/lib/leads/authorization";
 import { updateLeadContactDetails } from "@/lib/leads/corrections";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 
-// GET - agreements currently credited to this seller. Legacy rows fall back to
-// the creator only while no canonical credit has been frozen.
+// GET - linked agreements are visible to the current operational owner and to
+// the frozen-credit seller for financial history. Only a canonically ready
+// current owner gets canManage; legacy/exception rows remain read-only.
 export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const sellerId = session.user.id;
+    await requirePersistedLeadReadRole(
+      session.user.id,
+      ["ADMIN", "SELLER"],
+    );
     const agreements = await prisma.agreement.findMany({
-      where: {
-        OR: [
-          { creditedSellerId: session.user.id },
-          { creditedSellerId: null, createdBy: session.user.id },
-        ],
-      },
+      where: sellerAgreementScope(sellerId),
       select: {
         id: true,
         tier: true,
@@ -38,6 +44,16 @@ export async function GET() {
         paidAmount: true,
         paidAt: true,
         createdAt: true,
+        lead: {
+          select: {
+            id: true,
+            ownerId: true,
+            migrationReviewRequired: true,
+            intentLevel: true,
+            sourceKey: true,
+            stage: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -45,7 +61,7 @@ export async function GET() {
     // Attach the commission row (if any) per agreement so the UI can show
     // "deal closed → ₪X" + whether a brief was already sent.
     const commissions = await prisma.sellerCommission.findMany({
-      where: { sellerId: session.user.id },
+      where: { sellerId },
       select: {
         agreementId: true,
         agreementRefId: true,
@@ -61,15 +77,25 @@ export async function GET() {
       ]),
     );
 
-    const data = agreements.map((a) => ({
-      ...a,
-      commission: byAgreement.get(a.id) ?? null,
+    const data = agreements.map(({ lead, ...agreement }) => ({
+      ...agreement,
+      lead: lead
+        ? {
+            id: lead.id,
+            intentLevel: lead.intentLevel,
+            sourceKey: lead.sourceKey,
+            stage: lead.stage,
+          }
+        : null,
+      canManage:
+        canSellerManageAgreement(sellerId, { lead }),
+      commission: byAgreement.get(agreement.id) ?? null,
     }));
 
     return NextResponse.json({ data });
   } catch (error) {
     console.error("Error listing seller agreements:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return leadDomainErrorResponse(error);
   }
 }
 

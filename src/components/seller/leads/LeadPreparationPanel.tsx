@@ -1,5 +1,6 @@
 import QualityScoreBadge from "@/components/seller/QualityScoreBadge";
 import type { LeadDetail } from "@/lib/leads/projection";
+import { auditedDomainWebsite } from "@/lib/prospecting/seller-view";
 
 const websiteStatusLabels: Record<string, string> = {
   NO_WEBSITE: "אין אתר",
@@ -20,13 +21,136 @@ const scoreLabels = {
   commercial: "יכולת מסחרית",
 } as const;
 
-function evidenceItems(value: Record<string, unknown> | null) {
+const MAX_EVIDENCE_BRANCH_ITEMS = 8;
+const MAX_EVIDENCE_ROOT_BRANCHES = 4;
+const MAX_EVIDENCE_ARRAY_ITEMS = 8;
+const MAX_EVIDENCE_OBJECT_ENTRIES = 12;
+const MAX_EVIDENCE_DEPTH = 5;
+const MAX_EVIDENCE_TEXT_LENGTH = 240;
+
+function boundedText(value: string): string {
+  const normalized = value.trim();
+  return normalized.length <= MAX_EVIDENCE_TEXT_LENGTH
+    ? normalized
+    : `${normalized.slice(0, MAX_EVIDENCE_TEXT_LENGTH - 1)}…`;
+}
+
+function collectEvidenceLeaves(
+  value: unknown,
+  path: string[],
+  result: Array<[string, string]>,
+  limit: number,
+  depth = 0,
+): void {
+  if (result.length >= limit || depth > MAX_EVIDENCE_DEPTH || value === null) {
+    return;
+  }
+
+  if (typeof value === "string") {
+    const text = boundedText(value);
+    if (text) result.push([path.join(" › "), text]);
+    return;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    result.push([path.join(" › "), String(value)]);
+    return;
+  }
+  if (typeof value === "boolean") {
+    result.push([path.join(" › "), value ? "כן" : "לא"]);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.slice(0, MAX_EVIDENCE_ARRAY_ITEMS).forEach((entry, index) => {
+      collectEvidenceLeaves(
+        entry,
+        [...path, `[${index + 1}]`],
+        result,
+        limit,
+        depth + 1,
+      );
+    });
+    return;
+  }
+  if (typeof value !== "object") return;
+
+  Object.entries(value)
+    .slice(0, MAX_EVIDENCE_OBJECT_ENTRIES)
+    .forEach(([key, entry]) => {
+      collectEvidenceLeaves(
+        entry,
+        [...path, key],
+        result,
+        limit,
+        depth + 1,
+      );
+    });
+}
+
+function evidenceItems(
+  value: Record<string, unknown> | null,
+  groupLabel: string,
+) {
   if (!value) return [];
-  return Object.entries(value)
-    .filter(([, entry]) =>
-      ["string", "number", "boolean"].includes(typeof entry),
-    )
-    .slice(0, 8);
+  const result: Array<[string, string]> = [];
+  Object.entries(value)
+    .slice(0, MAX_EVIDENCE_ROOT_BRANCHES)
+    .forEach(([key, entry]) => {
+      collectEvidenceLeaves(
+        entry,
+        [groupLabel, key],
+        result,
+        result.length + MAX_EVIDENCE_BRANCH_ITEMS,
+      );
+    });
+  return result;
+}
+
+function metaSourceAnswers(snapshot: Record<string, unknown> | null) {
+  const answers = snapshot?.nonContactAnswers;
+  if (!Array.isArray(answers)) return [];
+
+  return answers.slice(0, 12).flatMap((answer) => {
+    if (!answer || typeof answer !== "object" || Array.isArray(answer)) {
+      return [];
+    }
+    const item = answer as Record<string, unknown>;
+    const name =
+      typeof item.name === "string" ? boundedText(item.name) : "";
+    const values = Array.isArray(item.values)
+      ? item.values
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => boundedText(value))
+          .filter(Boolean)
+          .slice(0, 5)
+      : [];
+    return name && values.length > 0 ? [{ name, values }] : [];
+  });
+}
+
+function MetaAnswers({
+  answers,
+}: {
+  answers: Array<{ name: string; values: string[] }>;
+}) {
+  if (answers.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-gray-700 bg-gray-800 p-4">
+      <h3 className="font-bold text-white">תשובות מטופס הליד</h3>
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        {answers.map((answer, index) => (
+          <div
+            key={`${answer.name}:${index}`}
+            className="rounded-xl bg-gray-900 p-3 text-sm"
+          >
+            <dt className="text-xs text-gray-500">{answer.name}</dt>
+            <dd className="mt-1 break-words text-gray-200">
+              {answer.values.join(" · ")}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
 }
 
 export default function LeadPreparationPanel({
@@ -35,21 +159,36 @@ export default function LeadPreparationPanel({
   lead: LeadDetail;
 }) {
   const preparation = lead.preparation;
+  const sourceAnswers = metaSourceAnswers(lead.sourceSnapshot);
 
   if (!preparation) {
     return (
-      <div className="rounded-xl border border-gray-700 bg-gray-800 p-4 text-sm text-gray-400">
-        לליד הזה אין אבחון אתר מוקדם. פרטי המקור והקשר נשארים זמינים בראש
-        העמוד.
+      <div className="space-y-4">
+        <MetaAnswers answers={sourceAnswers} />
+        <div className="rounded-xl border border-gray-700 bg-gray-800 p-4 text-sm text-gray-400">
+          לליד הזה אין אבחון אתר מוקדם. פרטי המקור והקשר נשארים זמינים בראש
+          העמוד.
+        </div>
       </div>
     );
   }
 
-  const technicalEvidence = evidenceItems(preparation.technicalEvidence);
-  const visualEvidence = evidenceItems(preparation.visualEvidence);
+  const technicalEvidence = evidenceItems(
+    preparation.technicalEvidence,
+    "טכני",
+  );
+  const visualEvidence = evidenceItems(preparation.visualEvidence, "חזותי");
+  const displayWebsite =
+    lead.website ??
+    auditedDomainWebsite(
+      preparation.auditedDomain,
+      preparation.websiteStatus ?? "UNKNOWN",
+    );
 
   return (
     <div className="space-y-4">
+      <MetaAnswers answers={sourceAnswers} />
+
       {preparation.liveStatus === "UNAVAILABLE" && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
           המידע החי מ־Google אינו זמין זמנית. האבחון והאתר שנבדקו נשמרו
@@ -101,26 +240,23 @@ export default function LeadPreparationPanel({
           </div>
           <QualityScoreBadge score={preparation.qualityScore} />
         </div>
-        {lead.website ? (
+        {displayWebsite ? (
           <a
-            href={lead.website}
+            href={displayWebsite}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-block text-sm font-bold text-cyan hover:underline"
           >
-            <bdi dir="ltr">{lead.website}</bdi> ↗
-          </a>
-        ) : preparation.auditedDomain ? (
-          <a
-            href={`https://${preparation.auditedDomain}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-block text-sm font-bold text-cyan hover:underline"
-          >
-            <bdi dir="ltr">{preparation.auditedDomain}</bdi> ↗
+            <bdi dir="ltr">{displayWebsite}</bdi> ↗
           </a>
         ) : (
-          <p className="mt-3 text-sm font-bold text-amber-300">אין אתר</p>
+          <p className="mt-3 text-sm font-bold text-amber-300">
+            {preparation.websiteStatus === "NO_WEBSITE"
+              ? "אין אתר"
+              : preparation.websiteStatus === "SOCIAL_ONLY"
+                ? "לא נמצא אתר עצמאי"
+                : "כתובת האתר שנבדקה אינה זמינה"}
+          </p>
         )}
       </section>
 
@@ -161,14 +297,19 @@ export default function LeadPreparationPanel({
         <section className="rounded-xl border border-gray-700 bg-gray-800 p-4">
           <h3 className="font-bold text-white">ראיות מהאבחון</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            {[...technicalEvidence, ...visualEvidence].map(([key, value]) => (
-              <div key={key} className="rounded-xl bg-gray-900 p-3">
-                <dt className="text-xs text-gray-500">{key}</dt>
-                <dd className="mt-1 break-words text-gray-200">
-                  {String(value)}
-                </dd>
-              </div>
-            ))}
+            {[...technicalEvidence, ...visualEvidence].map(
+              ([key, value], index) => (
+                <div
+                  key={`${key}:${index}`}
+                  className="rounded-xl bg-gray-900 p-3"
+                >
+                  <dt className="text-xs text-gray-500">{key}</dt>
+                  <dd className="mt-1 break-words text-gray-200">
+                    {value}
+                  </dd>
+                </div>
+              ),
+            )}
           </dl>
         </section>
       )}

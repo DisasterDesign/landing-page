@@ -46,11 +46,41 @@ export default function SellerNewAgreementPage() {
   // Prefill from the lead (query params) without needing a Suspense boundary.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
+    const selectedLeadId = p.get("leadId") ?? p.get("lead");
     if (p.get("name")) setCustomerName(p.get("name")!);
     if (p.get("phone")) setPhone(p.get("phone")!);
     if (p.get("email")) setEmail(p.get("email")!);
     if (p.get("business")) setBusinessName(p.get("business")!);
-    if (p.get("lead")) setLeadId(p.get("lead"));
+    if (selectedLeadId) {
+      setLeadId(selectedLeadId);
+      void fetch(`/api/seller/leads/${encodeURIComponent(selectedLeadId)}`, {
+        cache: "no-store",
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json()) as {
+            name: string | null;
+            company: string | null;
+            email: string | null;
+            phone: string | null;
+            phoneSource: "CRM" | "GOOGLE" | "NONE";
+          };
+        })
+        .then((lead) => {
+          if (!lead) return;
+          if (!p.get("name") && lead.name) setCustomerName(lead.name);
+          if (!p.get("business") && lead.company) {
+            setBusinessName(lead.company);
+          }
+          if (!p.get("email") && lead.email) setEmail(lead.email);
+          if (!p.get("phone") && lead.phoneSource === "CRM" && lead.phone) {
+            setPhone(lead.phone);
+          }
+        })
+        .catch(() => {
+          toast.error("פרטי הליד לא נטענו — חזרו לליד ואמתו אותם");
+        });
+    }
     setParamsLoaded(true);
   }, []);
 

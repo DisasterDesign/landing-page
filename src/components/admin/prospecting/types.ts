@@ -30,6 +30,7 @@ export interface ProspectAuditView {
 export interface ProspectView {
   id: string;
   placeId: string;
+  promotedLeadId: string | null;
   status: string;
   websiteStatus: string;
   auditedDomain: string | null;
@@ -41,13 +42,15 @@ export interface ProspectView {
   callAngles: string[];
   createdAt: string;
   audits: ProspectAuditView[];
-  live?: {
+  liveStatus: "READY" | "NO_PHONE" | "UNAVAILABLE";
+  business: {
     displayName: string;
-    nationalPhoneNumber: string | null;
-    formattedAddress: string | null;
-    websiteUri: string | null;
-    businessStatus: string | null;
-  } | null;
+    phone: string | null;
+    address: string | null;
+    auditedWebsite: string | null;
+    liveWebsite: string | null;
+    mapUrl: string;
+  };
 }
 
 export interface ProspectingCycleView {

@@ -12,7 +12,12 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "leads:backfill": "tsx scripts/backfill-unified-lead-lifecycle.ts",
+    "leads:resolve": "tsx scripts/resolve-unified-lead-exceptions.ts",
+    "leads:reconcile": "tsx scripts/reconcile-unified-lead-lifecycle.ts",
+    "leads:indexes": "tsx scripts/apply-unified-lead-indexes.ts",
+    "leads:constraints": "tsx scripts/apply-unified-lead-constraints.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

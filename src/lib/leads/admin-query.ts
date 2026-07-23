@@ -77,7 +77,7 @@ const scoreSchema = z
   .string()
   .regex(/^\d$/)
   .transform(Number)
-  .pipe(z.number().int().min(0).max(4));
+  .pipe(z.number().int().min(0).max(5));
 const booleanSchema = z
   .enum(["true", "false"])
   .transform((value) => value === "true");

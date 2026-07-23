@@ -80,6 +80,74 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+async function assertPersistedMigrationAdmin(
+  transaction: Prisma.TransactionClient,
+  actor: AuthenticatedLeadActor,
+  reason: string,
+): Promise<string> {
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Migration resolution reason is required",
+    );
+  }
+  if (actor.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+  const persistedActor = await transaction.user.findUnique({
+    where: { id: actor.userId },
+    select: { role: true },
+  });
+  if (persistedActor?.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+  return normalizedReason;
+}
+
+function normalizedPhone(value: string | null | undefined): string | null {
+  const normalized = value?.replace(/\D/g, "") ?? "";
+  return normalized || null;
+}
+
+function normalizedEmail(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLocaleLowerCase("en") ?? "";
+  return normalized || null;
+}
+
+interface ContactIdentityEvidence {
+  phone?: string | null;
+  email?: string | null;
+}
+
+function hasMatchingContactIdentity(
+  left: ContactIdentityEvidence | null,
+  right: ContactIdentityEvidence | null,
+): boolean {
+  if (!left || !right) return false;
+  const leftPhone = normalizedPhone(left.phone);
+  const rightPhone = normalizedPhone(right.phone);
+  if (leftPhone && rightPhone && leftPhone === rightPhone) return true;
+  const leftEmail = normalizedEmail(left.email);
+  const rightEmail = normalizedEmail(right.email);
+  return Boolean(leftEmail && rightEmail && leftEmail === rightEmail);
+}
+
+function hasAnyMatchingContactIdentity(
+  left: Array<ContactIdentityEvidence | null>,
+  right: Array<ContactIdentityEvidence | null>,
+): boolean {
+  return left.some((leftIdentity) =>
+    right.some((rightIdentity) =>
+      hasMatchingContactIdentity(leftIdentity, rightIdentity),
+    ),
+  );
+}
+
+function isActiveAgreementStatus(status: string): boolean {
+  return status === "DRAFT" || status === "SENT" || status === "SIGNED";
+}
+
 async function persistLeadAgreementStage(
   transaction: Prisma.TransactionClient,
   input: {
@@ -883,6 +951,543 @@ export async function changeAgreementCredit(
       });
     }
     return updated;
+  });
+}
+
+export async function recordAgreementPaymentPage(
+  input: {
+    agreementId: string;
+    paymentUrl: string;
+    providerPaymentId: string;
+  },
+  dependencies: { store?: AgreementLifecycleStore } = {},
+): Promise<Agreement> {
+  if (!input.paymentUrl.trim() || !input.providerPaymentId.trim()) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Payment page URL and provider ID are required",
+    );
+  }
+  const store = dependencies.store ?? prismaAgreementLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const agreement = await transaction.agreement.findUnique({
+      where: { id: input.agreementId },
+    });
+    if (!agreement) {
+      throw new LeadDomainError("NOT_FOUND", "Agreement not found");
+    }
+    if (agreement.paymentStatus === "COMPLETED") {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Completed payment cannot be replaced",
+      );
+    }
+    if (
+      agreement.paymentStatus === "SENT" &&
+      agreement.paymentUrl === input.paymentUrl &&
+      agreement.paymentId === input.providerPaymentId
+    ) {
+      return agreement;
+    }
+    return transaction.agreement.update({
+      where: { id: agreement.id },
+      data: {
+        paymentUrl: input.paymentUrl.trim(),
+        paymentId: input.providerPaymentId.trim(),
+        paymentStatus: "SENT",
+      },
+    });
+  });
+}
+
+export async function claimCommissionBriefTask(
+  input: {
+    commissionId: string;
+    taskId: string;
+    actor: AuthenticatedLeadActor;
+  },
+  dependencies: { store?: AgreementLifecycleStore } = {},
+) {
+  if (input.actor.role !== "SELLER") {
+    throw new LeadDomainError("FORBIDDEN", "Seller role is required");
+  }
+  const store = dependencies.store ?? prismaAgreementLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const persistedActor = await transaction.user.findUnique({
+      where: { id: input.actor.userId },
+      select: { role: true },
+    });
+    if (persistedActor?.role !== "SELLER") {
+      throw new LeadDomainError("FORBIDDEN", "Seller role is required");
+    }
+    const commission = await transaction.sellerCommission.findUnique({
+      where: { id: input.commissionId },
+    });
+    if (!commission) {
+      throw new LeadDomainError("NOT_FOUND", "Commission not found");
+    }
+    if (commission.sellerId !== input.actor.userId) {
+      throw new LeadDomainError(
+        "FORBIDDEN",
+        "Commission is not owned by this seller",
+      );
+    }
+    if (commission.briefTaskId === input.taskId) return commission;
+    if (commission.briefTaskId) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Commission already has a developer brief",
+      );
+    }
+    const claimed = await transaction.sellerCommission.updateMany({
+      where: {
+        id: commission.id,
+        sellerId: input.actor.userId,
+        briefTaskId: null,
+      },
+      data: { briefTaskId: input.taskId },
+    });
+    if (claimed.count !== 1) {
+      const current = await transaction.sellerCommission.findUnique({
+        where: { id: commission.id },
+      });
+      if (current?.briefTaskId === input.taskId) return current;
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Commission developer brief was claimed concurrently",
+      );
+    }
+    const updated = await transaction.sellerCommission.findUnique({
+      where: { id: commission.id },
+    });
+    if (!updated) {
+      throw new LeadDomainError("NOT_FOUND", "Commission not found");
+    }
+    return updated;
+  });
+}
+
+export async function setSellerCommissionPayoutStatus(
+  input: {
+    commissionId: string;
+    status: "PENDING" | "PAID";
+    actor: AuthenticatedLeadActor;
+  },
+  dependencies: { store?: AgreementLifecycleStore } = {},
+) {
+  if (input.actor.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+  const store = dependencies.store ?? prismaAgreementLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const persistedActor = await transaction.user.findUnique({
+      where: { id: input.actor.userId },
+      select: { role: true },
+    });
+    if (persistedActor?.role !== "ADMIN") {
+      throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+    }
+    const commission = await transaction.sellerCommission.findUnique({
+      where: { id: input.commissionId },
+    });
+    if (!commission) {
+      throw new LeadDomainError("NOT_FOUND", "Commission not found");
+    }
+    if (commission.status === input.status) return commission;
+    return transaction.sellerCommission.update({
+      where: { id: commission.id },
+      data: {
+        status: input.status,
+        paidAt: input.status === "PAID" ? new Date() : null,
+      },
+    });
+  });
+}
+
+export async function linkAgreementToLeadForMigrationInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    agreementId: string;
+    leadId: string;
+    reason: string;
+    actor: AuthenticatedLeadActor;
+  },
+): Promise<AgreementLeadResult> {
+  const reason = await assertPersistedMigrationAdmin(
+    transaction,
+    input.actor,
+    input.reason,
+  );
+  const agreement = await transaction.agreement.findUnique({
+    where: { id: input.agreementId },
+  });
+  if (!agreement) {
+    throw new LeadDomainError("NOT_FOUND", "Agreement not found");
+  }
+  const [lead, agreementClient] = await Promise.all([
+    transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+      include: { assignees: { select: { id: true } } },
+    }),
+    agreement.clientId
+      ? transaction.client.findUnique({
+          where: { id: agreement.clientId },
+          select: { phone: true, email: true },
+        })
+      : null,
+  ]);
+  if (!lead) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+  if (agreement.leadId && agreement.leadId !== lead.id) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Agreement is already linked to another lead",
+    );
+  }
+
+  const compatibleEvidence = hasAnyMatchingContactIdentity(
+    [agreement, agreementClient],
+    [lead],
+  );
+  if (!compatibleEvidence) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Agreement and lead lack compatible contact or client evidence",
+    );
+  }
+
+  if (isActiveAgreementStatus(agreement.status)) {
+    const collision = await transaction.agreement.findFirst({
+      where: {
+        leadId: lead.id,
+        id: { not: agreement.id },
+        status: { in: ["DRAFT", "SENT", "SIGNED"] },
+      },
+      select: { id: true },
+    });
+    if (collision) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Link would create an active agreement collision",
+      );
+    }
+  }
+
+  if (agreement.leadId !== lead.id) {
+    await transaction.agreement.update({
+      where: { id: agreement.id },
+      data: { leadId: lead.id },
+    });
+  }
+  await appendLeadEventOnce(transaction, {
+    leadId: lead.id,
+    type: "MIGRATED",
+    actor: userActor(input.actor),
+    fromStage: lead.stage,
+    toStage: lead.stage,
+    dedupeKey: `lead:${lead.id}:migration-agreement-link:${agreement.id}`,
+    metadata: {
+      agreementId: agreement.id,
+      reason,
+    },
+  });
+
+  if (agreement.paymentStatus === "COMPLETED" && agreement.paidAt) {
+    const paidAmount = agreement.paidAmount ?? agreement.monthlyPrice;
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Paid agreement is missing a valid payment amount",
+      );
+    }
+    return applyPaymentSuccess(transaction, {
+      agreementId: agreement.id,
+      providerTransactionId:
+        agreement.cardcomDealId ??
+        agreement.paymentId ??
+        `legacy-paid:${agreement.id}`,
+      paidAt: agreement.paidAt,
+      paidAmount,
+      actor: { type: "INTEGRATION" },
+    });
+  }
+
+  return {
+    agreementId: agreement.id,
+    leadId: lead.id,
+    stage: lead.stage,
+    effects: [],
+  };
+}
+
+export async function cancelDuplicateAgreementForMigrationInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    agreementId: string;
+    retainedAgreementId: string;
+    reason: string;
+    actor: AuthenticatedLeadActor;
+  },
+): Promise<Agreement> {
+  const reason = await assertPersistedMigrationAdmin(
+    transaction,
+    input.actor,
+    input.reason,
+  );
+  if (input.agreementId === input.retainedAgreementId) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Duplicate and retained agreement IDs must differ",
+    );
+  }
+  const [duplicate, retained] = await Promise.all([
+    transaction.agreement.findUnique({ where: { id: input.agreementId } }),
+    transaction.agreement.findUnique({
+      where: { id: input.retainedAgreementId },
+    }),
+  ]);
+  if (!duplicate || !retained) {
+    throw new LeadDomainError("NOT_FOUND", "Agreement not found");
+  }
+  if (!isActiveAgreementStatus(retained.status)) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Retained agreement must be an active record",
+    );
+  }
+  if (
+    duplicate.leadId &&
+    retained.leadId &&
+    duplicate.leadId !== retained.leadId
+  ) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Duplicate and retained agreements do not share a lead",
+    );
+  }
+  const shareLead =
+    duplicate.leadId !== null && duplicate.leadId === retained.leadId;
+  if (!shareLead) {
+    const [duplicateClient, retainedClient] = await Promise.all([
+      duplicate.clientId
+        ? transaction.client.findUnique({
+            where: { id: duplicate.clientId },
+            select: { phone: true, email: true },
+          })
+        : null,
+      retained.clientId
+        ? transaction.client.findUnique({
+            where: { id: retained.clientId },
+            select: { phone: true, email: true },
+          })
+        : null,
+    ]);
+    const shareClient = Boolean(
+      duplicate.clientId && duplicate.clientId === retained.clientId,
+    );
+    const shareContact = hasAnyMatchingContactIdentity(
+      [duplicate, duplicateClient],
+      [retained, retainedClient],
+    );
+    if (!shareClient && !shareContact) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Unlinked duplicate and retained agreements lack shared contact or client identity",
+      );
+    }
+  }
+  if (duplicate.paymentStatus === "COMPLETED" || duplicate.paidAt) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "A paid agreement cannot be cancelled as a duplicate",
+    );
+  }
+  if (duplicate.status === "CANCELLED") return duplicate;
+  if (!isActiveAgreementStatus(duplicate.status)) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Only an active unpaid duplicate agreement may be cancelled",
+    );
+  }
+
+  const cancelled = await transaction.agreement.update({
+    where: { id: duplicate.id },
+    data: { status: "CANCELLED" },
+  });
+  const leadId = duplicate.leadId ?? retained.leadId;
+  if (leadId) {
+    const lead = await transaction.contactSubmission.findUnique({
+      where: { id: leadId },
+      select: { stage: true },
+    });
+    if (lead) {
+      await appendLeadEventOnce(transaction, {
+        leadId,
+        type: "MIGRATED",
+        actor: userActor(input.actor),
+        fromStage: lead.stage,
+        toStage: lead.stage,
+        dedupeKey: `lead:${leadId}:migration-agreement-duplicate:${duplicate.id}:${retained.id}`,
+        metadata: {
+          cancelledAgreementId: duplicate.id,
+          retainedAgreementId: retained.id,
+          reason,
+        },
+      });
+    }
+  }
+  return cancelled;
+}
+
+export async function linkHistoricalCommissionInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    commissionId: string;
+    agreementId: string;
+    reason: string;
+    actor: AuthenticatedLeadActor;
+  },
+) {
+  const reason = await assertPersistedMigrationAdmin(
+    transaction,
+    input.actor,
+    input.reason,
+  );
+  const commission = await transaction.sellerCommission.findUnique({
+    where: { id: input.commissionId },
+  });
+  if (!commission) {
+    throw new LeadDomainError("NOT_FOUND", "Commission not found");
+  }
+  if (
+    commission.agreementLinkStatus === "LINKED" &&
+    commission.agreementRefId === input.agreementId
+  ) {
+    return commission;
+  }
+  if (commission.agreementLinkStatus || commission.agreementRefId) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Commission already has a conflicting classification",
+    );
+  }
+  const agreement = await transaction.agreement.findUnique({
+    where: { id: input.agreementId },
+    include: { lead: { select: { stage: true } } },
+  });
+  if (!agreement) {
+    throw new LeadDomainError("NOT_FOUND", "Agreement not found");
+  }
+  if (agreement.paymentStatus !== "COMPLETED" || !agreement.paidAt) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Target agreement has no verified first payment",
+    );
+  }
+  const sellerMatches =
+    agreement.creditedSellerId === commission.sellerId ||
+    (!agreement.creditedSellerId &&
+      agreement.isSellerDeal &&
+      agreement.createdBy === commission.sellerId);
+  const amountMatches =
+    Number.isFinite(commission.amount) &&
+    Number.isFinite(agreement.monthlyPrice) &&
+    Math.abs(commission.amount - agreement.monthlyPrice) < 0.01;
+  if (!sellerMatches || !amountMatches) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Commission seller or payment evidence does not match the agreement",
+    );
+  }
+  const existingLink = await transaction.sellerCommission.findUnique({
+    where: { agreementRefId: agreement.id },
+  });
+  if (existingLink && existingLink.id !== commission.id) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Agreement is already linked to another commission",
+    );
+  }
+
+  const reviewedAt = new Date();
+  const linked = await transaction.sellerCommission.update({
+    where: { id: commission.id },
+    data: {
+      agreementRefId: agreement.id,
+      agreementLinkStatus: "LINKED",
+      agreementLinkReviewedAt: reviewedAt,
+      agreementLinkReviewReason: reason,
+      agreementLinkReviewedById: input.actor.userId,
+    },
+  });
+  if (agreement.leadId) {
+    await appendLeadEventOnce(transaction, {
+      leadId: agreement.leadId,
+      type: "MIGRATED",
+      actor: userActor(input.actor),
+      fromStage: agreement.lead?.stage ?? null,
+      toStage: agreement.lead?.stage ?? null,
+      occurredAt: reviewedAt,
+      dedupeKey: `lead:${agreement.leadId}:migration-commission-link:${commission.id}:${agreement.id}`,
+      metadata: {
+        agreementId: agreement.id,
+        commissionId: commission.id,
+        reason,
+      },
+    });
+  }
+  return linked;
+}
+
+export async function classifyLegacyOrphanCommissionInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: {
+    commissionId: string;
+    reason: string;
+    actor: AuthenticatedLeadActor;
+  },
+) {
+  const reason = await assertPersistedMigrationAdmin(
+    transaction,
+    input.actor,
+    input.reason,
+  );
+  const commission = await transaction.sellerCommission.findUnique({
+    where: { id: input.commissionId },
+  });
+  if (!commission) {
+    throw new LeadDomainError("NOT_FOUND", "Commission not found");
+  }
+  const legacyAgreement = await transaction.agreement.findUnique({
+    where: { id: commission.agreementId },
+    select: { id: true },
+  });
+  if (legacyAgreement) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Legacy agreement still exists; commission is not an orphan",
+    );
+  }
+  if (
+    commission.agreementLinkStatus === "LEGACY_ORPHAN" &&
+    commission.agreementRefId === null
+  ) {
+    return commission;
+  }
+  if (commission.agreementLinkStatus || commission.agreementRefId) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Commission already has a conflicting classification",
+    );
+  }
+  return transaction.sellerCommission.update({
+    where: { id: commission.id },
+    data: {
+      agreementRefId: null,
+      agreementLinkStatus: "LEGACY_ORPHAN",
+      agreementLinkReviewedAt: new Date(),
+      agreementLinkReviewReason: reason,
+      agreementLinkReviewedById: input.actor.userId,
+    },
   });
 }
 

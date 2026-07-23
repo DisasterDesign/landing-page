@@ -157,7 +157,7 @@ export async function POST(
           signedUserAgent: signedUserAgent ?? null,
           documentVersion: AGREEMENT_DOCUMENT_VERSION,
           content: finalContent,
-          ...(linkedClientId ? { clientId: linkedClientId } : {}),
+          clientId: linkedClientId ?? existing.clientId,
         },
       });
 

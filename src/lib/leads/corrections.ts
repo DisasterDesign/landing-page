@@ -251,6 +251,12 @@ export async function updateLeadContactDetails(
           "Admin confirmation provenance is required",
         );
       }
+      if (!input.reason?.trim()) {
+        throw new LeadDomainError(
+          "VALIDATION",
+          "Admin contact correction reason is required",
+        );
+      }
     }
 
     const details = Object.fromEntries(
@@ -278,6 +284,9 @@ export async function updateLeadContactDetails(
       metadata: {
         changedFields,
         confirmation: input.confirmation,
+        ...(input.actor.role === "ADMIN"
+          ? { reason: input.reason!.trim() }
+          : {}),
       },
     });
     return updated;

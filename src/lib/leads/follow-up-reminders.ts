@@ -9,6 +9,7 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { sellerLeadActionUrl } from "./action-url";
+import { markFollowUpReminderSentInTransaction } from "./follow-ups";
 
 const terminalStages = new Set(["WON", "LOST", "SPAM"]);
 
@@ -100,16 +101,12 @@ export async function dispatchDueFollowUps(
         transaction.notification as unknown as NotificationPersistence,
         input,
       );
-      const marked = await transaction.leadFollowUp.updateMany({
-        where: {
-          id: followUp.id,
-          ownerId: followUp.ownerId,
-          status: "SCHEDULED",
-          reminderSentAt: null,
-        },
-        data: { reminderSentAt: now },
+      const marked = await markFollowUpReminderSentInTransaction(transaction, {
+        followUpId: followUp.id,
+        ownerId: followUp.ownerId,
+        reminderSentAt: now,
       });
-      if (marked.count !== 1) {
+      if (!marked) {
         throw new Error("Follow-up changed while dispatching its reminder");
       }
       return { input, created: persisted.created };

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  cancelDuplicateFollowUpForMigrationInTransaction,
   completeFollowUp,
   rescheduleFollowUp,
   scheduleFollowUp,
@@ -46,8 +47,10 @@ function fakeStore(options: {
   };
   const transaction = {
     user: {
-      async findUnique() {
-        return { role: "SELLER" };
+      async findUnique({ where }: { where: { id: string } }) {
+        return {
+          role: where.id === "admin-1" ? "ADMIN" : "SELLER",
+        };
       },
     },
     contactSubmission: {
@@ -64,7 +67,11 @@ function fakeStore(options: {
         return (
           followUps.find(
             (item) =>
-              item.leadId === where.leadId && item.status === "SCHEDULED",
+              item.leadId === where.leadId &&
+              item.status === "SCHEDULED" &&
+              (!where.id ||
+                typeof where.id !== "object" ||
+                item.id !== (where.id as { not?: string }).not),
           ) ?? null
         );
       },
@@ -248,4 +255,76 @@ test("review, non-owner and do-not-contact leads reject notes and follow-ups", a
       /review|owned|contact/i,
     );
   }
+});
+
+test("migration duplicate follow-up cancellation keeps the retained task and audit trail", async () => {
+  const store = fakeStore();
+  const retainedDueAt = new Date(Date.now() + 120_000);
+  store.followUps.push(
+    {
+      id: "follow-up-duplicate",
+      leadId: "lead-1",
+      status: "SCHEDULED",
+      dueAt: new Date(Date.now() + 60_000),
+    },
+    {
+      id: "follow-up-retained",
+      leadId: "lead-1",
+      status: "SCHEDULED",
+      dueAt: retainedDueAt,
+    },
+  );
+
+  await assert.rejects(
+    store.transaction((transaction) =>
+      cancelDuplicateFollowUpForMigrationInTransaction(transaction, {
+        followUpId: "follow-up-duplicate",
+        reason: "Duplicate created during legacy import",
+        actor: seller,
+      }),
+    ),
+    /admin/i,
+  );
+
+  await store.transaction((transaction) =>
+    cancelDuplicateFollowUpForMigrationInTransaction(transaction, {
+      followUpId: "follow-up-duplicate",
+      reason: "Duplicate created during legacy import",
+      actor: { userId: "admin-1", role: "ADMIN" },
+    }),
+  );
+  assert.equal(store.followUps[0]?.status, "CANCELLED");
+  assert.equal(store.followUps[1]?.status, "SCHEDULED");
+  assert.equal(store.lead.nextFollowUpAt, retainedDueAt);
+  assert.equal(store.events.at(-1)?.type, "MIGRATED");
+
+  await store.transaction((transaction) =>
+    cancelDuplicateFollowUpForMigrationInTransaction(transaction, {
+      followUpId: "follow-up-duplicate",
+      reason: "Duplicate created during legacy import",
+      actor: { userId: "admin-1", role: "ADMIN" },
+    }),
+  );
+  assert.equal(
+    store.events.filter((event) => event.type === "MIGRATED").length,
+    1,
+  );
+
+  const only = fakeStore();
+  only.followUps.push({
+    id: "follow-up-only",
+    leadId: "lead-1",
+    status: "SCHEDULED",
+    dueAt: new Date(Date.now() + 60_000),
+  });
+  await assert.rejects(
+    only.transaction((transaction) =>
+      cancelDuplicateFollowUpForMigrationInTransaction(transaction, {
+        followUpId: "follow-up-only",
+        reason: "This is not actually a duplicate",
+        actor: { userId: "admin-1", role: "ADMIN" },
+      }),
+    ),
+    /duplicate|retained/i,
+  );
 });

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { createNotification } from "@/lib/notifications";
+import { claimCommissionBriefTask } from "@/lib/leads/agreement-lifecycle";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
 
 const briefSchema = z.object({
   agreementId: z.string().min(1),
@@ -101,13 +103,15 @@ export async function POST(request: NextRequest) {
     });
 
     // Atomically claim the report slot (double-submit / two-tab guard).
-    const claimed = await prisma.sellerCommission.updateMany({
-      where: { id: commission.id, briefTaskId: null },
-      data: { briefTaskId: task.id },
-    });
-    if (claimed.count === 0) {
+    try {
+      await claimCommissionBriefTask({
+        commissionId: commission.id,
+        taskId: task.id,
+        actor: { userId: sellerId, role: "SELLER" },
+      });
+    } catch (error) {
       await prisma.task.delete({ where: { id: task.id } }).catch(() => {});
-      return NextResponse.json({ error: "הדוח כבר נשלח" }, { status: 409 });
+      return leadDomainErrorResponse(error);
     }
 
     await Promise.all(

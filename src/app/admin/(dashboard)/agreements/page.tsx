@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import PullToRefresh from "@/components/ui/PullToRefresh";
-import { confirmDanger } from "@/lib/confirm";
+import {
+  agreementLeadPrefill,
+  parseAgreementPageQuery,
+} from "@/lib/leads/admin-agreement-ui";
+import type { LeadDetail } from "@/lib/leads/projection";
 
 type Tier = "LANDING" | "BASIC" | "ADVANCED" | "PREMIUM";
 type Status = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
@@ -15,6 +19,7 @@ type PaymentStatus = "PENDING" | "SENT" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 interface Agreement {
   id: string;
+  leadId?: string | null;
   tier: Tier | null;
   monthlyPrice: number;
   oneTimeFee: number | null;
@@ -137,6 +142,7 @@ export default function AgreementsPage() {
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [agreementLeadId, setAgreementLeadId] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string>("");
   // Product coverage: "" = none, "new" = create a product, else a product id.
   const [productChoice, setProductChoice] = useState<string>("");
@@ -151,6 +157,9 @@ export default function AgreementsPage() {
   const [relinkingId, setRelinkingId] = useState<string | null>(null);
   const [savingLinkFor, setSavingLinkFor] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Agreement | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   // Modal that shows a generated link (signing or payment) so the user can
   // copy it via a fresh click — `navigator.clipboard.writeText` fails when
   // called after `await fetch(...)` because the original user gesture is gone.
@@ -187,25 +196,142 @@ export default function AgreementsPage() {
     fetchClients();
   }, [fetchList, fetchClients]);
 
-  // Deep-link from the leads screen ("סגור עסקה → חוזה"): ?new=1&name=..&
-  // phone=..&email=.. opens the create form prefilled with the lead's details.
+  // Canonical deep-links carry only the lead id. Contact details are read from
+  // the server projection so URL values cannot silently become contract data.
   const searchParams = useSearchParams();
   const router = useRouter();
+  const createHandledRef = useRef<string | null>(null);
+  const focusHandledRef = useRef<string | null>(null);
+  const {
+    leadId: queryLeadId,
+    focusAgreementId,
+  } = parseAgreementPageQuery(searchParams);
+  const createRequested = searchParams.get("new") === "1";
+  const legacyCreateValues = {
+    name: searchParams.get("name") ?? "",
+    phone: searchParams.get("phone") ?? "",
+    email: searchParams.get("email") ?? "",
+    business: searchParams.get("business") ?? "",
+  };
+  const createRequestKey = createRequested
+    ? JSON.stringify({
+        leadId: queryLeadId,
+        ...legacyCreateValues,
+      })
+    : null;
+
   useEffect(() => {
-    if (searchParams.get("new") !== "1") return;
+    if (!createRequestKey) {
+      createHandledRef.current = null;
+      return;
+    }
+
+    if (createHandledRef.current === createRequestKey) return;
+    createHandledRef.current = createRequestKey;
     setCreateOpen(true);
-    const name = searchParams.get("name");
-    const phone = searchParams.get("phone");
-    const email = searchParams.get("email");
-    const business = searchParams.get("business");
-    if (name) setCustomerName(name);
-    if (phone) setPhone(phone);
-    if (email) setEmail(email);
-    if (business) setBusinessName(business);
-    // Strip the query so a refresh doesn't re-open / re-fill the form.
-    router.replace("/admin/agreements", { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    setAgreementLeadId(queryLeadId);
+
+    const stripCreateQuery = () => {
+      const next = new URLSearchParams(window.location.search);
+      ["new", "leadId", "name", "phone", "email", "business"].forEach(
+        (key) => next.delete(key),
+      );
+      const suffix = next.toString();
+      router.replace(
+        suffix ? `/admin/agreements?${suffix}` : "/admin/agreements",
+        { scroll: false },
+      );
+    };
+
+    if (!queryLeadId) {
+      // Compatibility for legacy lead links while the feature flag is off.
+      setCustomerName(legacyCreateValues.name);
+      setPhone(legacyCreateValues.phone);
+      setEmail(legacyCreateValues.email);
+      setBusinessName(legacyCreateValues.business);
+      stripCreateQuery();
+      return;
+    }
+
+    let active = true;
+    void fetch(`/api/leads/${encodeURIComponent(queryLeadId)}`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("לא ניתן לטעון את פרטי הליד");
+        return (await response.json()) as LeadDetail;
+      })
+      .then((lead) => {
+        if (!active) return;
+        const prefill = agreementLeadPrefill(lead);
+        setCustomerName(prefill.customerName);
+        setBusinessName(prefill.businessName);
+        setEmail(prefill.email);
+        setPhone(prefill.phone);
+      })
+      .catch((error) => {
+        if (active) {
+          toast.error(
+            error instanceof Error ? error.message : "טעינת הליד נכשלה",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) stripCreateQuery();
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    createRequestKey,
+    legacyCreateValues.business,
+    legacyCreateValues.email,
+    legacyCreateValues.name,
+    legacyCreateValues.phone,
+    queryLeadId,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (!focusAgreementId) {
+      focusHandledRef.current = null;
+      return;
+    }
+    if (
+      loading ||
+      focusHandledRef.current === focusAgreementId
+    ) {
+      return;
+    }
+
+    focusHandledRef.current = focusAgreementId;
+    const agreement = agreements.find(
+      (candidate) => candidate.id === focusAgreementId,
+    );
+
+    const next = new URLSearchParams(window.location.search);
+    next.delete("focus");
+    const suffix = next.toString();
+    router.replace(
+      suffix ? `/admin/agreements?${suffix}` : "/admin/agreements",
+      { scroll: false },
+    );
+
+    if (!agreement) {
+      toast.error("ההסכם המבוקש לא נמצא");
+      return;
+    }
+
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    const element = document.getElementById(
+      `${mobile ? "agreement-card" : "agreement-row"}-${focusAgreementId}`,
+    );
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    element?.focus({ preventScroll: true });
+    setViewing(agreement);
+  }, [agreements, focusAgreementId, loading, router]);
 
   const resetForm = () => {
     setTierChoice("ADVANCED");
@@ -218,6 +344,7 @@ export default function AgreementsPage() {
     setIdNumber("");
     setPhone("");
     setEmail("");
+    setAgreementLeadId(null);
     setClientId("");
     setProductChoice("");
     setNewProductName("");
@@ -395,6 +522,7 @@ export default function AgreementsPage() {
           email: email.trim(),
           locale: isForeign ? "en" : "he",
           vatExempt: isForeign,
+          ...(agreementLeadId ? { leadId: agreementLeadId } : {}),
           ...(clientId ? { clientId } : {}),
           ...(clientId && productChoice && productChoice !== "new"
             ? { productId: productChoice }
@@ -523,27 +651,41 @@ export default function AgreementsPage() {
     }
   };
 
-  const handleDelete = async (a: Agreement) => {
-    const isSigned = a.status === "SIGNED";
-    const ok = await confirmDanger({
-      title: isSigned ? `מחיקת הסכם חתום של ${a.customerName}` : `מחיקת הסכם של ${a.customerName}`,
-      message: isSigned
-        ? "ההסכם נחתם דיגיטלית. המחיקה תסיר את החתימה, את ה-IP ואת ה-audit trail לצמיתות. הפעולה אינה הפיכה."
-        : "הסכם זה יימחק. הפעולה אינה הפיכה.",
-      confirmLabel: "מחק",
-      dangerous: true,
-    });
-    if (!ok) return;
+  const openCancellation = (agreement: Agreement) => {
+    setCancelTarget(agreement);
+    setCancelReason("");
+  };
+
+  const closeCancellation = () => {
+    if (cancelling) return;
+    setCancelTarget(null);
+    setCancelReason("");
+  };
+
+  const handleCancellation = async () => {
+    if (!cancelTarget || cancelReason.trim().length < 3) return;
+    setCancelling(true);
     try {
-      const res = await fetch(`/api/agreements/${a.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/agreements/${cancelTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "CANCELLED",
+          reason: cancelReason.trim(),
+        }),
+      });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || "שגיאה");
       }
-      toast.success("נמחק");
-      fetchList();
+      toast.success("ההסכם בוטל ונשמר בהיסטוריה");
+      setCancelTarget(null);
+      setCancelReason("");
+      await fetchList();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "שגיאה במחיקה");
+      toast.error(err instanceof Error ? err.message : "שגיאה בביטול ההסכם");
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -561,7 +703,10 @@ export default function AgreementsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">הסכמים</h1>
         <button
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            resetForm();
+            setCreateOpen(true);
+          }}
           className="flex items-center gap-2 px-4 py-2 bg-pink hover:bg-pink-light text-white rounded-xl text-sm font-bold transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -581,6 +726,8 @@ export default function AgreementsPage() {
           agreements.map((a) => (
             <div
               key={a.id}
+              id={`agreement-card-${a.id}`}
+              tabIndex={-1}
               className="bg-gray-900 border border-gray-700 rounded-2xl p-4 space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
@@ -675,12 +822,15 @@ export default function AgreementsPage() {
                     {retryingId === a.id ? "מקים..." : "הקם הו״ק"}
                   </button>
                 )}
-                <button
-                  onClick={() => handleDelete(a)}
-                  className="ml-auto text-red-400 hover:text-red-300 text-xs font-medium"
-                >
-                  מחק
-                </button>
+                {(a.status === "DRAFT" || a.status === "SENT") &&
+                  a.paymentStatus !== "COMPLETED" && (
+                    <button
+                      onClick={() => openCancellation(a)}
+                      className="ml-auto text-red-400 hover:text-red-300 text-xs font-medium"
+                    >
+                      בטל הסכם
+                    </button>
+                  )}
               </div>
             </div>
           ))
@@ -714,7 +864,12 @@ export default function AgreementsPage() {
               </tr>
             ) : (
               agreements.map((a) => (
-                <tr key={a.id} className="border-b border-gray-800 hover:bg-gray-800/50 group/row">
+                <tr
+                  key={a.id}
+                  id={`agreement-row-${a.id}`}
+                  tabIndex={-1}
+                  className="border-b border-gray-800 hover:bg-gray-800/50 group/row"
+                >
                   <td className="px-3 py-2.5 text-white">{a.customerName}</td>
                   <td className="px-3 py-2.5 text-gray-300">{a.businessName || "—"}</td>
                   <td className="px-3 py-2.5">
@@ -847,12 +1002,15 @@ export default function AgreementsPage() {
                           {retryingId === a.id ? "מקים..." : "הקם הו״ק"}
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(a)}
-                        className="text-red-400 hover:text-red-300 text-xs underline-offset-2 hover:underline"
-                      >
-                        מחק
-                      </button>
+                      {(a.status === "DRAFT" || a.status === "SENT") &&
+                        a.paymentStatus !== "COMPLETED" && (
+                          <button
+                            onClick={() => openCancellation(a)}
+                            className="text-red-400 hover:text-red-300 text-xs underline-offset-2 hover:underline"
+                          >
+                            בטל הסכם
+                          </button>
+                        )}
                     </div>
                   </td>
                 </tr>
@@ -1152,6 +1310,52 @@ export default function AgreementsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={cancelTarget !== null}
+        onClose={closeCancellation}
+        title={cancelTarget ? `ביטול הסכם — ${cancelTarget.customerName}` : ""}
+      >
+        {cancelTarget && (
+          <div className="space-y-4" dir="rtl">
+            <p className="text-sm text-gray-300">
+              ההסכם יסומן כמבוטל, אך יישאר בהיסטוריית המכירה יחד עם כל האירועים
+              שכבר נרשמו.
+            </p>
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">
+                סיבת הביטול *
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                rows={4}
+                autoFocus
+                placeholder="לדוגמה: הלקוח החליט שלא להתקדם"
+                className="w-full resize-none rounded-xl border border-gray-700 bg-gray-800 px-3 py-2.5 text-base text-white outline-none focus:border-pink sm:text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCancellation}
+                disabled={cancelling || cancelReason.trim().length < 3}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 font-bold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+              >
+                {cancelling ? "מבטל..." : "אשר ביטול"}
+              </button>
+              <button
+                type="button"
+                onClick={closeCancellation}
+                disabled={cancelling}
+                className="rounded-xl border border-gray-700 px-4 text-gray-300 hover:border-gray-600 disabled:opacity-50"
+              >
+                חזרה
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* View modal */}

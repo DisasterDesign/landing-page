@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   dispatchLeadSlaAlerts,
   getLeadSlaMinutes,
+  projectLeadResponseSla,
   type LeadSlaStore,
 } from "./lead-sla";
 import { leadActionUrlFor } from "./action-url";
@@ -115,6 +116,54 @@ test("lead SLA defaults are intent-specific", () => {
     INBOUND: 5,
     AD_RESPONSE: 15,
   });
+});
+
+test("response SLA projection is server-derived and intent-specific", () => {
+  const now = new Date("2026-07-23T10:10:00.000Z");
+  assert.deepEqual(
+    projectLeadResponseSla(
+      {
+        intentLevel: "INBOUND",
+        createdAt: new Date("2026-07-23T10:00:00.000Z"),
+        firstClaimedAt: null,
+      },
+      now,
+      { INBOUND: 5, AD_RESPONSE: 15 },
+    ),
+    {
+      thresholdMinutes: 5,
+      elapsedMinutes: 10,
+      state: "OVERDUE",
+    },
+  );
+  assert.deepEqual(
+    projectLeadResponseSla(
+      {
+        intentLevel: "AD_RESPONSE",
+        createdAt: new Date("2026-07-23T10:00:00.000Z"),
+        firstClaimedAt: new Date("2026-07-23T10:12:00.000Z"),
+      },
+      now,
+      { INBOUND: 5, AD_RESPONSE: 15 },
+    ),
+    {
+      thresholdMinutes: 15,
+      elapsedMinutes: 12,
+      state: "MET",
+    },
+  );
+  assert.equal(
+    projectLeadResponseSla(
+      {
+        intentLevel: "OUTBOUND",
+        createdAt: new Date("2026-07-23T10:00:00.000Z"),
+        firstClaimedAt: null,
+      },
+      now,
+      { INBOUND: 5, AD_RESPONSE: 15 },
+    ),
+    null,
+  );
 });
 
 test("lead action URLs always target a screen enabled for the audience", () => {

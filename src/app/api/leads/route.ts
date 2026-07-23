@@ -8,6 +8,7 @@ import {
   getAdminLeadList,
   parseAdminLeadFilters,
 } from "@/lib/leads/admin-query";
+import { requirePersistedLeadReadRole } from "@/lib/leads/authorization";
 import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { getAdminLeadDetail, type LeadDetail } from "@/lib/leads/projection";
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedLeadReadRole(session.user.id, ["ADMIN"]);
     const url = new URL(request.url);
     const filters = parseAdminLeadFilters(url.searchParams);
     const unified = getLeadLifecycleConfig().enabled;
@@ -79,12 +81,20 @@ export async function GET(request: NextRequest) {
 
     let leads = page.items;
     const focus = url.searchParams.get("focus");
+    let focusState: "none" | "found" | "not_found" = focus
+      ? "not_found"
+      : "none";
+    if (focus && leads.some((lead) => lead.id === focus)) {
+      focusState = "found";
+    }
     if (focus && !leads.some((lead) => lead.id === focus)) {
       try {
         const focused = await getAdminLeadDetail(focus);
         leads = [focused, ...leads];
+        focusState = "found";
       } catch {
         // A stale notification should not make the entire list unavailable.
+        focusState = "not_found";
       }
     }
 
@@ -92,6 +102,7 @@ export async function GET(request: NextRequest) {
       leads: unified ? leads : leads.map(legacyLead),
       nextCursor: page.nextCursor,
       stats: page.stats,
+      focusState,
     });
   } catch (error) {
     console.error("Leads list error:", error);

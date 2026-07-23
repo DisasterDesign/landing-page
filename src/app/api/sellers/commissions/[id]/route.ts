@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { setSellerCommissionPayoutStatus } from "@/lib/leads/agreement-lifecycle";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
+import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
 import { z } from "zod";
 
 const patchSchema = z.object({ status: z.enum(["PENDING", "PAID"]) });
@@ -11,9 +12,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const admin = await requireProspectingAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id } = await params;
@@ -23,18 +24,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Validation failed" }, { status: 400 });
     }
 
-    const updated = await prisma.sellerCommission.update({
-      where: { id },
-      data: {
-        status: parsed.data.status,
-        paidAt: parsed.data.status === "PAID" ? new Date() : null,
-      },
-      select: { id: true, status: true, paidAt: true },
+    const updated = await setSellerCommissionPayoutStatus({
+      commissionId: id,
+      status: parsed.data.status,
+      actor: { userId: admin.id, role: "ADMIN" },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      id: updated.id,
+      status: updated.status,
+      paidAt: updated.paidAt,
+    });
   } catch (error) {
-    console.error("Error updating commission:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return leadDomainErrorResponse(error);
   }
 }

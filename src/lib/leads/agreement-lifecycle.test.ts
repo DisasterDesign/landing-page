@@ -5,8 +5,15 @@ import {
   applyAgreementEvent,
   applyPaymentFailure,
   applyPaymentSuccess,
+  cancelDuplicateAgreementForMigrationInTransaction,
   changeAgreementCredit,
+  claimCommissionBriefTask,
+  classifyLegacyOrphanCommissionInTransaction,
   createAgreementForLead,
+  linkAgreementToLeadForMigrationInTransaction,
+  linkHistoricalCommissionInTransaction,
+  recordAgreementPaymentPage,
+  setSellerCommissionPayoutStatus,
   type AgreementLifecycleStore,
 } from "./agreement-lifecycle";
 
@@ -39,8 +46,10 @@ function fakeAgreementStore(options: {
 } = {}): AgreementLifecycleStore & {
   lead: Record<string, unknown>;
   agreements: Array<Record<string, unknown>>;
+  clients: Array<Record<string, unknown>>;
   events: Array<Record<string, unknown>>;
   commissions: Array<Record<string, unknown>>;
+  followUps: Array<Record<string, unknown>>;
 } {
   const lead: Record<string, unknown> = {
     id: "lead-1",
@@ -60,6 +69,8 @@ function fakeAgreementStore(options: {
     externalFormName: null,
     externalCampaignId: null,
     externalAdId: null,
+    phone: "0501234567",
+    email: "noa@example.com",
     nextFollowUpAt: null,
     lastContactedAt: new Date("2026-07-23T08:00:00.000Z"),
     closedAt: null,
@@ -90,6 +101,7 @@ function fakeAgreementStore(options: {
   const events: Array<Record<string, unknown>> = [];
   const commissions: Array<Record<string, unknown>> = [];
   const followUps: Array<Record<string, unknown>> = [];
+  const clients: Array<Record<string, unknown>> = [];
   const roles: Record<string, "ADMIN" | "SELLER"> = {
     "seller-1": "SELLER",
     "seller-2": "SELLER",
@@ -113,13 +125,21 @@ function fakeAgreementStore(options: {
         return lead;
       },
     },
+    client: {
+      async findUnique({ where }: { where: { id: string } }) {
+        return clients.find((client) => client.id === where.id) ?? null;
+      },
+    },
     agreement: {
       async findFirst({ where }: { where: Record<string, unknown> }) {
         return (
           agreements.find(
             (agreement) =>
               agreement.leadId === where.leadId &&
-              ["DRAFT", "SENT", "SIGNED"].includes(String(agreement.status)),
+              ["DRAFT", "SENT", "SIGNED"].includes(String(agreement.status)) &&
+              (!where.id ||
+                typeof where.id !== "object" ||
+                agreement.id !== (where.id as { not?: string }).not),
           ) ?? null
         );
       },
@@ -134,7 +154,7 @@ function fakeAgreementStore(options: {
         const agreement =
           agreements.find((item) => item[key] === where[key]) ?? null;
         return agreement && include?.lead
-          ? { ...agreement, lead }
+          ? { ...agreement, lead: agreement.leadId ? lead : null }
           : agreement;
       },
       async create({ data }: { data: Record<string, unknown> }) {
@@ -224,10 +244,37 @@ function fakeAgreementStore(options: {
         Object.assign(row, data);
         return row;
       },
+      async updateMany({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) {
+        const row = commissions.find(
+          (item) =>
+            item.id === where.id &&
+            (where.sellerId === undefined || item.sellerId === where.sellerId) &&
+            (where.briefTaskId === undefined ||
+              item.briefTaskId === where.briefTaskId),
+        );
+        if (!row) return { count: 0 };
+        Object.assign(row, data);
+        return { count: 1 };
+      },
     },
     leadFollowUp: {
-      async findFirst() {
-        return followUps[0] ?? null;
+      async findFirst({ where }: { where?: Record<string, unknown> } = {}) {
+        return (
+          followUps.find(
+            (followUp) =>
+              (!where?.leadId || followUp.leadId === where.leadId) &&
+              (!where?.status || followUp.status === where.status) &&
+              (!where?.id ||
+                typeof where.id !== "object" ||
+                followUp.id !== (where.id as { not?: string }).not),
+          ) ?? null
+        );
       },
       async updateMany({ data }: { data: Record<string, unknown> }) {
         for (const followUp of followUps) Object.assign(followUp, data);
@@ -260,8 +307,10 @@ function fakeAgreementStore(options: {
   return {
     lead,
     agreements,
+    clients,
     events,
     commissions,
+    followUps,
     async transaction(callback) {
       return callback(tx as never);
     },
@@ -433,6 +482,40 @@ test("payment keeps frozen credit after reassignment and flags a lost-lead misma
   );
 });
 
+test("reassignment transfers agreement operations without changing frozen seller credit", async () => {
+  const store = fakeAgreementStore();
+  const agreement = await createAgreementForLead(
+    { leadId: "lead-1", actor: seller1, agreement: draft },
+    { store },
+  );
+  store.lead.ownerId = "seller-2";
+  store.lead.assignees = [{ id: "seller-2" }];
+
+  await assert.rejects(
+    applyAgreementEvent(
+      {
+        agreementId: agreement.id,
+        type: "SENT",
+        actor: seller1,
+      },
+      { store },
+    ),
+    /owned/i,
+  );
+
+  await applyAgreementEvent(
+    {
+      agreementId: agreement.id,
+      type: "SENT",
+      actor: seller2,
+    },
+    { store },
+  );
+
+  assert.equal(agreement.status, "SENT");
+  assert.equal(agreement.creditedSellerId, "seller-1");
+});
+
 test("verified signature preserves review truth while payment derives won", async () => {
   const store = fakeAgreementStore({
     review: true,
@@ -584,4 +667,578 @@ test("only an admin can change frozen commission credit with a reason", async ()
     { store },
   );
   assert.equal(store.commissions[0]?.sellerId, "seller-1");
+});
+
+test("migration linking requires persisted admin, contact evidence and no active collision", async () => {
+  const store = fakeAgreementStore();
+  store.agreements.push({
+    id: "agreement-unlinked",
+    leadId: null,
+    status: "DRAFT",
+    paymentStatus: "PENDING",
+    paidAt: null,
+    paidAmount: null,
+    phone: "050-123-4567",
+    email: "other@example.com",
+    clientId: null,
+    creditedSellerId: "seller-1",
+    createdBy: "seller-1",
+    isSellerDeal: true,
+    customerName: "נועה",
+    monthlyPrice: 599,
+  });
+
+  await assert.rejects(
+    store.transaction((transaction) =>
+      linkAgreementToLeadForMigrationInTransaction(transaction, {
+        agreementId: "agreement-unlinked",
+        leadId: "lead-1",
+        reason: "Historical contact match",
+        actor: seller1,
+      }),
+    ),
+    /admin/i,
+  );
+
+  await store.transaction((transaction) =>
+    linkAgreementToLeadForMigrationInTransaction(transaction, {
+      agreementId: "agreement-unlinked",
+      leadId: "lead-1",
+      reason: "Historical contact match",
+      actor: admin,
+    }),
+  );
+  assert.equal(store.agreements[0]?.leadId, "lead-1");
+  assert.equal(store.events.at(-1)?.type, "MIGRATED");
+
+  await store.transaction((transaction) =>
+    linkAgreementToLeadForMigrationInTransaction(transaction, {
+      agreementId: "agreement-unlinked",
+      leadId: "lead-1",
+      reason: "Historical contact match",
+      actor: admin,
+    }),
+  );
+  assert.equal(
+    store.events.filter((event) => event.type === "MIGRATED").length,
+    1,
+  );
+
+  const mismatch = fakeAgreementStore();
+  mismatch.agreements.push({
+    id: "agreement-mismatch",
+    leadId: null,
+    status: "DRAFT",
+    paymentStatus: "PENDING",
+    paidAt: null,
+    phone: "0999999999",
+    email: "wrong@example.com",
+    clientId: null,
+  });
+  await assert.rejects(
+    mismatch.transaction((transaction) =>
+      linkAgreementToLeadForMigrationInTransaction(transaction, {
+        agreementId: "agreement-mismatch",
+        leadId: "lead-1",
+        reason: "No actual matching evidence",
+        actor: admin,
+      }),
+    ),
+    /evidence|contact/i,
+  );
+});
+
+test("migration linking rejects a clientId alone and accepts matching client contact evidence", async () => {
+  const unrelated = fakeAgreementStore();
+  unrelated.agreements.push({
+    id: "agreement-unrelated-client",
+    leadId: null,
+    status: "DRAFT",
+    paymentStatus: "PENDING",
+    paidAt: null,
+    phone: "0999999999",
+    email: "wrong@example.com",
+    clientId: "client-unrelated",
+  });
+  unrelated.clients.push({
+    id: "client-unrelated",
+    phone: "0529999999",
+    email: "also-wrong@example.com",
+  });
+
+  await assert.rejects(
+    unrelated.transaction((transaction) =>
+      linkAgreementToLeadForMigrationInTransaction(transaction, {
+        agreementId: "agreement-unrelated-client",
+        leadId: "lead-1",
+        reason: "Client record exists but identifies another customer",
+        actor: admin,
+      }),
+    ),
+    /evidence|contact|identity/i,
+  );
+
+  const compatible = fakeAgreementStore();
+  compatible.agreements.push({
+    id: "agreement-compatible-client",
+    leadId: null,
+    status: "DRAFT",
+    paymentStatus: "PENDING",
+    paidAt: null,
+    phone: "0999999999",
+    email: "legacy-wrong@example.com",
+    clientId: "client-compatible",
+  });
+  compatible.clients.push({
+    id: "client-compatible",
+    phone: "050-123-4567",
+    email: "client@example.com",
+  });
+
+  await compatible.transaction((transaction) =>
+    linkAgreementToLeadForMigrationInTransaction(transaction, {
+      agreementId: "agreement-compatible-client",
+      leadId: "lead-1",
+      reason: "Linked Client phone matches the Lead",
+      actor: admin,
+    }),
+  );
+  assert.equal(compatible.agreements[0]?.leadId, "lead-1");
+});
+
+test("migration duplicate cancellation preserves lead state and paid agreements", async () => {
+  const store = fakeAgreementStore();
+  store.agreements.push(
+    {
+      id: "agreement-duplicate",
+      leadId: "lead-1",
+      status: "SENT",
+      paymentStatus: "PENDING",
+      paidAt: null,
+    },
+    {
+      id: "agreement-retained",
+      leadId: "lead-1",
+      status: "SIGNED",
+      paymentStatus: "PENDING",
+      paidAt: null,
+    },
+  );
+  const stageBefore = store.lead.stage;
+  await store.transaction((transaction) =>
+    cancelDuplicateAgreementForMigrationInTransaction(transaction, {
+      agreementId: "agreement-duplicate",
+      retainedAgreementId: "agreement-retained",
+      reason: "Duplicate draft created during the legacy cutover",
+      actor: admin,
+    }),
+  );
+  assert.equal(store.agreements[0]?.status, "CANCELLED");
+  assert.equal(store.agreements[1]?.status, "SIGNED");
+  assert.equal(store.lead.stage, stageBefore);
+  assert.equal(store.events.at(-1)?.type, "MIGRATED");
+
+  const paid = fakeAgreementStore();
+  paid.agreements.push(
+    {
+      id: "agreement-paid",
+      leadId: "lead-1",
+      status: "SIGNED",
+      paymentStatus: "COMPLETED",
+      paidAt: new Date("2026-07-01T08:00:00.000Z"),
+    },
+    {
+      id: "agreement-retained",
+      leadId: "lead-1",
+      status: "SIGNED",
+      paymentStatus: "PENDING",
+      paidAt: null,
+    },
+  );
+  await assert.rejects(
+    paid.transaction((transaction) =>
+      cancelDuplicateAgreementForMigrationInTransaction(transaction, {
+        agreementId: "agreement-paid",
+        retainedAgreementId: "agreement-retained",
+        reason: "Must not cancel paid history",
+        actor: admin,
+      }),
+    ),
+    /paid/i,
+  );
+});
+
+test("unlinked duplicate cancellation requires shared contact or client identity", async () => {
+  const unrelated = fakeAgreementStore();
+  unrelated.agreements.push(
+    {
+      id: "agreement-unlinked-duplicate",
+      leadId: null,
+      status: "SENT",
+      paymentStatus: "PENDING",
+      paidAt: null,
+      phone: "0501111111",
+      email: "duplicate@example.com",
+      clientId: "client-duplicate",
+    },
+    {
+      id: "agreement-linked-retained",
+      leadId: "lead-1",
+      status: "SIGNED",
+      paymentStatus: "PENDING",
+      paidAt: null,
+      phone: "0522222222",
+      email: "retained@example.com",
+      clientId: "client-retained",
+    },
+  );
+  unrelated.clients.push(
+    {
+      id: "client-duplicate",
+      phone: "0533333333",
+      email: "duplicate-client@example.com",
+    },
+    {
+      id: "client-retained",
+      phone: "0544444444",
+      email: "retained-client@example.com",
+    },
+  );
+
+  await assert.rejects(
+    unrelated.transaction((transaction) =>
+      cancelDuplicateAgreementForMigrationInTransaction(transaction, {
+        agreementId: "agreement-unlinked-duplicate",
+        retainedAgreementId: "agreement-linked-retained",
+        reason: "These records have no shared identity",
+        actor: admin,
+      }),
+    ),
+    /identity|contact|client|share/i,
+  );
+  assert.equal(unrelated.agreements[0]?.status, "SENT");
+
+  const compatible = fakeAgreementStore();
+  compatible.agreements.push(
+    {
+      id: "agreement-shared-client-duplicate",
+      leadId: null,
+      status: "SENT",
+      paymentStatus: "PENDING",
+      paidAt: null,
+      phone: "0501111111",
+      email: "old@example.com",
+      clientId: "client-shared",
+    },
+    {
+      id: "agreement-shared-client-retained",
+      leadId: "lead-1",
+      status: "SIGNED",
+      paymentStatus: "PENDING",
+      paidAt: null,
+      phone: "0522222222",
+      email: "new@example.com",
+      clientId: "client-shared",
+    },
+  );
+
+  await compatible.transaction((transaction) =>
+    cancelDuplicateAgreementForMigrationInTransaction(transaction, {
+      agreementId: "agreement-shared-client-duplicate",
+      retainedAgreementId: "agreement-shared-client-retained",
+      reason: "Both agreements belong to the same persisted Client",
+      actor: admin,
+    }),
+  );
+  assert.equal(compatible.agreements[0]?.status, "CANCELLED");
+});
+
+test("historical commission linking is audited, idempotent and rejects conflicting evidence", async () => {
+  const store = fakeAgreementStore();
+  store.agreements.push({
+    id: "agreement-paid",
+    leadId: "lead-1",
+    status: "SIGNED",
+    paymentStatus: "COMPLETED",
+    paidAt: new Date("2026-07-01T08:00:00.000Z"),
+    paidAmount: 599,
+    monthlyPrice: 599,
+    creditedSellerId: "seller-1",
+    createdBy: "seller-1",
+    isSellerDeal: true,
+  });
+  store.commissions.push({
+    id: "commission-historical",
+    sellerId: "seller-1",
+    agreementId: "legacy-agreement-id",
+    agreementRefId: null,
+    agreementLinkStatus: null,
+    agreementLinkReviewedAt: null,
+    agreementLinkReviewReason: null,
+    agreementLinkReviewedById: null,
+    clientName: "נועה",
+    amount: 599,
+    status: "PENDING",
+    paidAt: null,
+    createdAt: new Date("2026-07-01T08:01:00.000Z"),
+  });
+
+  await store.transaction((transaction) =>
+    linkHistoricalCommissionInTransaction(transaction, {
+      commissionId: "commission-historical",
+      agreementId: "agreement-paid",
+      reason: "Payment and seller evidence match",
+      actor: admin,
+    }),
+  );
+  const linked = store.commissions[0]!;
+  assert.equal(linked.agreementId, "legacy-agreement-id");
+  assert.equal(linked.agreementRefId, "agreement-paid");
+  assert.equal(linked.agreementLinkStatus, "LINKED");
+  assert.equal(linked.agreementLinkReviewedById, "admin-1");
+  assert.equal(store.events.at(-1)?.type, "MIGRATED");
+
+  await store.transaction((transaction) =>
+    linkHistoricalCommissionInTransaction(transaction, {
+      commissionId: "commission-historical",
+      agreementId: "agreement-paid",
+      reason: "Payment and seller evidence match",
+      actor: admin,
+    }),
+  );
+  assert.equal(
+    store.events.filter((event) => event.type === "MIGRATED").length,
+    1,
+  );
+
+  store.agreements.push({
+    id: "agreement-other-paid",
+    leadId: "lead-1",
+    status: "SIGNED",
+    paymentStatus: "COMPLETED",
+    paidAt: new Date("2026-07-02T08:00:00.000Z"),
+    paidAmount: 599,
+    monthlyPrice: 599,
+    creditedSellerId: "seller-1",
+  });
+  await assert.rejects(
+    store.transaction((transaction) =>
+      linkHistoricalCommissionInTransaction(transaction, {
+        commissionId: "commission-historical",
+        agreementId: "agreement-other-paid",
+        reason: "Conflicting second resolution",
+        actor: admin,
+      }),
+    ),
+    /conflict|classified|linked/i,
+  );
+});
+
+test("genuine legacy orphan commission classification preserves financial history", async () => {
+  const store = fakeAgreementStore();
+  const createdAt = new Date("2026-06-01T08:00:00.000Z");
+  const paidAt = new Date("2026-07-01T08:00:00.000Z");
+  store.commissions.push({
+    id: "commission-orphan",
+    sellerId: "seller-1",
+    agreementId: "deleted-agreement",
+    agreementRefId: null,
+    agreementLinkStatus: null,
+    agreementLinkReviewedAt: null,
+    agreementLinkReviewReason: null,
+    agreementLinkReviewedById: null,
+    clientName: "נועה",
+    amount: 599,
+    status: "PAID",
+    paidAt,
+    createdAt,
+  });
+  const immutableBefore = {
+    sellerId: store.commissions[0]?.sellerId,
+    agreementId: store.commissions[0]?.agreementId,
+    amount: store.commissions[0]?.amount,
+    status: store.commissions[0]?.status,
+    paidAt: store.commissions[0]?.paidAt,
+    createdAt: store.commissions[0]?.createdAt,
+  };
+
+  await assert.rejects(
+    store.transaction((transaction) =>
+      classifyLegacyOrphanCommissionInTransaction(transaction, {
+        commissionId: "commission-orphan",
+        reason: "Deleted agreement confirmed in archived records",
+        actor: seller1,
+      }),
+    ),
+    /admin/i,
+  );
+  await assert.rejects(
+    store.transaction((transaction) =>
+      classifyLegacyOrphanCommissionInTransaction(transaction, {
+        commissionId: "commission-orphan",
+        reason: " ",
+        actor: admin,
+      }),
+    ),
+    /reason/i,
+  );
+
+  await store.transaction((transaction) =>
+    classifyLegacyOrphanCommissionInTransaction(transaction, {
+      commissionId: "commission-orphan",
+      reason: "Deleted agreement confirmed in archived records",
+      actor: admin,
+    }),
+  );
+  assert.equal(store.commissions[0]?.agreementRefId, null);
+  assert.equal(store.commissions[0]?.agreementLinkStatus, "LEGACY_ORPHAN");
+  assert.deepEqual(
+    {
+      sellerId: store.commissions[0]?.sellerId,
+      agreementId: store.commissions[0]?.agreementId,
+      amount: store.commissions[0]?.amount,
+      status: store.commissions[0]?.status,
+      paidAt: store.commissions[0]?.paidAt,
+      createdAt: store.commissions[0]?.createdAt,
+    },
+    immutableBefore,
+  );
+
+  await store.transaction((transaction) =>
+    classifyLegacyOrphanCommissionInTransaction(transaction, {
+      commissionId: "commission-orphan",
+      reason: "Deleted agreement confirmed in archived records",
+      actor: admin,
+    }),
+  );
+
+  const existingAgreement = fakeAgreementStore();
+  existingAgreement.agreements.push({
+    id: "existing-agreement",
+    leadId: null,
+    status: "CANCELLED",
+  });
+  existingAgreement.commissions.push({
+    id: "commission-not-orphan",
+    sellerId: "seller-1",
+    agreementId: "existing-agreement",
+    agreementRefId: null,
+    agreementLinkStatus: null,
+    amount: 599,
+  });
+  await assert.rejects(
+    existingAgreement.transaction((transaction) =>
+      classifyLegacyOrphanCommissionInTransaction(transaction, {
+        commissionId: "commission-not-orphan",
+        reason: "Incorrect orphan attempt",
+        actor: admin,
+      }),
+    ),
+    /exists|orphan/i,
+  );
+});
+
+test("commission brief task can be claimed once only by its seller", async () => {
+  const store = fakeAgreementStore();
+  store.commissions.push({
+    id: "commission-brief",
+    agreementId: "agreement-1",
+    sellerId: "seller-1",
+    briefTaskId: null,
+  });
+  const claimed = await claimCommissionBriefTask(
+    {
+      commissionId: "commission-brief",
+      taskId: "task-1",
+      actor: seller1,
+    },
+    { store },
+  );
+  assert.equal(claimed.briefTaskId, "task-1");
+
+  const retry = await claimCommissionBriefTask(
+    {
+      commissionId: "commission-brief",
+      taskId: "task-1",
+      actor: seller1,
+    },
+    { store },
+  );
+  assert.equal(retry.briefTaskId, "task-1");
+
+  await assert.rejects(
+    claimCommissionBriefTask(
+      {
+        commissionId: "commission-brief",
+        taskId: "task-2",
+        actor: seller2,
+      },
+      { store },
+    ),
+    /seller|owned|commission/i,
+  );
+});
+
+test("only a persisted admin can record commission payout status", async () => {
+  const store = fakeAgreementStore();
+  store.commissions.push({
+    id: "commission-payout",
+    agreementId: "agreement-1",
+    sellerId: "seller-1",
+    status: "PENDING",
+    paidAt: null,
+  });
+  await assert.rejects(
+    setSellerCommissionPayoutStatus(
+      {
+        commissionId: "commission-payout",
+        status: "PAID",
+        actor: seller1,
+      },
+      { store },
+    ),
+    /admin/i,
+  );
+  const paid = await setSellerCommissionPayoutStatus(
+    {
+      commissionId: "commission-payout",
+      status: "PAID",
+      actor: admin,
+    },
+    { store },
+  );
+  assert.equal(paid.status, "PAID");
+  assert.ok(paid.paidAt instanceof Date);
+});
+
+test("payment page persistence is centralized and does not overwrite completed payment", async () => {
+  const store = fakeAgreementStore();
+  const agreement = await createAgreementForLead(
+    { leadId: "lead-1", actor: seller1, agreement: draft },
+    { store },
+  );
+  const updated = await recordAgreementPaymentPage(
+    {
+      agreementId: agreement.id,
+      paymentUrl: "https://pay.example/checkout",
+      providerPaymentId: "low-profile-1",
+    },
+    { store },
+  );
+  assert.equal(updated.paymentStatus, "SENT");
+  assert.equal(updated.paymentUrl, "https://pay.example/checkout");
+  assert.equal(updated.paymentId, "low-profile-1");
+
+  agreement.paymentStatus = "COMPLETED";
+  await assert.rejects(
+    recordAgreementPaymentPage(
+      {
+        agreementId: agreement.id,
+        paymentUrl: "https://pay.example/replacement",
+        providerPaymentId: "low-profile-2",
+      },
+      { store },
+    ),
+    /paid|completed/i,
+  );
 });

@@ -9,14 +9,22 @@ import LeadOutcomeSheet, {
 } from "@/components/seller/leads/LeadOutcomeSheet";
 import Modal from "@/components/ui/Modal";
 import type { LeadDetail } from "@/lib/leads/projection";
-import type { LeadPrimaryActionKind } from "@/lib/leads/ui-state";
+import {
+  isLeadChangedEventFor,
+  LEAD_CHANGED_EVENT,
+} from "@/lib/leads/ui-events";
+import {
+  contactDetailsForUpdate,
+  leadWorkspaceTabFromQuery,
+  type LeadContactDraft,
+  type LeadPrimaryActionKind,
+  type LeadWorkspaceTab,
+} from "@/lib/leads/ui-state";
 
 import LeadActivityTimeline from "./LeadActivityTimeline";
 import LeadContactActions from "./LeadContactActions";
 import LeadPrimaryAction from "./LeadPrimaryAction";
 import LeadSourceBadge from "./LeadSourceBadge";
-
-type WorkspaceTab = "activity" | "preparation" | "agreement";
 
 const stageLabels: Record<string, string> = {
   NEW: "חדש",
@@ -53,15 +61,19 @@ export default function LeadWorkspace({
   leadId,
   audience,
   initialLead = null,
+  initialTab,
 }: {
   leadId: string;
   audience: "seller" | "admin";
   initialLead?: LeadDetail | null;
+  initialTab?: string | string[];
 }) {
   const [lead, setLead] = useState<LeadDetail | null>(initialLead);
   const [loading, setLoading] = useState(!initialLead);
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("activity");
+  const [activeTab, setActiveTab] = useState<LeadWorkspaceTab>(() =>
+    leadWorkspaceTabFromQuery(initialTab),
+  );
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [noteBody, setNoteBody] = useState("");
@@ -71,7 +83,7 @@ export default function LeadWorkspace({
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(
     null,
   );
-  const [contactDraft, setContactDraft] = useState({
+  const [contactDraft, setContactDraft] = useState<LeadContactDraft>({
     name: "",
     company: "",
     email: "",
@@ -118,6 +130,22 @@ export default function LeadWorkspace({
       active = false;
     };
   }, [loadLead]);
+
+  useEffect(() => {
+    const handleLeadChanged = (event: Event) => {
+      if (!isLeadChangedEventFor(event, leadId)) return;
+      void loadLead().catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : "רענון הליד נכשל",
+        );
+      });
+    };
+
+    window.addEventListener(LEAD_CHANGED_EVENT, handleLeadChanged);
+    return () => {
+      window.removeEventListener(LEAD_CHANGED_EVENT, handleLeadChanged);
+    };
+  }, [leadId, loadLead]);
 
   const activeFollowUp = useMemo(
     () => lead?.followUps.find((followUp) => followUp.status === "SCHEDULED"),
@@ -192,17 +220,17 @@ export default function LeadWorkspace({
       if (lead.phone) {
         window.location.href = `tel:${lead.phone.replace(/[^+\d]/g, "")}`;
       }
-      if (audience === "seller") setOutcomeOpen(true);
+      setOutcomeOpen(true);
       return;
     }
-    if (action === "RECORD_OUTCOME" && audience === "seller") {
+    if (action === "RECORD_OUTCOME") {
       setOutcomeOpen(true);
     }
   }
 
   async function submitOutcome(input: LeadOutcomeInput) {
     const success = await mutate(
-      `/api/seller/leads/${leadId}/interactions`,
+      `${mutationBase}/interactions`,
       { method: "POST", body: JSON.stringify(input) },
       "תוצאת השיחה נשמרה",
     );
@@ -285,18 +313,11 @@ export default function LeadWorkspace({
 
   async function updateContact() {
     if (!lead) return;
-    const values = {
-      name: contactDraft.name.trim(),
-      company: contactDraft.company.trim(),
-      email: contactDraft.email.trim(),
-      phone: contactDraft.phone.trim(),
-    };
-    const changed = Object.fromEntries(
-      Object.entries(values).filter(([key, value]) => {
-        const current = lead[key as keyof typeof values];
-        return value && value !== (current ?? "");
-      }),
-    );
+    const changed = contactDetailsForUpdate({
+      current: lead,
+      draft: contactDraft,
+      confirmGooglePhone: audience === "seller",
+    });
     if (Object.keys(changed).length === 0) {
       toast.error("לא בוצע שינוי בפרטי הקשר");
       return;
@@ -373,6 +394,7 @@ export default function LeadWorkspace({
             </div>
             <LeadContactActions
               phone={lead.phone}
+              phoneSource={lead.phoneSource}
               website={lead.website}
               mapUrl={lead.mapUrl}
               doNotContactAt={lead.doNotContactAt}
@@ -428,6 +450,7 @@ export default function LeadWorkspace({
 
       <nav
         aria-label="אזורי עבודה בליד"
+        role="tablist"
         className="flex gap-2 overflow-x-auto rounded-2xl border border-gray-700 bg-gray-900 p-2"
       >
         {(
@@ -440,6 +463,10 @@ export default function LeadWorkspace({
           <button
             key={value}
             type="button"
+            role="tab"
+            id={`lead-tab-${value}`}
+            aria-selected={activeTab === value}
+            aria-controls={`lead-panel-${value}`}
             onClick={() => setActiveTab(value)}
             className={`min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink ${
               activeTab === value
@@ -452,7 +479,12 @@ export default function LeadWorkspace({
         ))}
       </nav>
 
-      <main className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
+      <main
+        id={`lead-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`lead-tab-${activeTab}`}
+        className="rounded-2xl border border-gray-700 bg-gray-900 p-5"
+      >
         {activeTab === "activity" && (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <LeadActivityTimeline items={lead.timeline} />
@@ -604,10 +636,10 @@ export default function LeadWorkspace({
         )}
       </main>
 
-      {audience === "seller" && (
+      {outcomeOpen && (
         <LeadOutcomeSheet
           lead={lead}
-          isOpen={outcomeOpen}
+          isOpen
           busy={busy}
           onClose={() => setOutcomeOpen(false)}
           onSubmit={submitOutcome}

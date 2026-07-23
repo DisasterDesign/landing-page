@@ -64,7 +64,7 @@ const googleMapsSnapshotSchema = z
       ]),
     internalBusinessCategory: z.enum(["UNKNOWN", "SERVICE", "RETAIL", "ECOMMERCE"]),
     internalBusinessCategoryVersion: z.number().int().min(1),
-    qualityScore: z.number().int().min(0).max(4),
+    qualityScore: z.number().int().min(0).max(5),
     scoringVersion: z.number().int().min(1),
     opportunitySummary: z.string().trim().min(1).max(2_000),
     callAngles: z.array(callAngleSchema).max(3),

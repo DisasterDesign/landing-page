@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { sellerLeadScope } from "@/lib/leads/authorization";
+import {
+  requirePersistedLeadReadRole,
+  sellerLeadScope,
+} from "@/lib/leads/authorization";
 import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import {
   getSellerLeadDetailsByIds,
+  getSellerLeadDetail,
   getSellerLeadList,
   type SellerLeadDetail,
 } from "@/lib/leads/projection";
@@ -43,8 +47,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
+    await requirePersistedLeadReadRole(session.user.id, ["ADMIN", "SELLER"]);
     const sellerId = session.user.id;
     const url = new URL(request.url);
+    const focus = url.searchParams.get("focus");
     const now = new Date();
     const config = getLeadLifecycleConfig();
     const unified = config.enabled && config.coldPreparationEnabled;
@@ -100,7 +106,28 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    const pageById = new Map(page.items.map((lead) => [lead.id, lead]));
+    let focusState: "none" | "found" | "not_found" = focus
+      ? "not_found"
+      : "none";
+    const pageItems = [...page.items];
+    if (focus && pageItems.some((lead) => lead.id === focus)) {
+      focusState = "found";
+    } else if (focus) {
+      try {
+        const focusedLead = await getSellerLeadDetail({
+          id: focus,
+          sellerId,
+        });
+        if (focusedLead.intentLevel === "OUTBOUND") {
+          pageItems.unshift(focusedLead);
+          focusState = "found";
+        }
+      } catch {
+        focusState = "not_found";
+      }
+    }
+
+    const pageById = new Map(pageItems.map((lead) => [lead.id, lead]));
     const missingDueIds = dueTasks
       .map(({ leadId }) => leadId)
       .filter((leadId) => !pageById.has(leadId));
@@ -116,7 +143,7 @@ export async function GET(request: Request) {
     const dueIds = new Set(
       due.map((lead) => lead.id),
     );
-    const current = page.items.filter((lead) => !dueIds.has(lead.id));
+    const current = pageItems.filter((lead) => !dueIds.has(lead.id));
     const responseBatch = currentBatch
       ? {
           id: currentBatch.id,
@@ -141,6 +168,7 @@ export async function GET(request: Request) {
         current,
         followUps: due,
         nextCursor: page.nextCursor,
+        focusState,
       });
     }
     return NextResponse.json({
@@ -148,6 +176,7 @@ export async function GET(request: Request) {
       current: current.map(serializeCanonicalSellerProspect),
       followUps: due.map(serializeCanonicalSellerProspect),
       nextCursor: page.nextCursor,
+      focusState,
     });
   } catch (error) {
     console.error("Error listing seller cold leads:", error);
