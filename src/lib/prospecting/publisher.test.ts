@@ -13,6 +13,9 @@ function prospect(
     qualityScore: 2,
     auditConfidence: 0.8,
     commercialFit: 5,
+    salesFitClassification: "INDEPENDENT_LIKELY" as const,
+    salesFitConfidence: 0.9,
+    ownerReachabilityScore: 80,
     auditedDomain: `${id}.example`,
     hasLivePhone: true,
     discoveredAt: new Date("2026-07-01T00:00:00Z"),
@@ -56,4 +59,23 @@ test("publication order is bad score first, then confidence, commercial fit and 
   ]);
 
   assert.deepEqual(selected.map(({ id }) => id), ["worst", "confident", "commercial", "new"]);
+});
+
+test("publication requires sales fit and orders by website then owner reachability", () => {
+  const selected = selectPublishableProspects([
+    prospect("chain", {
+      salesFitClassification: "CHAIN_OR_FRANCHISE",
+      salesFitConfidence: 1,
+      ownerReachabilityScore: 0,
+    }),
+    prospect("uncertain", {
+      salesFitClassification: "UNCERTAIN",
+      salesFitConfidence: 0.95,
+      ownerReachabilityScore: 95,
+    }),
+    prospect("reachable", { ownerReachabilityScore: 90 }),
+    prospect("less-reachable", { ownerReachabilityScore: 75 }),
+  ]);
+
+  assert.deepEqual(selected.map(({ id }) => id), ["reachable", "less-reachable"]);
 });

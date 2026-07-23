@@ -12,6 +12,9 @@ export interface PublishableProspectCandidate {
   qualityScore: number | null;
   auditConfidence: number | null;
   commercialFit: number;
+  salesFitClassification: string | null;
+  salesFitConfidence: number | null;
+  ownerReachabilityScore: number | null;
   auditedDomain: string | null;
   hasLivePhone: boolean;
   discoveredAt: Date;
@@ -44,6 +47,9 @@ export function selectPublishableProspects<T extends PublishableProspectCandidat
         prospect.qualityScore !== null &&
         prospect.qualityScore >= 0 &&
         prospect.qualityScore <= 4 &&
+        prospect.salesFitClassification === "INDEPENDENT_LIKELY" &&
+        (prospect.salesFitConfidence ?? 0) >= 0.8 &&
+        (prospect.ownerReachabilityScore ?? 0) >= 70 &&
         prospect.hasLivePhone &&
         (!prospect.placeId || !options.suppressedPlaceIds?.has(prospect.placeId)) &&
         (!prospect.phone || !existingPhones.has(normalizePhone(prospect.phone))) &&
@@ -63,6 +69,12 @@ export function selectPublishableProspects<T extends PublishableProspectCandidat
     .sort((left, right) => {
       if (left.qualityScore !== right.qualityScore) {
         return (left.qualityScore ?? 5) - (right.qualityScore ?? 5);
+      }
+      if (left.ownerReachabilityScore !== right.ownerReachabilityScore) {
+        return (right.ownerReachabilityScore ?? 0) - (left.ownerReachabilityScore ?? 0);
+      }
+      if (left.salesFitConfidence !== right.salesFitConfidence) {
+        return (right.salesFitConfidence ?? 0) - (left.salesFitConfidence ?? 0);
       }
       if (left.auditConfidence !== right.auditConfidence) {
         return (right.auditConfidence ?? 0) - (left.auditConfidence ?? 0);
@@ -132,6 +144,9 @@ export async function publishProspectingCycle(
       qualityScore: prospect.qualityScore,
       auditConfidence: prospect.auditConfidence,
       commercialFit: prospect.audits[0]?.commercialScore ?? 0,
+      salesFitClassification: prospect.salesFitClassification,
+      salesFitConfidence: prospect.salesFitConfidence,
+      ownerReachabilityScore: prospect.ownerReachabilityScore,
       auditedDomain: prospect.auditedDomain,
       phone: live?.nationalPhoneNumber ?? null,
       hasLivePhone: Boolean(live?.nationalPhoneNumber),

@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-import { assessWebsiteVisuals } from "./ai";
+import { assessBusinessSalesFit, assessWebsiteVisuals } from "./ai";
 import { classifyWebsiteUrl, looksParked } from "./classify-website";
 import { auditCommerce } from "./commerce-audit";
 import { getProspectingConfig } from "./config";
@@ -12,14 +12,126 @@ import { hasPageSpeedScreenshot, runPageSpeed } from "./pagespeed";
 import { GooglePlacesProspectingProvider } from "./places";
 import { publishProspectingCycle } from "./publisher";
 import { safeFetchHtml, type SafeFetchFailureCode } from "./safe-fetch";
+import { detectHardSalesFitExclusion, SALES_FIT_VERSION } from "./sales-fit";
 import { calculateWebsiteScore } from "./score";
 import { normalizeDomain } from "./suppression";
 import { auditHtml } from "./technical-audit";
 import { buildDiscoveryQueries } from "./territory";
-import type { WebsiteScoreDimensions, WebsiteStatus } from "./types";
+import type {
+  LivePlaceDetails,
+  SalesFitAssessment,
+  WebsiteScoreDimensions,
+  WebsiteStatus,
+} from "./types";
+import { decideProspectSalesFit, type ProspectSalesFitDecision } from "./worker-policy";
 
 const LOCK_TTL_MS = 15 * 60 * 1_000;
 const RETRY_WINDOW_MS = 24 * 60 * 60 * 1_000;
+
+function aiEstimatedCost(usage: { inputTokens: number; outputTokens: number }): number {
+  return (usage.inputTokens / 1_000_000) * 3 + (usage.outputTokens / 1_000_000) * 15;
+}
+
+async function recordAiUsage(
+  cycleId: string,
+  usage: { inputTokens: number; outputTokens: number },
+): Promise<void> {
+  await prisma.prospectingCycle.update({
+    where: { id: cycleId },
+    data: {
+      aiCalls: { increment: 1 },
+      aiInputTokens: { increment: usage.inputTokens },
+      aiOutputTokens: { increment: usage.outputTokens },
+      estimatedCostUsd: { increment: aiEstimatedCost(usage) },
+    },
+  });
+}
+
+function liveDetailsExclusion(details: LivePlaceDetails): SalesFitAssessment | null {
+  if (details.businessStatus && details.businessStatus !== "OPERATIONAL") {
+    return {
+      classification: "UNSUITABLE_CATEGORY",
+      confidence: 1,
+      ownerReachabilityScore: 0,
+      reason: "העסק אינו מסומן כפעיל ולכן אינו מתאים כרגע לשיחת מכירה",
+      evidence: ["INSUFFICIENT_EVIDENCE"],
+    };
+  }
+  if (!details.nationalPhoneNumber) {
+    return {
+      classification: "UNCERTAIN",
+      confidence: 1,
+      ownerReachabilityScore: 0,
+      reason: "לא נמצא מספר טלפון עסקי ציבורי שאליו ניתן להתקשר",
+      evidence: ["INSUFFICIENT_EVIDENCE"],
+    };
+  }
+  return detectHardSalesFitExclusion({
+    displayName: details.displayName,
+    category: details.category,
+    rating: details.rating,
+    reviewCount: details.reviewCount,
+  });
+}
+
+async function persistSalesFitDecision(
+  prospectId: string,
+  decision: ProspectSalesFitDecision,
+  now: Date,
+): Promise<void> {
+  await prisma.prospect.update({
+    where: { id: prospectId },
+    data: {
+      status: decision.action === "REJECT" ? decision.status : "AUDITING",
+      salesFitClassification: decision.assessment.classification,
+      salesFitConfidence: decision.assessment.confidence,
+      ownerReachabilityScore: decision.assessment.ownerReachabilityScore,
+      salesFitReason: decision.assessment.reason,
+      salesFitEvidence: [...decision.assessment.evidence],
+      salesFitVersion: SALES_FIT_VERSION,
+      salesFitAssessedAt: now,
+    },
+  });
+}
+
+async function assessAndPersistSalesFit(input: {
+  prospectId: string;
+  cycleId: string;
+  details: LivePlaceDetails;
+  websiteDomain: string | null;
+  websiteText: string;
+  now: Date;
+  config: ReturnType<typeof getProspectingConfig>;
+}): Promise<ProspectSalesFitDecision> {
+  const hardExclusion = liveDetailsExclusion(input.details);
+  if (hardExclusion) {
+    const decision = decideProspectSalesFit({ hardExclusion });
+    await persistSalesFitDecision(input.prospectId, decision, input.now);
+    return decision;
+  }
+
+  const result = await assessBusinessSalesFit(
+    {
+      displayName: input.details.displayName,
+      category: input.details.category,
+      formattedAddress: input.details.formattedAddress,
+      rating: input.details.rating,
+      reviewCount: input.details.reviewCount,
+      businessStatus: input.details.businessStatus,
+      publicPhoneAvailable: Boolean(input.details.nationalPhoneNumber),
+      websiteDomain: input.websiteDomain,
+      websiteText: input.websiteText,
+    },
+    { apiKey: input.config.aiApiKey, model: input.config.aiModel },
+  );
+  await recordAiUsage(input.cycleId, result.usage);
+  const decision = decideProspectSalesFit({
+    hardExclusion: null,
+    assessment: result.value,
+  });
+  await persistSalesFitDecision(input.prospectId, decision, input.now);
+  return decision;
+}
 
 export type WorkerResult = {
   enabled: boolean;
@@ -322,13 +434,42 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       await recordAuditFailure(prospect, "PROVIDER_ERROR", now);
       return "waiting" as const;
     }
+    const hardSalesFitExclusion = liveDetailsExclusion(details);
+    if (hardSalesFitExclusion) {
+      await persistSalesFitDecision(
+        prospect.id,
+        decideProspectSalesFit({ hardExclusion: hardSalesFitExclusion }),
+        now,
+      );
+      return "audited" as const;
+    }
     if (!details.websiteUri) {
+      const salesFit = await assessAndPersistSalesFit({
+        prospectId: prospect.id,
+        cycleId,
+        details,
+        websiteDomain: null,
+        websiteText: "",
+        now,
+        config,
+      });
+      if (salesFit.action === "REJECT") return "audited" as const;
       await saveHardZero(prospect.id, "NO_WEBSITE", { reason: "No website URI returned by live details" });
       return "audited" as const;
     }
 
     const classification = classifyWebsiteUrl(details.websiteUri);
     if (classification === "SOCIAL_ONLY") {
+      const salesFit = await assessAndPersistSalesFit({
+        prospectId: prospect.id,
+        cycleId,
+        details,
+        websiteDomain: normalizeDomain(details.websiteUri),
+        websiteText: "",
+        now,
+        config,
+      });
+      if (salesFit.action === "REJECT") return "audited" as const;
       await saveHardZero(prospect.id, "SOCIAL_ONLY", { reason: "Only a social or directory profile" });
       return "audited" as const;
     }
@@ -356,9 +497,23 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
     }
 
     const domain = normalizeDomain(fetched.url);
+    const bodyText = fetched.html
+      .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, " ")
+      .slice(0, 10_000);
+    const salesFit = await assessAndPersistSalesFit({
+      prospectId: prospect.id,
+      cycleId,
+      details,
+      websiteDomain: domain,
+      websiteText: bodyText,
+      now,
+      config,
+    });
+    if (salesFit.action === "REJECT") return "audited" as const;
+
     if (looksParked({
       title: fetched.html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1],
-      bodyText: fetched.html.replace(/<[^>]+>/g, " ").slice(0, 10_000),
+      bodyText,
     })) {
       await saveHardZero(prospect.id, "PARKED", { reason: "Registrar or domain-sale page detected" }, domain);
       return "audited" as const;
@@ -393,7 +548,7 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       {
         screenshotDataUrl: pageSpeed.finalScreenshotDataUrl,
         technicalEvidence: technical,
-        bodyText: fetched.html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, " ").slice(0, 10_000),
+        bodyText,
         businessShape: commerce.businessShape,
       },
       { apiKey: config.aiApiKey, model: config.aiModel },
@@ -423,19 +578,7 @@ async function processAudit(cycleId: string, config: ReturnType<typeof getProspe
       businessShape: commerce.businessShape,
       callAngles: visual.value.callAngles,
     });
-    await prisma.prospectingCycle.update({
-      where: { id: cycleId },
-      data: {
-        aiCalls: { increment: 1 },
-        aiInputTokens: { increment: visual.usage.inputTokens },
-        aiOutputTokens: { increment: visual.usage.outputTokens },
-        estimatedCostUsd: {
-          increment:
-            (visual.usage.inputTokens / 1_000_000) * 3 +
-            (visual.usage.outputTokens / 1_000_000) * 15,
-        },
-      },
-    });
+    await recordAiUsage(cycleId, visual.usage);
     return "audited" as const;
   } catch (error) {
     console.error("Prospecting audit failed", {
