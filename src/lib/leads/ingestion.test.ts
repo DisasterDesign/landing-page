@@ -193,7 +193,11 @@ test("website capture creates a canonical inbound lead without contact data in i
   assert.equal(website.phoneProvenance, "FIRST_PARTY_FORM");
   assert.equal("phone" in (website.sourceSnapshot as object), false);
   assert.equal("email" in (website.sourceSnapshot as object), false);
-  assert.equal(store.notifications[0]?.input.recipientId, "seller-1");
+  // Warm leads notify admins AND the eligible seller (restored pre-unified
+  // behaviour) — admins first, then the seller.
+  assert.equal(store.notifications.length, 2);
+  assert.equal(store.notifications[0]?.input.recipientId, "admin-1");
+  assert.equal(store.notifications[1]?.input.recipientId, "seller-1");
 });
 
 test("Meta retries are idempotent and immutable attribution conflicts fail closed", async () => {
@@ -202,8 +206,10 @@ test("Meta retries are idempotent and immutable attribution conflicts fail close
   const retry = await createLeadFromSource(metaInput, { store });
   assert.equal(first.id, retry.id);
   assert.equal(store.createdCount, 1);
-  assert.equal(store.notifications.length, 1);
-  assert.equal(store.notifications[0]?.input.recipientId, "seller-1");
+  // One admin push + one seller push on creation; the retry adds none.
+  assert.equal(store.notifications.length, 2);
+  assert.equal(store.notifications[0]?.input.recipientId, "admin-1");
+  assert.equal(store.notifications[1]?.input.recipientId, "seller-1");
 
   await assert.rejects(
     createLeadFromSource(

@@ -13,6 +13,7 @@ import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { getAdminLeadDetail, type LeadDetail } from "@/lib/leads/projection";
 import { legacyStatusForStage } from "@/lib/leads/stage-machine";
+import { legacySourceForSourceKey } from "@/lib/leads/legacy-mapping";
 
 async function loadLegacyAdminPages(filters: AdminLeadFilters) {
   const first = await getAdminLeadList({
@@ -51,7 +52,10 @@ function legacyLead(lead: LeadDetail) {
     status: lead.stage
       ? legacyStatusForStage(lead.stage)
       : lead.legacyStatus,
-    source: lead.sourceKey,
+    // The legacy admin page badges on the OLD source values ("FACEBOOK"),
+    // not on sourceKey ("meta_lead_ads") — translate, or the FB badge never
+    // renders again.
+    source: legacySourceForSourceKey(lead.sourceKey),
     nextFollowUpAt: lead.nextFollowUpAt,
     lastContactedAt: lead.lastContactedAt,
     closedAt: lead.closedAt,

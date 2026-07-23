@@ -1041,6 +1041,39 @@ export async function createLeadInTransaction(
       });
     }
   }
+  // Admins hear about every fresh WARM lead, like the pre-unified pipeline
+  // did — the eligible-seller push below is IN ADDITION, not a replacement.
+  // OUTBOUND (cold) leads are excluded on purpose: they arrive dozens at a
+  // time from a prospecting batch, which already sends its own single
+  // batch-published notification.
+  if (
+    created &&
+    !migrationReviewRequired &&
+    input.captureMode !== "HISTORICAL_SYNC" &&
+    input.intentLevel !== "OUTBOUND"
+  ) {
+    const admins = await transaction.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      effects.push({
+        kind: "NOTIFICATION",
+        input: {
+          recipientId: admin.id,
+          type: "CONTACT_RECEIVED",
+          title:
+            input.sourceKey === "meta_lead_ads"
+              ? "📘 ליד חדש מפייסבוק"
+              : "🌐 ליד חדש מהאתר",
+          body: lead.name ?? lead.company ?? undefined,
+          leadId: lead.id,
+          dedupeKey: `${admin.id}:lead-created:${lead.id}`,
+          url: leadActionUrlFor({ audience: "ADMIN", lead }),
+        },
+      });
+    }
+  }
   if (
     created &&
     !migrationReviewRequired &&
