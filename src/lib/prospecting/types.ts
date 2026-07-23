@@ -74,6 +74,10 @@ export interface LivePlaceDetails {
   formattedAddress: string | null;
   websiteUri: string | null;
   businessStatus: string | null;
+  category: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  weekdayDescriptions: string[];
 }
 
 export interface TerritorySearchInput {

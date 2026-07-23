@@ -13,7 +13,7 @@ const MAX_RESULTS_PER_QUERY = 60;
 
 export const PLACES_SEARCH_FIELD_MASK = "places.id,nextPageToken";
 export const PLACES_DETAILS_FIELD_MASK =
-  "id,displayName,nationalPhoneNumber,formattedAddress,websiteUri,businessStatus";
+  "id,displayName,nationalPhoneNumber,formattedAddress,websiteUri,businessStatus,primaryTypeDisplayName,rating,userRatingCount,regularOpeningHours";
 
 export const PROSPECTING_CATEGORY_QUERIES = Object.freeze([
   "חנויות",
@@ -35,6 +35,12 @@ const detailsResponseSchema = z.object({
   formattedAddress: z.string().optional(),
   websiteUri: z.string().optional(),
   businessStatus: z.string().optional(),
+  primaryTypeDisplayName: z.union([z.string(), z.object({ text: z.string() })]).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  userRatingCount: z.number().int().nonnegative().optional(),
+  regularOpeningHours: z
+    .object({ weekdayDescriptions: z.array(z.string()).optional() })
+    .optional(),
 });
 
 export function parsePlacesSearchResponse(value: unknown): {
@@ -51,6 +57,7 @@ interface PlacesProviderOptions {
   maxDiscoveredPerCycle: number;
   maxPlacesCallsPerCycle: number;
   fetchImpl?: typeof fetch;
+  onDetailError?: (input: { placeId: string; message: string }) => void;
 }
 
 export class GooglePlacesProspectingProvider implements PlacesProspectingProvider {
@@ -115,29 +122,62 @@ export class GooglePlacesProspectingProvider implements PlacesProspectingProvide
 
   async getLiveDetails(placeIds: string[]): Promise<Map<string, LivePlaceDetails>> {
     const details = new Map<string, LivePlaceDetails>();
-    for (const placeId of placeIds) {
-      if (this.calls >= this.options.maxPlacesCallsPerCycle) break;
-      this.calls += 1;
-      const response = await this.fetchImpl(`${DETAILS_URL}/${encodeURIComponent(placeId)}`, {
-        headers: {
-          "X-Goog-Api-Key": this.options.apiKey,
-          "X-Goog-FieldMask": PLACES_DETAILS_FIELD_MASK,
-        },
+    const remainingCalls = Math.max(0, this.options.maxPlacesCallsPerCycle - this.calls);
+    const pending = Array.from(new Set(placeIds)).slice(0, remainingCalls);
+    let nextIndex = 0;
+    const reportError =
+      this.options.onDetailError ??
+      ((input: { placeId: string; message: string }) => {
+        console.error("Places detail failed", input);
       });
-      if (!response.ok) continue;
-      const parsed = detailsResponseSchema.parse(await response.json());
-      details.set(placeId, {
-        placeId: parsed.id,
-        displayName:
-          typeof parsed.displayName === "string"
-            ? parsed.displayName
-            : (parsed.displayName?.text ?? ""),
-        nationalPhoneNumber: parsed.nationalPhoneNumber ?? null,
-        formattedAddress: parsed.formattedAddress ?? null,
-        websiteUri: parsed.websiteUri ?? null,
-        businessStatus: parsed.businessStatus ?? null,
-      });
-    }
+
+    const workers = Array.from({ length: Math.min(6, pending.length) }, async () => {
+      while (nextIndex < pending.length) {
+        const placeId = pending[nextIndex];
+        nextIndex += 1;
+        this.calls += 1;
+        try {
+          const response = await this.fetchImpl(`${DETAILS_URL}/${encodeURIComponent(placeId)}`, {
+            headers: {
+              "X-Goog-Api-Key": this.options.apiKey,
+              "X-Goog-FieldMask": PLACES_DETAILS_FIELD_MASK,
+            },
+          });
+          if (!response.ok) {
+            reportError({ placeId, message: `HTTP ${response.status}` });
+            continue;
+          }
+          const parsed = detailsResponseSchema.parse(await response.json());
+          if (parsed.id !== placeId) {
+            throw new Error("Place Details returned a mismatched ID");
+          }
+          details.set(placeId, {
+            placeId: parsed.id,
+            displayName:
+              typeof parsed.displayName === "string"
+                ? parsed.displayName
+                : (parsed.displayName?.text ?? ""),
+            nationalPhoneNumber: parsed.nationalPhoneNumber ?? null,
+            formattedAddress: parsed.formattedAddress ?? null,
+            websiteUri: parsed.websiteUri ?? null,
+            businessStatus: parsed.businessStatus ?? null,
+            category:
+              typeof parsed.primaryTypeDisplayName === "string"
+                ? parsed.primaryTypeDisplayName
+                : (parsed.primaryTypeDisplayName?.text ?? null),
+            rating: parsed.rating ?? null,
+            reviewCount: parsed.userRatingCount ?? null,
+            weekdayDescriptions: parsed.regularOpeningHours?.weekdayDescriptions ?? [],
+          });
+        } catch (error) {
+          reportError({
+            placeId,
+            message: error instanceof Error ? error.message.slice(0, 300) : "Unknown details error",
+          });
+        }
+      }
+    });
+    await Promise.all(workers);
     return details;
   }
 }
