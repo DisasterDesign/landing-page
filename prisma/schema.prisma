@@ -419,8 +419,11 @@ model TerritoryProposal {
   city                  String
   kind                  TerritoryKind
   searchQuery           String
+  searchQueries         String[]                @default([])
   coverageKey           String
   rationale             String
+  independentBusinessRationale String?
+  riskFactors           String[]                @default([])
   expectedBusinessTypes String[]
   confidence            Float
   status                TerritoryProposalStatus @default(PROPOSED)

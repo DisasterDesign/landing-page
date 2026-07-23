@@ -9,11 +9,16 @@ import {
 } from "./ai";
 
 const territory = {
-  displayName: "מרכז מסחרי רעננה",
-  city: "רעננה",
-  kind: "COMMERCIAL_CENTER",
-  searchQuery: "עסקים במרכז מסחרי רעננה ישראל",
-  rationale: "אזור מסחרי קומפקטי עם עסקים מקומיים רבים",
+  displayName: "רחוב רוטשילד",
+  city: "ראשון לציון",
+  kind: "STREET",
+  searchQueries: [
+    "עסקים ברחוב רוטשילד ראשון לציון",
+    "עסקים ברחובות הסמוכים לרוטשילד ראשון לציון",
+  ],
+  rationale: "רחוב מסחרי תחום עם עסקים מקומיים רבים",
+  independentBusinessRationale: "המסחר פונה לרחוב ומורכב בעיקר מעסקים מקומיים נגישים",
+  riskFactors: ["ייתכן שחלק מהחנויות הן סניפי רשת"],
   expectedBusinessTypes: ["חנויות", "מסעדות"],
   confidence: 0.82,
 };
@@ -69,16 +74,22 @@ test("territory requests define the complete strict JSON response contract", asy
     "displayName",
     "city",
     "kind",
-    "searchQuery",
+    "searchQueries",
     "rationale",
+    "independentBusinessRationale",
+    "riskFactors",
     "expectedBusinessTypes",
     "confidence",
   ]) {
     assert.match(system, new RegExp(`\\b${property}\\b`));
   }
-  for (const kind of ["STREET", "COMMERCIAL_CENTER", "AREA"]) {
+  for (const kind of ["STREET", "COMMERCIAL_CENTER"]) {
     assert.match(system, new RegExp(`\\b${kind}\\b`));
   }
+  assert.doesNotMatch(system, /\bAREA\b/);
+  assert.match(system, /chains/i);
+  assert.match(system, /franchises/i);
+  assert.match(system, /malls/i);
   assert.match(system, /Hebrew/i);
 
   const schema = outputJsonSchema(requestBody);
@@ -86,14 +97,16 @@ test("territory requests define the complete strict JSON response contract", asy
     "displayName",
     "city",
     "kind",
-    "searchQuery",
+    "searchQueries",
     "rationale",
+    "independentBusinessRationale",
+    "riskFactors",
     "expectedBusinessTypes",
     "confidence",
   ]);
   assert.equal(schema.additionalProperties, false);
   const properties = schema.properties as Record<string, Record<string, unknown>>;
-  assert.deepEqual(properties.kind.enum, ["STREET", "COMMERCIAL_CENTER", "AREA"]);
+  assert.deepEqual(properties.kind.enum, ["STREET", "COMMERCIAL_CENTER"]);
   for (const unsupported of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"]) {
     assert.doesNotMatch(JSON.stringify(schema), new RegExp(`"${unsupported}"`));
   }

@@ -42,9 +42,11 @@ export interface WebsiteScoreResult extends WebsiteScoreDimensions {
 export interface TerritoryProposalOutput {
   displayName: string;
   city: string;
-  kind: "STREET" | "COMMERCIAL_CENTER" | "AREA";
-  searchQuery: string;
+  kind: "STREET" | "COMMERCIAL_CENTER";
+  searchQueries: string[];
   rationale: string;
+  independentBusinessRationale: string;
+  riskFactors: string[];
   expectedBusinessTypes: string[];
   confidence: number;
 }

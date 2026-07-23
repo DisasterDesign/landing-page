@@ -5,8 +5,54 @@ import { prisma } from "@/lib/prisma";
 
 import { proposeTerritory } from "./ai";
 import { getProspectingConfig } from "./config";
+import { PROSPECTING_CATEGORY_QUERIES } from "./places";
+import type { TerritoryProposalOutput } from "./types";
 
 type TerritoryKind = "STREET" | "COMMERCIAL_CENTER" | "AREA";
+
+const PROHIBITED_TERRITORY_PATTERN =
+  /(?:\bmall\b|shopping\s+mall|shopping\s+center|קניון|דיזנגוף\s+סנטר|עזריאלי|גרנד\s+קניון|ביג\s+(?:פאשן|מרכז)|קמפוס|בית\s+חולים|אוניברסיט|אזור\s+תעשייה|פארק\s+תעשייה|מתחם\s+לוגיסט|corporate\s+campus|industrial\s+(?:zone|park)|logistics?\s+(?:center|park))/iu;
+const BROAD_AREA_PATTERN = /(?:כל\s+העיר|רחבי\s+העיר|אזור\s+כללי|citywide|entire\s+city)/iu;
+const CHAIN_DOMINANCE_PATTERN = /(?:רוב[^.]{0,40}רשת|דומיננט[^.]{0,30}רשת|chain[-\s]?dominat)/iu;
+
+export function validateTerritoryProposal(
+  proposal: Omit<TerritoryProposalOutput, "kind"> & { kind: TerritoryKind },
+): { ok: true } | { ok: false; reason: string } {
+  if (proposal.kind === "AREA") {
+    return { ok: false, reason: "Broad AREA territories are not allowed" };
+  }
+  if (proposal.searchQueries.length < 2 || proposal.searchQueries.length > 4) {
+    return { ok: false, reason: "Territory must contain two to four bounded search queries" };
+  }
+
+  const combined = [
+    proposal.displayName,
+    proposal.city,
+    proposal.rationale,
+    proposal.independentBusinessRationale,
+    ...proposal.searchQueries,
+    ...proposal.riskFactors,
+  ].join(" ");
+  if (PROHIBITED_TERRITORY_PATTERN.test(combined)) {
+    return { ok: false, reason: "Territory is a prohibited mall, institution, or large complex" };
+  }
+  if (BROAD_AREA_PATTERN.test(combined)) {
+    return { ok: false, reason: "Territory is not a bounded micro-market" };
+  }
+  if (CHAIN_DOMINANCE_PATTERN.test(combined)) {
+    return { ok: false, reason: "Territory is described as chain-dominated" };
+  }
+  return { ok: true };
+}
+
+export function buildDiscoveryQueries(
+  searchQueries: readonly string[],
+  categories: readonly string[] = PROSPECTING_CATEGORY_QUERIES,
+): string[] {
+  return searchQueries.flatMap((searchQuery) =>
+    categories.map((category) => `${category} ${searchQuery}`),
+  );
+}
 
 export function normalizeTerritoryText(value: string): string {
   return value
@@ -59,7 +105,10 @@ export async function createWeeklyProposal(
   if (!config.enabled) return { action: "disabled" };
 
   const weekStart = startOfProspectingWeek(now);
-  const existing = await prisma.prospectingCycle.findUnique({ where: { weekStart } });
+  const existing = await prisma.prospectingCycle.findFirst({
+    where: { weekStart, supersededAt: null },
+    orderBy: { revision: "desc" },
+  });
   if (existing) return { action: "exists", cycleId: existing.id };
 
   const [sellerSetting, targetSetting, previousProposals] = await Promise.all([
@@ -95,6 +144,8 @@ export async function createWeeklyProposal(
       { apiKey: config.aiApiKey, model: config.aiModel },
     );
     const proposal = proposalResult.value;
+    const validation = validateTerritoryProposal(proposal);
+    if (!validation.ok) throw new Error(validation.reason);
     const coverageKey = createCoverageKey(proposal);
     if (previousProposals.some((previous) => previous.coverageKey === coverageKey)) {
       throw new Error("AI proposed a territory that was already approved");
@@ -107,9 +158,12 @@ export async function createWeeklyProposal(
           displayName: proposal.displayName,
           city: proposal.city,
           kind: proposal.kind,
-          searchQuery: proposal.searchQuery,
+          searchQuery: proposal.searchQueries[0],
+          searchQueries: proposal.searchQueries,
           coverageKey,
           rationale: proposal.rationale,
+          independentBusinessRationale: proposal.independentBusinessRationale,
+          riskFactors: proposal.riskFactors,
           expectedBusinessTypes: proposal.expectedBusinessTypes,
           confidence: proposal.confidence,
         },
@@ -166,6 +220,8 @@ export async function createReplacementProposal(
     { apiKey: config.aiApiKey, model: config.aiModel },
   );
   const proposal = proposalResult.value;
+  const validation = validateTerritoryProposal(proposal);
+  if (!validation.ok) throw new Error(validation.reason);
   const coverageKey = createCoverageKey(proposal);
   if (previousProposals.some((previous) => previous.coverageKey === coverageKey)) {
     throw new Error("AI proposed a territory that was already considered");
@@ -178,9 +234,12 @@ export async function createReplacementProposal(
         displayName: proposal.displayName,
         city: proposal.city,
         kind: proposal.kind,
-        searchQuery: proposal.searchQuery,
+        searchQuery: proposal.searchQueries[0],
+        searchQueries: proposal.searchQueries,
         coverageKey,
         rationale: proposal.rationale,
+        independentBusinessRationale: proposal.independentBusinessRationale,
+        riskFactors: proposal.riskFactors,
         expectedBusinessTypes: proposal.expectedBusinessTypes,
         confidence: proposal.confidence,
       },

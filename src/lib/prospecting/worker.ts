@@ -9,12 +9,13 @@ import { classifyWebsiteUrl, looksParked } from "./classify-website";
 import { auditCommerce } from "./commerce-audit";
 import { getProspectingConfig } from "./config";
 import { hasPageSpeedScreenshot, runPageSpeed } from "./pagespeed";
-import { GooglePlacesProspectingProvider, PROSPECTING_CATEGORY_QUERIES } from "./places";
+import { GooglePlacesProspectingProvider } from "./places";
 import { publishProspectingCycle } from "./publisher";
 import { safeFetchHtml, type SafeFetchFailureCode } from "./safe-fetch";
 import { calculateWebsiteScore } from "./score";
 import { normalizeDomain } from "./suppression";
 import { auditHtml } from "./technical-audit";
+import { buildDiscoveryQueries } from "./territory";
 import type { WebsiteScoreDimensions, WebsiteStatus } from "./types";
 
 const LOCK_TTL_MS = 15 * 60 * 1_000;
@@ -224,7 +225,10 @@ async function processDiscovery(cycle: Awaited<ReturnType<typeof claimCycle>>, c
   if (!proposal) throw new Error("Approved territory proposal not found");
 
   const queryIndex = cycle.discoveryQueryIndex;
-  if (queryIndex >= PROSPECTING_CATEGORY_QUERIES.length) {
+  const discoveryQueries = buildDiscoveryQueries(
+    proposal.searchQueries.length > 0 ? proposal.searchQueries : [proposal.searchQuery],
+  );
+  if (queryIndex >= discoveryQueries.length) {
     await prisma.prospectingCycle.update({ where: { id: cycle.id }, data: { status: "AUDITING" } });
     return 0;
   }
@@ -244,7 +248,7 @@ async function processDiscovery(cycle: Awaited<ReturnType<typeof claimCycle>>, c
     maxPlacesCallsPerCycle: Math.max(1, config.maxPlacesCallsPerCycle - cycle.placesSearchCalls),
   });
   const places = await provider.discover({
-    query: `${PROSPECTING_CATEGORY_QUERIES[queryIndex]} ${proposal.searchQuery}`,
+    query: discoveryQueries[queryIndex],
   });
   const suppressions = await prisma.prospectSuppression.findMany({
     where: { placeId: { in: places.map(({ placeId }) => placeId) } },
@@ -268,7 +272,7 @@ async function processDiscovery(cycle: Awaited<ReturnType<typeof claimCycle>>, c
   await prisma.prospectingCycle.update({
     where: { id: cycle.id },
     data: {
-      status: nextIndex >= PROSPECTING_CATEGORY_QUERIES.length ? "AUDITING" : "DISCOVERING",
+      status: nextIndex >= discoveryQueries.length ? "AUDITING" : "DISCOVERING",
       discoveryQueryIndex: nextIndex,
       placesSearchCalls: { increment: provider.getCallCount() },
     },
