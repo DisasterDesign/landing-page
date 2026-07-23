@@ -9,6 +9,21 @@ export type WebsiteStatus =
 
 export type BusinessShape = "SERVICE" | "RETAIL" | "ECOMMERCE" | "UNKNOWN";
 
+export type SalesFitClassification =
+  | "INDEPENDENT_LIKELY"
+  | "CHAIN_OR_FRANCHISE"
+  | "LARGE_ORGANIZATION"
+  | "UNSUITABLE_CATEGORY"
+  | "UNCERTAIN";
+
+export interface SalesFitAssessment {
+  classification: SalesFitClassification;
+  confidence: number;
+  ownerReachabilityScore: number;
+  reason: string;
+  evidence: readonly string[];
+}
+
 export interface WebsiteScoreDimensions {
   availabilityScore: number;
   performanceScore: number;

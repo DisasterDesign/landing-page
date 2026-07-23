@@ -142,6 +142,14 @@ enum WebsiteStatus {
   UNKNOWN
 }
 
+enum SalesFitClassification {
+  INDEPENDENT_LIKELY
+  CHAIN_OR_FRANCHISE
+  LARGE_ORGANIZATION
+  UNSUITABLE_CATEGORY
+  UNCERTAIN
+}
+
 enum ProspectCallOutcome {
   NO_ANSWER
   CALLBACK
@@ -370,7 +378,8 @@ model ContactNote {
 
 model ProspectingCycle {
   id                  String                 @id @default(cuid())
-  weekStart           DateTime               @unique
+  weekStart           DateTime
+  revision            Int                    @default(1)
   status              ProspectingCycleStatus @default(PROPOSING)
   targetCount         Int                    @default(50)
   assignedSellerId    String?
@@ -390,12 +399,16 @@ model ProspectingCycle {
   updatedAt           DateTime               @updatedAt
   approvedAt          DateTime?
   publishedAt         DateTime?
+  supersededAt        DateTime?
+  supersededReason    String?
 
   proposals TerritoryProposal[]
   prospects Prospect[]
   batch     WeeklyProspectBatch?
 
+  @@unique([weekStart, revision])
   @@index([status, createdAt])
+  @@index([weekStart, supersededAt])
 }
 
 model TerritoryProposal {
@@ -436,6 +449,13 @@ model Prospect {
   opportunitySummary  String?
   callAngles          String[]
   scoringVersion      Int?
+  salesFitClassification SalesFitClassification?
+  salesFitConfidence  Float?
+  ownerReachabilityScore Int?
+  salesFitReason      String?
+  salesFitEvidence    String[]
+  salesFitVersion     Int?
+  salesFitAssessedAt  DateTime?
   assignedSellerId    String?
   assignedSeller      User?                  @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
   batchId             String?
@@ -487,14 +507,19 @@ model WeeklyProspectBatch {
   id          String           @id @default(cuid())
   cycleId     String           @unique
   cycle       ProspectingCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
-  weekStart   DateTime         @unique
+  weekStart   DateTime
+  revision    Int              @default(1)
   sellerId    String
   seller      User             @relation("WeeklyBatchSeller", fields: [sellerId], references: [id])
   publishedAt DateTime         @default(now())
+  supersededAt DateTime?
+  supersededReason String?
 
   prospects Prospect[]
 
+  @@unique([weekStart, revision])
   @@index([sellerId, weekStart])
+  @@index([sellerId, supersededAt, publishedAt])
 }
 
 model ProspectInteraction {
