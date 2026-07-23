@@ -16,6 +16,7 @@ function row(index: number): LeadAnalyticsRow {
   return {
     id: `lead-${index}`,
     createdAt,
+    stage: "NEW",
     intentLevel: index < 2 ? "INBOUND" : index < 4 ? "AD_RESPONSE" : "OUTBOUND",
     sourceKey: index < 6 ? "google_maps" : "website",
     lossReason: index === 8 ? "NO_BUDGET" : null,
@@ -131,4 +132,27 @@ test("keeps conversions after the date range in the created-lead cohort and excl
   assert.equal(metrics.sla.INBOUND.eligible, 2);
   assert.equal(metrics.sla.INBOUND.within, 1);
   assert.equal("OUTBOUND" in metrics.sla, false);
+});
+
+test("a migrated lead's current stage implies funnel milestones it has no events for", () => {
+  const migrated = {
+    ...row(0),
+    stage: "CONTACTING" as const,
+    events: [],
+  };
+  const lost = {
+    ...row(1),
+    stage: "LOST" as const,
+    events: [],
+  };
+  const metrics = calculateLeadMetrics([migrated, lost], cohort);
+  // CONTACTING implies claimed+contacted even with an empty event history
+  // (the pre-unified migration could not invent timestamps).
+  assert.equal(metrics.created, 2);
+  assert.equal(metrics.claimed, 1);
+  assert.equal(metrics.contacted, 1);
+  assert.equal(metrics.qualified, 0);
+  // Terminal LOST with no events implies nothing beyond creation.
+  // Timing medians stay event-only.
+  assert.equal(metrics.timeToClaimMedianMinutes, null);
 });
