@@ -15,11 +15,18 @@ import {
   stageAfterSupersession,
 } from "../../../scripts/unified-lead-lifecycle-safety";
 import {
+  assertOperationalPublicPlaceCompanyName,
+  assertGoogleMapsProspectSnapshotIdentity,
   assertActiveNameRepairApplyConfirmation,
   assertActiveNameRepairTargetCount,
+  assertPostWriteActiveNameRepairTargets,
   expectedActiveNameRepairTargetCount,
   hasPublishedProspectLeadCreatedMetadata,
+  isExactActiveNameRepairEvent,
+  activeNameRepairManifestHash,
+  protectedLeadState,
   safeActiveNameRepairSummary,
+  stableJson,
   validPublicPlaceCompanyName,
 } from "../../../scripts/public-place-name-repair";
 
@@ -533,9 +540,9 @@ test("active historical outbound name repair is fail-closed and limits its produ
   assert.match(repairSources, /public-place-company-name-backfill:v1/);
   assert.match(repairSources, /validateSourceSnapshot\(\s*"google_maps"/);
   assert.match(repairSources, /migrationReviewRequired\s*!==\s*false/);
-  assert.match(repairSources, /CLOSED_PERMANENTLY/);
+  assert.match(repairSources, /businessStatus\s*!==\s*"OPERATIONAL"/);
   assert.match(repairSources, /getLiveDetails/);
-  assert.match(repairSources, /post-check/i);
+  assert.match(repairSources, /Post-write/i);
 });
 
 test("active name repair output is restricted to aggregate counts and the manifest hash", () => {
@@ -571,10 +578,32 @@ test("historical backfill provenance accepts its immutable context and rejects a
     prospectId: "prospect-1",
     cycleId: "cycle-1",
   };
-  assert.equal(hasPublishedProspectLeadCreatedMetadata(metadata, "prospect-1"), true);
-  assert.equal(hasPublishedProspectLeadCreatedMetadata(metadata, "prospect-2"), false);
   assert.equal(
-    hasPublishedProspectLeadCreatedMetadata({ ...metadata, cycleId: "" }, "prospect-1"),
+    hasPublishedProspectLeadCreatedMetadata(metadata, {
+      prospectId: "prospect-1",
+      cycleId: "cycle-1",
+    }),
+    true,
+  );
+  assert.equal(
+    hasPublishedProspectLeadCreatedMetadata(metadata, {
+      prospectId: "prospect-2",
+      cycleId: "cycle-1",
+    }),
+    false,
+  );
+  assert.equal(
+    hasPublishedProspectLeadCreatedMetadata({ ...metadata, cycleId: "" }, {
+      prospectId: "prospect-1",
+      cycleId: "cycle-1",
+    }),
+    false,
+  );
+  assert.equal(
+    hasPublishedProspectLeadCreatedMetadata(
+      { ...metadata, unexpected: true },
+      { prospectId: "prospect-1", cycleId: "cycle-1" },
+    ),
     false,
   );
 });
@@ -612,4 +641,111 @@ test("public Google business names are trimmed and bounded without becoming cont
   assert.equal(validPublicPlaceCompanyName("x"), null);
   assert.equal(validPublicPlaceCompanyName("x".repeat(200)), "x".repeat(200));
   assert.equal(validPublicPlaceCompanyName("x".repeat(201)), null);
+});
+
+test("only an operational Google place can supply a repair company name", () => {
+  assert.equal(
+    assertOperationalPublicPlaceCompanyName({
+      displayName: "  עסק פעיל  ",
+      businessStatus: "OPERATIONAL",
+    }),
+    "עסק פעיל",
+  );
+  for (const businessStatus of ["CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY", null, "UNKNOWN"]) {
+    assert.throws(
+      () => assertOperationalPublicPlaceCompanyName({ displayName: "עסק", businessStatus }),
+      /operational/i,
+    );
+  }
+});
+
+test("Google snapshot must retain the linked Prospect cycle and batch identity", () => {
+  const prospect = { placeId: "place-1", cycleId: "cycle-1", batchId: "batch-1" };
+  const snapshot = { placeId: "place-1", cycleId: "cycle-1", batchId: "batch-1" };
+  assert.equal(assertGoogleMapsProspectSnapshotIdentity(prospect, snapshot), undefined);
+  assert.throws(
+    () => assertGoogleMapsProspectSnapshotIdentity(prospect, { ...snapshot, cycleId: "cycle-2" }),
+    /cycle/i,
+  );
+  assert.throws(
+    () => assertGoogleMapsProspectSnapshotIdentity(prospect, { ...snapshot, batchId: "batch-2" }),
+    /batch/i,
+  );
+});
+
+test("repair event is exact about actor, stages and metadata", () => {
+  const event = {
+    type: "MIGRATED",
+    actorType: "SYSTEM",
+    actorUserId: null,
+    fromStage: "CONTACTING",
+    toStage: "CONTACTING",
+    dedupeKey: "lead:lead-1:public-place-company-name-backfill:v1",
+    metadata: {
+      action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
+      provider: "GOOGLE_PLACES",
+      version: 1,
+    },
+  };
+  assert.equal(isExactActiveNameRepairEvent(event, "lead-1", "CONTACTING"), true);
+  assert.equal(
+    isExactActiveNameRepairEvent({ ...event, actorUserId: "user-1" }, "lead-1", "CONTACTING"),
+    false,
+  );
+  assert.equal(
+    isExactActiveNameRepairEvent({ ...event, toStage: "QUALIFIED" }, "lead-1", "CONTACTING"),
+    false,
+  );
+  assert.equal(
+    isExactActiveNameRepairEvent(
+      { ...event, metadata: { ...event.metadata, extra: true } },
+      "lead-1",
+      "CONTACTING",
+    ),
+    false,
+  );
+});
+
+test("protected repair manifest preserves raw snapshots and ISO dates while excluding only repair writes", () => {
+  const at = new Date("2026-07-23T12:34:56.000Z");
+  const base = {
+    id: "lead-1",
+    company: null,
+    sourceSnapshot: { auditedDomain: "Example.COM" },
+    createdAt: at,
+    prospect: { id: "prospect-1", placeId: "place-1", promotedLeadId: "lead-1", cycleId: "cycle-1", batchId: "batch-1" },
+    notes: [{ id: "note-1" }],
+    notifications: [{ id: "notification-1" }],
+    agreements: [{ id: "agreement-1" }],
+    interactions: [{ id: "interaction-1" }],
+    followUps: [{ id: "follow-up-1" }],
+    assignees: [{ id: "seller-1" }],
+    events: [
+      { id: "event-1", dedupeKey: "other", occurredAt: at, recordedAt: at },
+      { id: "repair", dedupeKey: "lead:lead-1:public-place-company-name-backfill:v1" },
+    ],
+  };
+  assert.equal(stableJson({ at }), '{"at":"2026-07-23T12:34:56.000Z"}');
+  assert.notEqual(
+    activeNameRepairManifestHash(protectedLeadState(base)),
+    activeNameRepairManifestHash(
+      protectedLeadState({ ...base, sourceSnapshot: { auditedDomain: "example.com" } }),
+    ),
+  );
+  assert.deepEqual(protectedLeadState({ ...base, company: "changed" }), protectedLeadState(base));
+});
+
+test("post-write target guard rejects a changed target count or a pending target", () => {
+  assert.throws(
+    () => assertPostWriteActiveNameRepairTargets({ expectedTargetCount: 11, targetCount: 12, pendingCount: 0 }),
+    /count/i,
+  );
+  assert.throws(
+    () => assertPostWriteActiveNameRepairTargets({ expectedTargetCount: 11, targetCount: 11, pendingCount: 1 }),
+    /pending/i,
+  );
+  assert.equal(
+    assertPostWriteActiveNameRepairTargets({ expectedTargetCount: 11, targetCount: 11, pendingCount: 0 }),
+    undefined,
+  );
 });

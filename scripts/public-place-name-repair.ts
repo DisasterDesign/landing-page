@@ -53,16 +53,16 @@ export function prospectCreatedByBackfillDedupeKey(leadId: string): string {
 
 export function hasPublishedProspectLeadCreatedMetadata(
   value: unknown,
-  prospectId: string,
+  expected: { prospectId: string; cycleId: string },
 ): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const metadata = value as Record<string, unknown>;
   return (
+    Object.keys(metadata).sort().join(",") === "action,cycleId,prospectId,version" &&
     metadata.action === "PUBLISHED_PROSPECT_LEAD_CREATED" &&
     metadata.version === 1 &&
-    metadata.prospectId === prospectId &&
-    typeof metadata.cycleId === "string" &&
-    metadata.cycleId.trim().length > 0
+    metadata.prospectId === expected.prospectId &&
+    metadata.cycleId === expected.cycleId
   );
 }
 
@@ -71,7 +71,76 @@ export function validPublicPlaceCompanyName(value: string | null | undefined): s
   return name && name.length >= 2 && name.length <= 200 ? name : null;
 }
 
-function stableJson(value: unknown): string {
+export function assertOperationalPublicPlaceCompanyName(input: {
+  displayName: string | null | undefined;
+  businessStatus: string | null;
+}): string {
+  if (input.businessStatus !== "OPERATIONAL") {
+    throw new Error("Google validation failed: business is not operational");
+  }
+  const company = validPublicPlaceCompanyName(input.displayName);
+  if (!company) throw new Error("Google validation failed: invalid public business name");
+  return company;
+}
+
+export function assertGoogleMapsProspectSnapshotIdentity(
+  prospect: { placeId: string; cycleId: string; batchId: string | null },
+  snapshot: Record<string, unknown>,
+): void {
+  if (snapshot.placeId !== prospect.placeId) {
+    throw new Error("Target validation failed: source snapshot place mismatch");
+  }
+  if (snapshot.cycleId !== prospect.cycleId) {
+    throw new Error("Target validation failed: source snapshot cycle mismatch");
+  }
+  if (
+    typeof prospect.batchId !== "string" ||
+    prospect.batchId.length === 0 ||
+    snapshot.batchId !== prospect.batchId
+  ) {
+    throw new Error("Target validation failed: source snapshot batch mismatch");
+  }
+}
+
+function hasExactKeys(value: unknown, keys: readonly string[]): boolean {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).sort().join(",") === [...keys].sort().join(",")
+  );
+}
+
+export function isExactActiveNameRepairEvent(
+  event: {
+    type: string;
+    actorType: string;
+    actorUserId: string | null;
+    fromStage: string | null;
+    toStage: string | null;
+    dedupeKey: string | null;
+    metadata: unknown;
+  },
+  leadId: string,
+  stage: string,
+): boolean {
+  const metadata = event.metadata as Record<string, unknown>;
+  return (
+    event.type === "MIGRATED" &&
+    event.actorType === "SYSTEM" &&
+    event.actorUserId === null &&
+    event.fromStage === stage &&
+    event.toStage === stage &&
+    event.dedupeKey === publicPlaceNameRepairDedupeKey(leadId) &&
+    hasExactKeys(metadata, ["action", "provider", "version"]) &&
+    metadata.action === "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED" &&
+    metadata.provider === "GOOGLE_PLACES" &&
+    metadata.version === 1
+  );
+}
+
+export function stableJson(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
@@ -85,6 +154,52 @@ function stableJson(value: unknown): string {
 
 export function activeNameRepairManifestHash(value: unknown): string {
   return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+function sortRelationById(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return [...value].sort((left, right) => {
+    const leftId = typeof left === "object" && left !== null ? String((left as { id?: unknown }).id ?? "") : "";
+    const rightId = typeof right === "object" && right !== null ? String((right as { id?: unknown }).id ?? "") : "";
+    return leftId.localeCompare(rightId);
+  });
+}
+
+export function protectedLeadState(lead: Record<string, unknown>): Record<string, unknown> {
+  const { company, events, ...scalarsAndRelations } = lead;
+  void company;
+  const protectedEvents = Array.isArray(events)
+    ? events.filter(
+        (event) =>
+          !(
+            event &&
+            typeof event === "object" &&
+            (event as { dedupeKey?: unknown }).dedupeKey ===
+              publicPlaceNameRepairDedupeKey(String(lead.id))
+          ),
+      )
+    : events;
+  return {
+    ...scalarsAndRelations,
+    events: sortRelationById(protectedEvents),
+    notes: sortRelationById(scalarsAndRelations.notes),
+    notifications: sortRelationById(scalarsAndRelations.notifications),
+    agreements: sortRelationById(scalarsAndRelations.agreements),
+    interactions: sortRelationById(scalarsAndRelations.interactions),
+    followUps: sortRelationById(scalarsAndRelations.followUps),
+    assignees: sortRelationById(scalarsAndRelations.assignees),
+  };
+}
+
+export function assertPostWriteActiveNameRepairTargets(input: {
+  expectedTargetCount: number;
+  targetCount: number;
+  pendingCount: number;
+}): void {
+  if (input.targetCount !== input.expectedTargetCount) {
+    throw new Error("Post-write target count changed");
+  }
+  if (input.pendingCount !== 0) throw new Error("Post-write pending target remains");
 }
 
 export function safeActiveNameRepairSummary(input: {

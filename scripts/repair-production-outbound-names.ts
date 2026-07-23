@@ -10,30 +10,46 @@ import {
   activeLeadStage,
   activeNameRepairManifestHash,
   assertActiveNameRepairApplyConfirmation,
+  assertGoogleMapsProspectSnapshotIdentity,
+  assertOperationalPublicPlaceCompanyName,
+  assertPostWriteActiveNameRepairTargets,
   assertActiveNameRepairTargetCount,
   hasPublishedProspectLeadCreatedMetadata,
+  isExactActiveNameRepairEvent,
   prospectCreatedByBackfillDedupeKey,
   publicPlaceNameRepairDedupeKey,
+  protectedLeadState,
   safeActiveNameRepairSummary,
-  validPublicPlaceCompanyName,
 } from "./public-place-name-repair";
 
-const REPAIR_VERSION = 1;
-const REPAIR_ACTION = "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED";
-
 const leadInclude = {
-  prospect: { select: { id: true, placeId: true, promotedLeadId: true } },
+  prospect: {
+    select: {
+      id: true,
+      placeId: true,
+      promotedLeadId: true,
+      cycleId: true,
+      batchId: true,
+    },
+  },
   assignees: { select: { id: true } },
+  notes: { select: { id: true } },
+  notifications: { select: { id: true } },
+  agreements: { select: { id: true } },
+  interactions: { select: { id: true } },
+  followUps: { select: { id: true } },
   events: {
     select: {
       id: true,
       type: true,
       actorType: true,
+      actorUserId: true,
       fromStage: true,
       toStage: true,
       metadata: true,
       dedupeKey: true,
       occurredAt: true,
+      recordedAt: true,
     },
   },
 } satisfies Prisma.ContactSubmissionInclude;
@@ -49,40 +65,18 @@ type RepairTarget = {
   snapshot: Record<string, unknown>;
 };
 
-type ManifestEntry = {
-  leadId: string;
-  prospectId: string;
-  placeId: string;
-  stage: string;
-  ownerId: string | null;
-  eligibleSellerId: string | null;
-  phone: string | null;
-  phoneProvenance: string | null;
-  assigneeIds: string[];
-  sourceSnapshot: Record<string, unknown>;
-};
-
-function isExactMetadata(value: unknown, expected: Record<string, unknown>): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  const actualKeys = Object.keys(record).sort();
-  const expectedKeys = Object.keys(expected).sort();
-  return (
-    actualKeys.length === expectedKeys.length &&
-    actualKeys.every((key, index) => key === expectedKeys[index]) &&
-    expectedKeys.every((key) => record[key] === expected[key])
-  );
-}
-
 function hasCreatedByBackfillEvent(lead: RepairLead): boolean {
-  const prospectId = lead.prospect?.id;
-  if (!prospectId) return false;
+  const prospect = lead.prospect;
+  if (!prospect) return false;
   return lead.events.some(
     (event) =>
       event.type === "MIGRATED" &&
       event.actorType === "SYSTEM" &&
       event.dedupeKey === prospectCreatedByBackfillDedupeKey(lead.id) &&
-      hasPublishedProspectLeadCreatedMetadata(event.metadata, prospectId),
+      hasPublishedProspectLeadCreatedMetadata(event.metadata, {
+        prospectId: prospect.id,
+        cycleId: prospect.cycleId,
+      }),
   );
 }
 
@@ -102,13 +96,7 @@ function hasExactRepairEvent(lead: RepairLead): boolean {
   const events = repairEvents(lead);
   return (
     events.length === 1 &&
-    events[0].type === "MIGRATED" &&
-    events[0].actorType === "SYSTEM" &&
-    isExactMetadata(events[0].metadata, {
-      action: REPAIR_ACTION,
-      provider: "GOOGLE_PLACES",
-      version: REPAIR_VERSION,
-    })
+    isExactActiveNameRepairEvent(events[0], lead.id, lead.stage)
   );
 }
 
@@ -137,9 +125,7 @@ function targetForLead(lead: RepairLead): RepairTarget | null {
   } catch {
     throw new Error("Target validation failed: invalid source snapshot");
   }
-  if (snapshot.placeId !== placeId) {
-    throw new Error("Target validation failed: source snapshot place mismatch");
-  }
+  assertGoogleMapsProspectSnapshotIdentity(lead.prospect, snapshot);
   if (lead.migrationReviewRequired !== false) {
     throw new Error("Target validation failed: migration review is still required");
   }
@@ -172,19 +158,8 @@ function validatedTargets(leads: RepairLead[], expectedTargetCount: number): Rep
   return targets;
 }
 
-function manifestFor(targets: readonly RepairTarget[]): ManifestEntry[] {
-  return targets.map(({ lead, placeId, snapshot }) => ({
-    leadId: lead.id,
-    prospectId: lead.prospect!.id,
-    placeId,
-    stage: lead.stage,
-    ownerId: lead.ownerId,
-    eligibleSellerId: lead.eligibleSellerId,
-    phone: lead.phone,
-    phoneProvenance: lead.phoneProvenance,
-    assigneeIds: lead.assignees.map(({ id }) => id).sort(),
-    sourceSnapshot: snapshot,
-  }));
+function manifestFor(targets: readonly RepairTarget[]): Record<string, unknown>[] {
+  return targets.map(({ lead }) => protectedLeadState(lead));
 }
 
 async function loadScopedLeads(client: Pick<typeof prisma, "contactSubmission">): Promise<RepairLead[]> {
@@ -232,11 +207,7 @@ function assertLiveDetails(
     if (!detail || detail.placeId !== target.placeId) {
       throw new Error("Google validation failed: missing place details");
     }
-    if (detail.businessStatus === "CLOSED_PERMANENTLY") {
-      throw new Error("Google validation failed: active lead is permanently closed");
-    }
-    const company = validPublicPlaceCompanyName(detail.displayName);
-    if (!company) throw new Error("Google validation failed: invalid public business name");
+    const company = assertOperationalPublicPlaceCompanyName(detail);
     names.set(target.lead.id, company);
   }
   return names;
@@ -312,14 +283,22 @@ async function applyRepair(input: {
           occurredAt: input.repairStartedAt,
           dedupeKey: publicPlaceNameRepairDedupeKey(target.lead.id),
           metadata: {
-            action: REPAIR_ACTION,
+            action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
             provider: "GOOGLE_PLACES",
-            version: REPAIR_VERSION,
+            version: 1,
           },
         });
         if (!event.created) throw new Error("Transaction validation failed: repair event already exists");
         eventsCreated += 1;
       }
+      const postWriteLeads = await loadScopedLeads(transaction);
+      const postWriteTargets = validatedTargets(postWriteLeads, input.expectedTargetCount);
+      assertPostWriteActiveNameRepairTargets({
+        expectedTargetCount: input.expectedTargetCount,
+        targetCount: postWriteTargets.length,
+        pendingCount: postWriteTargets.filter((target) => target.state === "pending").length,
+      });
+      assertSameManifest(input.manifestHash, postWriteTargets);
       return { updated, eventsCreated };
     },
     {
@@ -328,28 +307,6 @@ async function applyRepair(input: {
       timeout: 30_000,
     },
   );
-}
-
-async function postCheck(input: {
-  targetIds: readonly string[];
-  expectedTargetCount: number;
-  manifestHash: string;
-}): Promise<void> {
-  const leads = await prisma.contactSubmission.findMany({
-    where: { id: { in: [...input.targetIds] } },
-    include: leadInclude,
-  });
-  if (leads.length !== input.expectedTargetCount) {
-    throw new Error("Post-check failed: target count changed");
-  }
-  const targets = validatedTargets(leads, input.expectedTargetCount);
-  if (targets.some((target) => target.state !== "alreadyRepaired")) {
-    throw new Error("Post-check failed: company missing");
-  }
-  if (targets.some((target) => repairEvents(target.lead).length !== 1)) {
-    throw new Error("Post-check failed: repair event count mismatch");
-  }
-  assertSameManifest(input.manifestHash, targets);
 }
 
 async function main(): Promise<void> {
@@ -385,11 +342,6 @@ async function main(): Promise<void> {
     manifestHash,
     names,
     repairStartedAt,
-  });
-  await postCheck({
-    targetIds: targets.map((target) => target.lead.id),
-    expectedTargetCount,
-    manifestHash,
   });
   console.log(
     JSON.stringify(safeActiveNameRepairSummary({
