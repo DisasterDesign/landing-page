@@ -1,0 +1,914 @@
+import {
+  type ContactSubmission,
+  type LeadEventType,
+  type LeadPhoneProvenance,
+  type LeadStage,
+  Prisma,
+} from "@prisma/client";
+
+import {
+  createNotification,
+  type CreateNotificationInput,
+} from "@/lib/notifications";
+import { prisma } from "@/lib/prisma";
+
+import { assertCommercialLeadReady, canSellerReadLead } from "./authorization";
+import { LeadDomainError } from "./errors";
+import { appendLeadEvent, appendLeadEventOnce } from "./events";
+import { legacyLeadStateHash } from "./legacy-compat";
+import { assertLeadStageTransition, legacyStatusForStage } from "./stage-machine";
+import {
+  intentForSource,
+  isLeadSourceKey,
+  validateSourceSnapshot,
+} from "./source";
+import type {
+  AuthenticatedLeadActor,
+  ClaimLeadInput,
+  CreateLeadFromSourceInput,
+  LeadActor,
+  LeadRecord,
+  OwnershipMutationInput,
+  TransitionLeadStageInput,
+} from "./types";
+
+const terminalStages: readonly LeadStage[] = ["WON", "LOST", "SPAM"];
+const actionableNotificationTypes = [
+  "CONTACT_RECEIVED",
+  "LEAD_FOLLOWUP",
+  "LEAD_SLA_BREACH",
+  "LEAD_SLA_ESCALATION",
+] as const;
+
+export interface LeadLifecycleStore {
+  transaction<T>(
+    callback: (transaction: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: "Serializable" },
+  ): Promise<T>;
+  findLead(leadId: string): Promise<LeadRecord | null>;
+}
+
+const prismaLifecycleStore: LeadLifecycleStore = {
+  transaction: (callback) =>
+    prisma.$transaction(callback, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
+  findLead: (leadId) =>
+    prisma.contactSubmission.findUnique({ where: { id: leadId } }),
+};
+
+export interface LeadPostCommitEffect {
+  kind: "NOTIFICATION";
+  input: CreateNotificationInput;
+}
+
+export interface LeadCreationStore extends LeadLifecycleStore {
+  runEffect?(effect: LeadPostCommitEffect): Promise<void>;
+}
+
+export function legacySourceMirror(sourceKey: string): {
+  source: string;
+  acquisitionChannel:
+    | "META"
+    | "WEBSITE"
+    | "GOOGLE_PROSPECTING"
+    | "MANUAL"
+    | "OTHER";
+} {
+  switch (sourceKey) {
+    case "google_maps":
+      return {
+        source: "GOOGLE_PROSPECTING",
+        acquisitionChannel: "GOOGLE_PROSPECTING",
+      };
+    case "meta_lead_ads":
+      return { source: "FACEBOOK", acquisitionChannel: "META" };
+    case "website":
+      return { source: "WEBSITE", acquisitionChannel: "WEBSITE" };
+    case "google_search_ads":
+      return { source: "GOOGLE_SEARCH_ADS", acquisitionChannel: "OTHER" };
+    case "manual_outbound":
+      return { source: "MANUAL_OUTBOUND", acquisitionChannel: "MANUAL" };
+    case "direct_contact":
+      return { source: "DIRECT_CONTACT", acquisitionChannel: "MANUAL" };
+    default:
+      throw new LeadDomainError("VALIDATION", `Unknown lead source: ${sourceKey}`);
+  }
+}
+
+export function legacyHashForLead(
+  lead: {
+    status: ContactSubmission["status"];
+    source: string | null;
+    acquisitionChannel: ContactSubmission["acquisitionChannel"];
+    externalLeadId: string | null;
+    externalFormId: string | null;
+    externalFormName: string | null;
+    externalCampaignId: string | null;
+    externalAdId: string | null;
+    nextFollowUpAt: Date | null;
+    lastContactedAt: Date | null;
+    closedAt: Date | null;
+  },
+  assigneeIds: readonly string[],
+  overrides: Partial<{
+    status: ContactSubmission["status"];
+    source: string | null;
+    acquisitionChannel: ContactSubmission["acquisitionChannel"];
+    externalLeadId: string | null;
+    externalFormId: string | null;
+    externalFormName: string | null;
+    externalCampaignId: string | null;
+    externalAdId: string | null;
+    nextFollowUpAt: Date | null;
+    lastContactedAt: Date | null;
+    closedAt: Date | null;
+  }> = {},
+): string {
+  return legacyLeadStateHash({
+    status: overrides.status ?? lead.status,
+    assigneeIds,
+    source:
+      overrides.source === undefined ? lead.source : overrides.source,
+    acquisitionChannel:
+      overrides.acquisitionChannel === undefined
+        ? lead.acquisitionChannel
+        : overrides.acquisitionChannel,
+    externalLeadId:
+      overrides.externalLeadId === undefined
+        ? lead.externalLeadId
+        : overrides.externalLeadId,
+    externalFormId:
+      overrides.externalFormId === undefined
+        ? lead.externalFormId
+        : overrides.externalFormId,
+    externalFormName:
+      overrides.externalFormName === undefined
+        ? lead.externalFormName
+        : overrides.externalFormName,
+    externalCampaignId:
+      overrides.externalCampaignId === undefined
+        ? lead.externalCampaignId
+        : overrides.externalCampaignId,
+    externalAdId:
+      overrides.externalAdId === undefined
+        ? lead.externalAdId
+        : overrides.externalAdId,
+    nextFollowUpAt:
+      overrides.nextFollowUpAt === undefined
+        ? lead.nextFollowUpAt
+        : overrides.nextFollowUpAt,
+    lastContactedAt:
+      overrides.lastContactedAt === undefined
+        ? lead.lastContactedAt
+        : overrides.lastContactedAt,
+    closedAt:
+      overrides.closedAt === undefined ? lead.closedAt : overrides.closedAt,
+  });
+}
+
+function userActor(actor: AuthenticatedLeadActor): LeadActor {
+  return { type: "USER", userId: actor.userId, role: actor.role };
+}
+
+function transitionActor(actor: TransitionLeadStageInput["actor"]): LeadActor {
+  if ("type" in actor) return actor;
+  return userActor(actor);
+}
+
+function isRetryableTransactionError(error: unknown): boolean {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2034"
+  ) {
+    return true;
+  }
+  return (
+    error instanceof Error &&
+    /serialization|deadlock|write conflict/i.test(error.message)
+  );
+}
+
+export async function claimLeadInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: ClaimLeadInput,
+): Promise<LeadRecord> {
+  const existing = await transaction.contactSubmission.findUnique({
+    where: { id: input.leadId },
+    include: { assignees: { select: { id: true } } },
+  });
+  if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+  assertCommercialLeadReady(existing);
+  if (existing.doNotContactAt) {
+    throw new LeadDomainError("FORBIDDEN", "Lead may not be contacted");
+  }
+  if (terminalStages.includes(existing.stage)) {
+    throw new LeadDomainError("CONFLICT", "Terminal lead cannot be claimed");
+  }
+  if (existing.ownerId === input.sellerId) return existing;
+  if (existing.ownerId || existing.eligibleSellerId !== input.sellerId) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Lead is not eligible or was already claimed",
+    );
+  }
+
+  const fromStage = existing.stage;
+  const intentLevel = existing.intentLevel;
+  const now = new Date();
+  const targetStage: LeadStage =
+    fromStage === "NEW"
+      ? intentLevel === "OUTBOUND"
+        ? "PREPARING"
+        : "CONTACTING"
+      : fromStage;
+  const status = legacyStatusForStage(targetStage);
+  const legacyStateHash = legacyHashForLead(existing, [input.sellerId], { status });
+  const guarded = await transaction.contactSubmission.updateMany({
+    where: {
+      id: input.leadId,
+      ownerId: null,
+      eligibleSellerId: input.sellerId,
+      migrationReviewRequired: false,
+      doNotContactAt: null,
+      stage: fromStage,
+    },
+    data: {
+      ownerId: input.sellerId,
+      ownerAssignedAt: now,
+      firstClaimedAt: existing.firstClaimedAt ?? now,
+      stage: targetStage,
+      status,
+      legacyStateHash,
+    },
+  });
+
+  if (guarded.count !== 1) {
+    const raced = await transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+      include: { assignees: { select: { id: true } } },
+    });
+    if (
+      raced &&
+      !raced.migrationReviewRequired &&
+      raced.ownerId === input.sellerId
+    ) {
+      return raced;
+    }
+    throw new LeadDomainError("CONFLICT", "Lead was already claimed");
+  }
+
+  const claimed = await transaction.contactSubmission.update({
+    where: { id: input.leadId },
+    data: { assignees: { set: [{ id: input.sellerId }] } },
+  });
+  const dedupeBase = `lead:${input.leadId}:claim:${input.sellerId}:${now.toISOString()}`;
+  await appendLeadEventOnce(transaction, {
+    leadId: input.leadId,
+    type: "CLAIMED",
+    actor: { type: "USER", userId: input.sellerId, role: "SELLER" },
+    fromStage,
+    toStage: targetStage,
+    occurredAt: now,
+    dedupeKey: dedupeBase,
+  });
+  if (
+    fromStage === "NEW" &&
+    intentLevel === "OUTBOUND" &&
+    targetStage === "PREPARING"
+  ) {
+    await appendLeadEventOnce(transaction, {
+      leadId: input.leadId,
+      type: "PREPARATION_STARTED",
+      actor: { type: "USER", userId: input.sellerId, role: "SELLER" },
+      fromStage: "NEW",
+      toStage: "PREPARING",
+      occurredAt: now,
+      dedupeKey: `${dedupeBase}:preparation`,
+    });
+  }
+  await transaction.notification.updateMany({
+    where: {
+      recipientId: input.sellerId,
+      leadId: input.leadId,
+      readAt: null,
+      type: { in: [...actionableNotificationTypes] },
+    },
+    data: { readAt: now },
+  });
+  return claimed;
+}
+
+export async function claimLead(
+  input: ClaimLeadInput,
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  let lastRetryableError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await store.transaction(
+        (transaction) => claimLeadInTransaction(transaction, input),
+        { isolationLevel: "Serializable" },
+      );
+    } catch (error) {
+      if (!isRetryableTransactionError(error)) throw error;
+      lastRetryableError = error;
+    }
+  }
+
+  const current = await store.findLead(input.leadId);
+  if (
+    current &&
+    !current.migrationReviewRequired &&
+    current.ownerId === input.sellerId
+  ) {
+    return current;
+  }
+  if (current) {
+    throw new LeadDomainError("CONFLICT", "Lead was already claimed");
+  }
+  throw lastRetryableError ?? new LeadDomainError("NOT_FOUND", "Lead not found");
+}
+
+export async function releaseOrReassignLead(
+  input: OwnershipMutationInput,
+  dependencies: {
+    store?: LeadLifecycleStore;
+    notify?: (input: CreateNotificationInput) => Promise<void>;
+  } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  const result = await store.transaction(async (transaction) => {
+    const persistedActor = await transaction.user.findUnique({
+      where: { id: input.actor.userId },
+      select: { role: true },
+    });
+    if (!persistedActor || persistedActor.role !== "ADMIN") {
+      throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+    }
+
+    const existing = await transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+      include: { assignees: { select: { id: true } } },
+    });
+    if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+    assertCommercialLeadReady(existing);
+    if (terminalStages.includes(existing.stage)) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Terminal lead ownership cannot be changed",
+      );
+    }
+
+    const activeFollowUps = await transaction.leadFollowUp.findMany({
+      where: { leadId: input.leadId, status: "SCHEDULED" },
+      select: { id: true, ownerId: true, reminderSentAt: true },
+    });
+    if (
+      input.action === "RELEASE" &&
+      activeFollowUps.length > 0 &&
+      !input.cancelFollowUps
+    ) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "Active follow-up must be cancelled before release",
+      );
+    }
+
+    let newOwnerId: string | null;
+    let eligibleSellerId: string | null;
+    if (input.action === "REASSIGN") {
+      const seller = await transaction.user.findUnique({
+        where: { id: input.sellerId },
+        select: { role: true },
+      });
+      if (!seller || seller.role !== "SELLER") {
+        throw new LeadDomainError("VALIDATION", "Target seller is invalid");
+      }
+      newOwnerId = input.sellerId;
+      eligibleSellerId = input.sellerId;
+    } else {
+      newOwnerId = null;
+      eligibleSellerId =
+        input.replacementEligibleSellerId ?? existing.eligibleSellerId;
+      if (input.replacementEligibleSellerId) {
+        const replacement = await transaction.user.findUnique({
+          where: { id: input.replacementEligibleSellerId },
+          select: { role: true },
+        });
+        if (!replacement || replacement.role !== "SELLER") {
+          throw new LeadDomainError(
+            "VALIDATION",
+            "Replacement eligible seller is invalid",
+          );
+        }
+      }
+    }
+
+    const now = new Date();
+    if (input.action === "REASSIGN" && activeFollowUps.length > 0) {
+      await transaction.leadFollowUp.updateMany({
+        where: { leadId: input.leadId, status: "SCHEDULED" },
+        data: { ownerId: input.sellerId, reminderSentAt: null },
+      });
+    } else if (
+      input.action === "RELEASE" &&
+      input.cancelFollowUps &&
+      activeFollowUps.length > 0
+    ) {
+      await transaction.leadFollowUp.updateMany({
+        where: { leadId: input.leadId, status: "SCHEDULED" },
+        data: { status: "CANCELLED", cancelledAt: now },
+      });
+    }
+
+    if (existing.ownerId) {
+      await transaction.notification.updateMany({
+        where: {
+          recipientId: existing.ownerId,
+          leadId: input.leadId,
+          readAt: null,
+          type: { in: [...actionableNotificationTypes] },
+        },
+        data: { readAt: now },
+      });
+    }
+
+    const assigneeIds = newOwnerId ? [newOwnerId] : [];
+    const legacyStateHash = legacyHashForLead(existing, assigneeIds);
+    const updated = await transaction.contactSubmission.update({
+      where: { id: input.leadId },
+      data: {
+        ownerId: newOwnerId,
+        eligibleSellerId,
+        ownerAssignedAt: newOwnerId ? now : null,
+        assignees: { set: assigneeIds.map((id) => ({ id })) },
+        legacyStateHash,
+      },
+    });
+    await appendLeadEvent(transaction, {
+      leadId: input.leadId,
+      type: input.action === "REASSIGN" ? "REASSIGNED" : "RELEASED",
+      actor: userActor(input.actor),
+      fromStage: existing.stage,
+      toStage: existing.stage,
+      occurredAt: now,
+      metadata: {
+        reason: input.reason,
+        previousOwnerId: existing.ownerId,
+        ownerId: newOwnerId,
+        eligibleSellerId,
+      },
+    });
+
+    return {
+      lead: updated,
+      effect:
+        input.action === "REASSIGN"
+          ? ({
+              recipientId: input.sellerId,
+              type: "LEAD_REASSIGNED",
+              title: "ליד הועבר אליך",
+              body: "הליד ממתין לטיפול שלך",
+              leadId: input.leadId,
+              url: `/seller/leads?focus=${input.leadId}`,
+              dedupeKey: `${input.sellerId}:lead-reassigned:${input.leadId}:${now.toISOString()}`,
+            } satisfies CreateNotificationInput)
+          : null,
+    };
+  });
+
+  if (result.effect) {
+    const notify =
+      dependencies.notify ??
+      (async (notificationInput: CreateNotificationInput) => {
+        await createNotification(notificationInput);
+      });
+    await notify(result.effect);
+  }
+  return result.lead;
+}
+
+function eventTypeForTransition(
+  fromStage: LeadStage,
+  toStage: LeadStage,
+): LeadEventType {
+  if (fromStage === "LOST" && toStage === "CONTACTING") return "REOPENED";
+  switch (toStage) {
+    case "PREPARING":
+      return "PREPARATION_STARTED";
+    case "CONTACTING":
+      return "CONTACT_ATTEMPTED";
+    case "QUALIFIED":
+      return "QUALIFIED";
+    case "AGREEMENT_DRAFT":
+      return "AGREEMENT_CREATED";
+    case "AGREEMENT_SENT":
+      return "AGREEMENT_SENT";
+    case "AGREEMENT_SIGNED":
+      return "AGREEMENT_SIGNED";
+    case "WON":
+      return "WON";
+    case "LOST":
+      return "LOST";
+    case "SPAM":
+      return "SPAM_MARKED";
+    case "NEW":
+      throw new LeadDomainError(
+        "INVALID_TRANSITION",
+        "No transition may return a lead to NEW",
+      );
+  }
+}
+
+export async function transitionLeadStage(
+  input: TransitionLeadStageInput,
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const existing = await transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+      include: { assignees: { select: { id: true } } },
+    });
+    if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+    assertCommercialLeadReady(existing);
+
+    const actor = transitionActor(input.actor);
+    assertLeadStageTransition(existing.stage, input.toStage, {
+      actorType: actor.type,
+      actorRole: actor.role ?? null,
+      intentLevel: existing.intentLevel,
+    });
+    if (input.toStage === "LOST" && !input.lossReason) {
+      throw new LeadDomainError(
+        "VALIDATION",
+        "A structured loss reason is required",
+      );
+    }
+    if (
+      input.toStage === "LOST" &&
+      input.lossReason === "OTHER" &&
+      !input.lossReasonDetails?.trim()
+    ) {
+      throw new LeadDomainError("VALIDATION", "Loss details are required");
+    }
+    if (
+      existing.stage === "LOST" &&
+      input.toStage === "CONTACTING" &&
+      !input.reason?.trim()
+    ) {
+      throw new LeadDomainError(
+        "VALIDATION",
+        "An admin reopen reason is required",
+      );
+    }
+
+    const now = actor.occurredAt ?? new Date();
+    const status = legacyStatusForStage(input.toStage);
+    const reopening =
+      existing.stage === "LOST" && input.toStage === "CONTACTING";
+    const closedAt =
+      input.toStage === "WON" ||
+      input.toStage === "LOST" ||
+      input.toStage === "SPAM"
+        ? now
+        : reopening
+          ? null
+          : existing.closedAt;
+    const data: Prisma.ContactSubmissionUpdateInput = {
+      stage: input.toStage,
+      status,
+      closedAt,
+      legacyStateHash: legacyHashForLead(
+        existing,
+        existing.assignees.map(({ id }) => id),
+        { status, closedAt },
+      ),
+    };
+    if (input.toStage === "QUALIFIED") data.qualifiedAt = now;
+    if (input.toStage === "WON") data.wonAt = now;
+    if (input.toStage === "LOST") {
+      data.lostAt = now;
+      data.lossReason = input.lossReason;
+      data.lossReasonDetails = input.lossReasonDetails?.trim() || null;
+    }
+    if (reopening) {
+      data.lostAt = null;
+      data.lossReason = null;
+      data.lossReasonDetails = null;
+    }
+
+    const updated = await transaction.contactSubmission.update({
+      where: { id: input.leadId },
+      data,
+    });
+    await appendLeadEvent(transaction, {
+      leadId: input.leadId,
+      type: eventTypeForTransition(existing.stage, input.toStage),
+      actor,
+      fromStage: existing.stage,
+      toStage: input.toStage,
+      occurredAt: now,
+      metadata: {
+        ...(input.reason ? { reason: input.reason.trim() } : {}),
+        ...(input.lossReason ? { lossReason: input.lossReason } : {}),
+        ...(input.lossReasonDetails
+          ? { lossReasonDetails: input.lossReasonDetails.trim() }
+          : {}),
+      },
+    });
+    return updated;
+  });
+}
+
+export async function markLeadRead(
+  input: {
+    leadId: string;
+    isRead: boolean;
+    actor: AuthenticatedLeadActor;
+  },
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const existing = await transaction.contactSubmission.findUnique({
+      where: { id: input.leadId },
+    });
+    if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
+    if (
+      input.actor.role === "SELLER" &&
+      !canSellerReadLead(input.actor.userId, existing)
+    ) {
+      throw new LeadDomainError("FORBIDDEN", "Lead is outside seller scope");
+    }
+    if (input.actor.role === "ADMIN") {
+      const actor = await transaction.user.findUnique({
+        where: { id: input.actor.userId },
+        select: { role: true },
+      });
+      if (actor?.role !== "ADMIN") {
+        throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+      }
+    }
+    return transaction.contactSubmission.update({
+      where: { id: input.leadId },
+      data: { isRead: input.isRead },
+    });
+  });
+}
+
+export async function markLeadsRead(
+  input: {
+    leadIds: string[];
+    isRead: boolean;
+    actor: AuthenticatedLeadActor;
+  },
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<{ count: number }> {
+  if (input.actor.role !== "ADMIN") {
+    throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+  }
+  const store = dependencies.store ?? prismaLifecycleStore;
+  return store.transaction(async (transaction) => {
+    const actor = await transaction.user.findUnique({
+      where: { id: input.actor.userId },
+      select: { role: true },
+    });
+    if (actor?.role !== "ADMIN") {
+      throw new LeadDomainError("FORBIDDEN", "Admin role is required");
+    }
+    return transaction.contactSubmission.updateMany({
+      where: { id: { in: input.leadIds } },
+      data: { isRead: input.isRead },
+    });
+  });
+}
+
+export async function createLeadInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: CreateLeadFromSourceInput,
+): Promise<{ lead: LeadRecord; effects: LeadPostCommitEffect[] }> {
+  if (!isLeadSourceKey(input.sourceKey)) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      `Unknown lead source: ${input.sourceKey}`,
+    );
+  }
+  const expectedIntent = intentForSource(input.sourceKey);
+  if (input.intentLevel !== expectedIntent) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Lead intent does not match its immutable source",
+    );
+  }
+  const sourceSnapshot = validateSourceSnapshot(
+    input.sourceKey,
+    input.sourceSnapshot,
+  );
+
+  if (input.externalLeadId) {
+    const existing = await transaction.contactSubmission.findUnique({
+      where: {
+        sourceKey_externalLeadId: {
+          sourceKey: input.sourceKey,
+          externalLeadId: input.externalLeadId,
+        },
+      },
+    });
+    if (existing) {
+      if (existing.intentLevel && existing.intentLevel !== input.intentLevel) {
+        throw new LeadDomainError(
+          "CONFLICT",
+          "Existing lead has different immutable intent",
+        );
+      }
+      return { lead: existing, effects: [] };
+    }
+
+    const transitional = await transaction.contactSubmission.findFirst({
+      where: { externalLeadId: input.externalLeadId },
+      include: { assignees: { select: { id: true } } },
+    });
+    if (transitional?.sourceKey && transitional.sourceKey !== input.sourceKey) {
+      throw new LeadDomainError(
+        "CONFLICT",
+        "External lead ID is occupied by another source during rollout",
+      );
+    }
+    if (transitional && transitional.sourceKey === null) {
+      const mirror = legacySourceMirror(input.sourceKey);
+      const unresolved =
+        transitional.stage === null ||
+        transitional.assignees.length > 1 ||
+        (transitional.ownerId !== null &&
+          transitional.ownerId !== input.eligibleSellerId);
+      const upgraded = await transaction.contactSubmission.update({
+        where: { id: transitional.id },
+        data: {
+          intentLevel: input.intentLevel,
+          sourceKey: input.sourceKey,
+          sourceSnapshot: sourceSnapshot as Prisma.InputJsonValue,
+          source: mirror.source,
+          acquisitionChannel: mirror.acquisitionChannel,
+          eligibleSellerId:
+            transitional.eligibleSellerId ?? input.eligibleSellerId ?? null,
+          migrationReviewRequired: unresolved,
+          migrationReviewReason: unresolved
+            ? "LEGACY_STAGE_OR_OWNERSHIP_AMBIGUOUS"
+            : null,
+          legacyStateHash: legacyHashForLead(transitional, transitional.assignees.map(({ id }) => id), {
+            source: mirror.source,
+            acquisitionChannel: mirror.acquisitionChannel,
+          }),
+        },
+      });
+      await appendLeadEventOnce(transaction, {
+        leadId: transitional.id,
+        type: "MIGRATED",
+        actor: { type: "SYSTEM" },
+        dedupeKey: `lead:${transitional.id}:source-upgrade:v1`,
+        metadata: { action: "LEGACY_SOURCE_UPGRADED", sourceKey: input.sourceKey },
+      });
+      return { lead: upgraded, effects: [] };
+    }
+  }
+
+  const now = new Date();
+  const occurredAt = input.occurredAt ?? now;
+  const mirror = legacySourceMirror(input.sourceKey);
+  const reviewReason =
+    input.forcedReviewReason ??
+    (input.eligibleSellerId ? null : "MISSING_ELIGIBLE_SELLER");
+  const migrationReviewRequired = reviewReason !== null;
+  const phoneProvenance: LeadPhoneProvenance | null =
+    input.phone &&
+    (input.sourceKey === "website" || input.sourceKey === "meta_lead_ads")
+      ? "FIRST_PARTY_FORM"
+      : null;
+  const baseData = {
+    name: input.name?.trim() || null,
+    company: input.company?.trim() || null,
+    email: input.email?.trim() || null,
+    phone: input.phone?.trim() || null,
+    message: input.message?.trim() || null,
+    intentLevel: input.intentLevel,
+    sourceKey: input.sourceKey,
+    sourceSnapshot: sourceSnapshot as Prisma.InputJsonValue,
+    externalLeadId: input.externalLeadId ?? null,
+    phoneProvenance,
+    stage: "NEW" as const,
+    ownerId: null,
+    eligibleSellerId: input.eligibleSellerId ?? null,
+    migrationReviewRequired,
+    migrationReviewReason: reviewReason,
+    source: mirror.source,
+    acquisitionChannel: mirror.acquisitionChannel,
+    status: "NEW" as const,
+    isRead: false,
+    tags: [],
+    createdAt: occurredAt,
+    slaAlertedAt: input.captureMode === "HISTORICAL_SYNC" ? now : null,
+    slaEscalatedAt: input.captureMode === "HISTORICAL_SYNC" ? now : null,
+  };
+  const legacyStateHash = legacyLeadStateHash({
+    status: "NEW",
+    assigneeIds: [],
+    source: mirror.source,
+    acquisitionChannel: mirror.acquisitionChannel,
+    externalLeadId: input.externalLeadId,
+    externalFormId: null,
+    externalFormName: null,
+    externalCampaignId: null,
+    externalAdId: null,
+    nextFollowUpAt: null,
+    lastContactedAt: null,
+    closedAt: null,
+  });
+
+  let lead: LeadRecord;
+  if (input.externalLeadId) {
+    await transaction.contactSubmission.createMany({
+      data: { ...baseData, legacyStateHash },
+      skipDuplicates: true,
+    });
+    const persisted = await transaction.contactSubmission.findUnique({
+      where: {
+        sourceKey_externalLeadId: {
+          sourceKey: input.sourceKey,
+          externalLeadId: input.externalLeadId,
+        },
+      },
+    });
+    if (!persisted) {
+      const occupied = await transaction.contactSubmission.findFirst({
+        where: { externalLeadId: input.externalLeadId },
+      });
+      if (occupied) {
+        throw new LeadDomainError(
+          "CONFLICT",
+          "External lead ID is occupied during rollout",
+        );
+      }
+      throw new Error("Lead was not persisted after idempotent create");
+    }
+    lead = persisted;
+  } else {
+    lead = await transaction.contactSubmission.create({
+      data: { ...baseData, legacyStateHash },
+    });
+  }
+
+  await appendLeadEventOnce(transaction, {
+    leadId: lead.id,
+    type: "CREATED",
+    actor: { type: "SYSTEM" },
+    occurredAt,
+    dedupeKey: `lead:${lead.id}:created`,
+    metadata: { intentLevel: input.intentLevel, sourceKey: input.sourceKey },
+  });
+
+  const effects: LeadPostCommitEffect[] = [];
+  if (
+    !migrationReviewRequired &&
+    input.notificationMode === "ELIGIBLE_SELLER" &&
+    input.captureMode !== "HISTORICAL_SYNC" &&
+    input.eligibleSellerId
+  ) {
+    effects.push({
+      kind: "NOTIFICATION",
+      input: {
+        recipientId: input.eligibleSellerId,
+        type: "CONTACT_RECEIVED",
+        title:
+          input.intentLevel === "INBOUND"
+            ? "פנייה ישירה חדשה"
+            : "ליד חדש ממתין לטיפול",
+        leadId: lead.id,
+        dedupeKey: `${input.eligibleSellerId}:lead-created:${lead.id}`,
+        url: `/seller/leads?focus=${lead.id}`,
+      },
+    });
+  }
+  return { lead, effects };
+}
+
+export async function createLeadFromSource(
+  input: CreateLeadFromSourceInput,
+  dependencies: { store?: LeadCreationStore } = {},
+): Promise<LeadRecord> {
+  const store: LeadCreationStore =
+    dependencies.store ?? prismaLifecycleStore;
+  const result = await store.transaction((transaction) =>
+    createLeadInTransaction(transaction, input),
+  );
+  for (const effect of result.effects) {
+    if (store.runEffect) {
+      await store.runEffect(effect);
+    } else {
+      await createNotification(effect.input);
+    }
+  }
+  return result.lead;
+}
