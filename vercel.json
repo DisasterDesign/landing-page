@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/prospecting-worker",
-      "schedule": "*/10 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/prospecting-maintenance",

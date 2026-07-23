@@ -637,3 +637,34 @@ export async function processNextProspectingWork(now = new Date()): Promise<Work
     });
   }
 }
+
+export type WorkerBatchResult = WorkerResult & {
+  unitsProcessed: number;
+  discoveredCount: number;
+};
+
+export async function processProspectingWorkBatch(
+  options: {
+    maxUnits?: number;
+    processUnit?: () => Promise<WorkerResult>;
+  } = {},
+): Promise<WorkerBatchResult> {
+  const maxUnits = Math.min(Math.max(Math.trunc(options.maxUnits ?? 2), 1), 5);
+  const processUnit = options.processUnit ?? (() => processNextProspectingWork());
+  let unitsProcessed = 0;
+  let discoveredCount = 0;
+  let result: WorkerResult = { enabled: true, action: "idle" };
+
+  while (unitsProcessed < maxUnits) {
+    result = await processUnit();
+    unitsProcessed += 1;
+    if (result.action === "discovered") {
+      discoveredCount += result.count ?? 0;
+    }
+    if (!["discovered", "audited", "ready"].includes(result.action)) {
+      break;
+    }
+  }
+
+  return { ...result, unitsProcessed, discoveredCount };
+}

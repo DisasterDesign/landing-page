@@ -6,7 +6,7 @@ import {
   runProspectingWorkerCron,
 } from "@/lib/prospecting/cron-handlers";
 import { getProspectingConfig } from "@/lib/prospecting/config";
-import { processNextProspectingWork } from "@/lib/prospecting/worker";
+import { processProspectingWorkBatch } from "@/lib/prospecting/worker";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const result = await runProspectingWorkerCron({
     enabled: config.enabled,
     adminKillSwitch: config.enabled ? await isProspectingAdminKillSwitchActive() : false,
-    action: () => processNextProspectingWork(),
+    action: () => processProspectingWorkBatch(),
   });
   return NextResponse.json(result);
 }
