@@ -26,12 +26,16 @@ import {
   activeNameRepairManifestHash,
   classifyActiveNameRepairState,
   protectedLeadState,
-  runActiveNameRepairTransaction,
+  publicPlaceNameRepairDedupeKey,
   safeActiveNameRepairSummary,
   stableJson,
   validPublicPlaceCompanyName,
 } from "../../../scripts/public-place-name-repair";
 import {
+  applyRepair,
+  type ActiveNameRepairPersistence,
+  type RepairLead,
+  type RepairTarget,
   targetForLead as repairTargetForLead,
   validatedTargets as validatedRepairTargets,
 } from "../../../scripts/repair-production-outbound-names";
@@ -549,8 +553,9 @@ test("active historical outbound name repair is fail-closed and limits its produ
   assert.match(repairSources, /businessStatus\s*!==\s*"OPERATIONAL"/);
   assert.match(repairSources, /getLiveDetails/);
   assert.match(repairSources, /Post-write/i);
-  assert.match(activeNameRepairSource, /runActiveNameRepairTransaction(?:<[\s\S]*?>)?\(/);
-  assert.match(activeNameRepairSource, /validate:\s*async/);
+  assert.match(activeNameRepairSource, /export async function applyRepair/);
+  assert.match(activeNameRepairSource, /persistence\.runTransaction\(async/);
+  assert.doesNotMatch(repairSources, /runActiveNameRepairTransaction/);
 });
 
 test("active name repair output is restricted to aggregate counts and the manifest hash", () => {
@@ -765,47 +770,6 @@ test("protected repair manifest preserves raw snapshots and ISO dates while excl
   );
 });
 
-test("repair transaction rolls back company and event when its in-transaction validator fails", async () => {
-  type Memory = { company: string | null; events: string[] };
-  let state: Memory = { company: null, events: [] };
-  const runTransaction = async <T>(callback: (transaction: Memory) => Promise<T>): Promise<T> => {
-    const before = structuredClone(state);
-    try {
-      return await callback(state);
-    } catch (error) {
-      state = before;
-      throw error;
-    }
-  };
-  const write = async (transaction: Memory) => {
-    transaction.company = "עסק";
-    transaction.events.push("repair");
-    return "written";
-  };
-
-  await assert.rejects(
-    runActiveNameRepairTransaction({
-      runTransaction,
-      write,
-      validate: async () => {
-        throw new Error("post-write failed");
-      },
-    }),
-    /post-write failed/,
-  );
-  assert.deepEqual(state, { company: null, events: [] });
-
-  assert.equal(
-    await runActiveNameRepairTransaction({
-      runTransaction,
-      write,
-      validate: async () => undefined,
-    }),
-    "written",
-  );
-  assert.deepEqual(state, { company: "עסק", events: ["repair"] });
-});
-
 test("post-write target guard rejects a changed target count or a pending target", () => {
   assert.throws(
     () => assertPostWriteActiveNameRepairTargets({ expectedTargetCount: 11, targetCount: 12, pendingCount: 0 }),
@@ -881,4 +845,437 @@ test("actual repair target selector isolates eleven active historical rows from 
     () => validatedRepairTargets([{ ...active[0], events: [{ ...active[0].events[0], actorUserId: "forged" }] }] as never, 1),
     /provenance/i,
   );
+});
+
+test("actual active name repair transaction is import-safe and exported for behavioral testing", async () => {
+  const repairModule = await import(
+    "../../../scripts/repair-production-outbound-names"
+  );
+  assert.equal(
+    typeof (repairModule as Record<string, unknown>).applyRepair,
+    "function",
+  );
+  assert.equal(applyRepair.length, 2);
+});
+
+type MemoryRepairTransaction = {
+  leads: RepairLead[];
+};
+
+type MemoryRepairFault = "wrong-company" | "duplicate-event";
+
+function realisticRepairLead(id: string, stage = "NEW"): RepairLead {
+  const createdAt = new Date(`2026-07-${String((Number(id.replace(/\D/g, "")) % 20) + 1).padStart(2, "0")}T08:00:00.000Z`);
+  const placeId = `place-${id}`;
+  const prospectId = `prospect-${id}`;
+  const cycleId = "cycle-1";
+  const batchId = "batch-1";
+  return {
+    id,
+    name: null,
+    email: null,
+    phone: "0500000000",
+    company: null,
+    message: null,
+    service: null,
+    isRead: false,
+    status: "NEW",
+    tags: [],
+    source: "Google Maps",
+    acquisitionChannel: null,
+    intentLevel: "OUTBOUND",
+    sourceKey: "google_maps",
+    sourceSnapshot: {
+      territory: "תל אביב",
+      cycleId,
+      batchId,
+      weekStart: "2026-07-20T00:00:00.000Z",
+      placeId,
+      websiteStatus: "UNKNOWN",
+      auditedDomain: null,
+      internalBusinessCategory: "UNKNOWN",
+      internalBusinessCategoryVersion: 1,
+      qualityScore: 1,
+      scoringVersion: 1,
+      opportunitySummary: "הזדמנות עסקית תקינה",
+      callAngles: [],
+    },
+    phoneProvenance: null,
+    stage,
+    externalLeadId: `gplaces:${placeId}`,
+    externalFormId: null,
+    externalFormName: null,
+    externalCampaignId: null,
+    externalAdId: null,
+    ownerId: null,
+    eligibleSellerId: null,
+    firstClaimedAt: null,
+    ownerAssignedAt: null,
+    firstContactedAt: null,
+    decisionMakerReachedAt: null,
+    qualifiedAt: null,
+    wonAt: null,
+    lostAt: stage === "LOST" ? createdAt : null,
+    lossReason: stage === "LOST" ? "BATCH_SUPERSEDED" : null,
+    lossReasonDetails: null,
+    doNotContactAt: null,
+    slaAlertedAt: createdAt,
+    slaEscalatedAt: createdAt,
+    migrationReviewRequired: false,
+    migrationReviewReason: null,
+    legacyStateHash: `legacy-${id}`,
+    nextFollowUpAt: null,
+    lastContactedAt: null,
+    closedAt: stage === "LOST" ? createdAt : null,
+    createdAt,
+    prospect: {
+      id: prospectId,
+      placeId,
+      cycleId,
+      status: "PUBLISHED",
+      websiteStatus: "UNKNOWN",
+      auditedDomain: null,
+      businessShape: null,
+      businessShapeVersion: null,
+      qualityScore: 1,
+      rawQualityScore: 1,
+      auditConfidence: 1,
+      opportunitySummary: "הזדמנות עסקית תקינה",
+      callAngles: [],
+      scoringVersion: 1,
+      salesFitClassification: null,
+      salesFitConfidence: null,
+      ownerReachabilityScore: null,
+      salesFitReason: null,
+      salesFitEvidence: [],
+      salesFitVersion: null,
+      salesFitAssessedAt: null,
+      assignedSellerId: null,
+      batchId,
+      promotedLeadId: id,
+      lastContactedAt: null,
+      nextFollowUpAt: null,
+      publishedAt: createdAt,
+      firstAuditFailureAt: null,
+      lastAuditFailureAt: null,
+      nextAuditAt: null,
+      auditFailureCount: 0,
+      createdAt,
+      updatedAt: createdAt,
+      batch: { id: batchId, cycleId },
+    },
+    events: [
+      {
+        id: `backfill-${id}`,
+        leadId: id,
+        type: "MIGRATED",
+        actorType: "SYSTEM",
+        actorUserId: null,
+        fromStage: null,
+        toStage: null,
+        dedupeKey: `lead:${id}:prospect-created-by-backfill:v1`,
+        metadata: {
+          action: "PUBLISHED_PROSPECT_LEAD_CREATED",
+          version: 1,
+          prospectId,
+          cycleId,
+        },
+        occurredAt: createdAt,
+        recordedAt: createdAt,
+      },
+    ],
+    assignees: [],
+    notes: [],
+    notifications: [],
+    agreements: [],
+    interactions: [],
+    followUps: [],
+  } as RepairLead;
+}
+
+function realisticRepairFixture(): RepairLead[] {
+  return [
+    ...Array.from({ length: 11 }, (_, index) =>
+      realisticRepairLead(`active-${index}`),
+    ),
+    ...Array.from({ length: 50 }, (_, index) =>
+      realisticRepairLead(`lost-${index}`, "LOST"),
+    ),
+  ];
+}
+
+function repairManifestHash(targets: readonly RepairTarget[]): string {
+  return activeNameRepairManifestHash(
+    targets.map(({ lead }) =>
+      protectedLeadState(lead as unknown as Record<string, unknown>),
+    ),
+  );
+}
+
+function pendingRepairNames(
+  targets: readonly RepairTarget[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    targets
+      .filter(({ state }) => state === "pending")
+      .map(({ lead }, index) => [lead.id, `עסק ציבורי ${index + 1}`]),
+  );
+}
+
+function memoryRepairPersistence(
+  initialLeads: RepairLead[],
+  fault?: MemoryRepairFault,
+): {
+  adapter: ActiveNameRepairPersistence<MemoryRepairTransaction>;
+  calls: { locks: number; loads: number; updates: number; events: number };
+  snapshot(): RepairLead[];
+  mutate(mutator: (leads: RepairLead[]) => void): void;
+} {
+  let state = structuredClone(initialLeads);
+  const calls = { locks: 0, loads: 0, updates: 0, events: 0 };
+  const adapter: ActiveNameRepairPersistence<MemoryRepairTransaction> = {
+    async runTransaction<TResult>(
+      callback: (transaction: MemoryRepairTransaction) => Promise<TResult>,
+    ): Promise<TResult> {
+      const before = structuredClone(state);
+      const transaction = { leads: state };
+      try {
+        const result = await callback(transaction);
+        state = transaction.leads;
+        return result;
+      } catch (error) {
+        state = before;
+        throw error;
+      }
+    },
+    async lockTargets(transaction, targets) {
+      calls.locks += 1;
+      for (const target of targets) {
+        const lead = transaction.leads.find(
+          ({ id }) => id === target.lead.id,
+        );
+        if (
+          !lead ||
+          lead.prospect?.id !== target.lead.prospect?.id
+        ) {
+          throw new Error("Transaction validation failed: lead lock missing");
+        }
+      }
+    },
+    async loadScopedLeads(transaction) {
+      calls.loads += 1;
+      return structuredClone(
+        transaction.leads.filter(
+          ({ intentLevel, sourceKey, stage }) =>
+            intentLevel === "OUTBOUND" &&
+            sourceKey === "google_maps" &&
+            !["WON", "LOST", "SPAM"].includes(stage),
+        ),
+      );
+    },
+    async updateCompany(transaction, target, company) {
+      calls.updates += 1;
+      const matching = transaction.leads.filter(
+        (lead) =>
+          lead.id === target.lead.id &&
+          lead.intentLevel === "OUTBOUND" &&
+          lead.sourceKey === "google_maps" &&
+          lead.externalLeadId === `gplaces:${target.placeId}` &&
+          lead.stage === target.lead.stage &&
+          lead.migrationReviewRequired === false &&
+          lead.name === null &&
+          lead.company === null &&
+          lead.ownerId === target.lead.ownerId &&
+          lead.eligibleSellerId === target.lead.eligibleSellerId &&
+          lead.prospect?.id === target.lead.prospect?.id &&
+          lead.prospect?.promotedLeadId === target.lead.id,
+      );
+      if (matching.length === 1) {
+        matching[0].company =
+          fault === "wrong-company" ? `${company} שגוי` : company;
+      }
+      return matching.length;
+    },
+    async appendRepairEvent(transaction, target, occurredAt) {
+      calls.events += 1;
+      const lead = transaction.leads.find(
+        ({ id }) => id === target.lead.id,
+      );
+      if (!lead) throw new Error("Lead is missing");
+      const event = {
+        id: `repair-${target.lead.id}-${lead.events.length}`,
+        leadId: target.lead.id,
+        type: "MIGRATED" as const,
+        actorType: "SYSTEM" as const,
+        actorUserId: null,
+        fromStage: target.lead.stage,
+        toStage: target.lead.stage,
+        dedupeKey: publicPlaceNameRepairDedupeKey(target.lead.id),
+        metadata: {
+          action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
+          provider: "GOOGLE_PLACES",
+          version: 1,
+        },
+        occurredAt,
+        recordedAt: occurredAt,
+      };
+      if (
+        lead.events.some(
+          ({ dedupeKey }) => dedupeKey === event.dedupeKey,
+        )
+      ) {
+        return false;
+      }
+      lead.events.push(event);
+      if (fault === "duplicate-event") {
+        lead.events.push({
+          ...event,
+          id: `${event.id}-duplicate`,
+        });
+      }
+      return true;
+    },
+  };
+  return {
+    adapter,
+    calls,
+    snapshot: () => structuredClone(state),
+    mutate(mutator) {
+      mutator(state);
+    },
+  };
+}
+
+test("actual applyRepair updates the exact eleven active targets and leaves fifty LOST leads untouched", async () => {
+  const fixture = realisticRepairFixture();
+  const lostBefore = structuredClone(
+    fixture.filter(({ stage }) => stage === "LOST"),
+  );
+  const targets = validatedRepairTargets(fixture, 11);
+  const names = pendingRepairNames(targets);
+  const repairStartedAt = new Date("2026-07-23T19:00:00.000Z");
+  const memory = memoryRepairPersistence(fixture);
+
+  assert.deepEqual(
+    await applyRepair(memory.adapter, {
+      targets,
+      manifestHash: repairManifestHash(targets),
+      names,
+      repairStartedAt,
+    }),
+    { updated: 11, eventsCreated: 11 },
+  );
+
+  const repaired = memory
+    .snapshot()
+    .filter(({ stage }) => stage !== "LOST")
+    .sort((left, right) => left.id.localeCompare(right.id));
+  assert.equal(repaired.length, 11);
+  for (const lead of repaired) {
+    assert.equal(lead.company, names.get(lead.id));
+    const repairEvents = lead.events.filter(
+      ({ dedupeKey }) =>
+        dedupeKey === publicPlaceNameRepairDedupeKey(lead.id),
+    );
+    assert.equal(repairEvents.length, 1);
+    assert.equal(isExactActiveNameRepairEvent(repairEvents[0], lead.id), true);
+    assert.equal(repairEvents[0].actorUserId, null);
+    assert.equal(repairEvents[0].occurredAt.toISOString(), repairStartedAt.toISOString());
+  }
+  assert.deepEqual(
+    memory.snapshot().filter(({ stage }) => stage === "LOST"),
+    lostBefore,
+  );
+});
+
+test("actual applyRepair post-write guards roll back wrong company and event counts", async () => {
+  for (const fault of ["wrong-company", "duplicate-event"] as const) {
+    const fixture = realisticRepairFixture();
+    const before = structuredClone(fixture);
+    const targets = validatedRepairTargets(fixture, 11);
+    const memory = memoryRepairPersistence(fixture, fault);
+
+    await assert.rejects(
+      applyRepair(memory.adapter, {
+        targets,
+        manifestHash: repairManifestHash(targets),
+        names: pendingRepairNames(targets),
+        repairStartedAt: new Date("2026-07-23T19:00:00.000Z"),
+      }),
+      /Post-write|company drift/,
+    );
+    assert.equal(memory.calls.updates, 11);
+    assert.equal(memory.calls.events, 11);
+    assert.deepEqual(memory.snapshot(), before);
+  }
+});
+
+test("actual applyRepair is idempotent after a repaired lead advances stage", async () => {
+  const fixture = realisticRepairFixture();
+  const firstTargets = validatedRepairTargets(fixture, 11);
+  const memory = memoryRepairPersistence(fixture);
+  await applyRepair(memory.adapter, {
+    targets: firstTargets,
+    manifestHash: repairManifestHash(firstTargets),
+    names: pendingRepairNames(firstTargets),
+    repairStartedAt: new Date("2026-07-23T19:00:00.000Z"),
+  });
+  memory.mutate((leads) => {
+    const advanced = leads.find(({ id }) => id === "active-0");
+    assert.ok(advanced);
+    advanced.stage = "CONTACTING";
+  });
+  const rerunTargets = validatedRepairTargets(memory.snapshot(), 11);
+
+  assert.deepEqual(
+    await applyRepair(memory.adapter, {
+      targets: rerunTargets,
+      manifestHash: repairManifestHash(rerunTargets),
+      names: new Map(),
+      repairStartedAt: new Date("2026-07-23T20:00:00.000Z"),
+    }),
+    { updated: 0, eventsCreated: 0 },
+  );
+  const repaired = memory
+    .snapshot()
+    .filter(({ stage }) => stage !== "LOST");
+  assert.equal(repaired.length, 11);
+  assert.equal(
+    repaired.reduce(
+      (count, lead) =>
+        count +
+        lead.events.filter(
+          ({ dedupeKey }) =>
+            dedupeKey === publicPlaceNameRepairDedupeKey(lead.id),
+        ).length,
+      0,
+    ),
+    11,
+  );
+  for (const lead of repaired) {
+    assert.equal(lead.company, pendingRepairNames(firstTargets).get(lead.id));
+  }
+});
+
+test("actual applyRepair rejects malformed batch lineage before any adapter write", async () => {
+  const fixture = realisticRepairFixture();
+  const targets = validatedRepairTargets(fixture, 11);
+  const memory = memoryRepairPersistence(fixture);
+  memory.mutate((leads) => {
+    const malformed = leads.find(({ id }) => id === "active-0");
+    assert.ok(malformed?.prospect?.batch);
+    malformed.prospect.batch.cycleId = "forged-cycle";
+  });
+
+  await assert.rejects(
+    applyRepair(memory.adapter, {
+      targets,
+      manifestHash: repairManifestHash(targets),
+      names: pendingRepairNames(targets),
+      repairStartedAt: new Date("2026-07-23T19:00:00.000Z"),
+    }),
+    /batch lineage/i,
+  );
+  assert.equal(memory.calls.updates, 0);
+  assert.equal(memory.calls.events, 0);
 });

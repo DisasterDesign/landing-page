@@ -170,20 +170,6 @@ export function classifyActiveNameRepairState(input: {
   return "alreadyRepaired";
 }
 
-export async function runActiveNameRepairTransaction<TClient, TResult>(input: {
-  runTransaction: (
-    callback: (transaction: TClient) => Promise<TResult>,
-  ) => Promise<TResult>;
-  write: (transaction: TClient) => Promise<TResult>;
-  validate: (transaction: TClient, result: TResult) => Promise<void>;
-}): Promise<TResult> {
-  return input.runTransaction(async (transaction) => {
-    const result = await input.write(transaction);
-    await input.validate(transaction, result);
-    return result;
-  });
-}
-
 export function stableJson(value: unknown): string {
   if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;

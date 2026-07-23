@@ -16,11 +16,11 @@ import {
   assertPostWriteActiveNameRepairTargets,
   assertActiveNameRepairTargetCount,
   classifyActiveNameRepairState,
+  EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT,
   hasPublishedProspectLeadCreatedMetadata,
   prospectCreatedByBackfillDedupeKey,
   publicPlaceNameRepairDedupeKey,
   protectedLeadState,
-  runActiveNameRepairTransaction,
   safeActiveNameRepairSummary,
 } from "./public-place-name-repair";
 
@@ -35,16 +35,37 @@ const leadInclude = {
   events: true,
 } satisfies Prisma.ContactSubmissionInclude;
 
-type RepairLead = Prisma.ContactSubmissionGetPayload<{
+export type RepairLead = Prisma.ContactSubmissionGetPayload<{
   include: typeof leadInclude;
 }>;
 
-type RepairTarget = {
+export type RepairTarget = {
   lead: RepairLead;
   placeId: string;
   state: "pending" | "alreadyRepaired";
   snapshot: Record<string, unknown>;
 };
+
+export interface ActiveNameRepairPersistence<TTransaction> {
+  runTransaction<TResult>(
+    callback: (transaction: TTransaction) => Promise<TResult>,
+  ): Promise<TResult>;
+  lockTargets(
+    transaction: TTransaction,
+    targets: readonly RepairTarget[],
+  ): Promise<void>;
+  loadScopedLeads(transaction: TTransaction): Promise<RepairLead[]>;
+  updateCompany(
+    transaction: TTransaction,
+    target: RepairTarget,
+    company: string,
+  ): Promise<number>;
+  appendRepairEvent(
+    transaction: TTransaction,
+    target: RepairTarget,
+    occurredAt: Date,
+  ): Promise<boolean>;
+}
 
 function hasCreatedByBackfillEvent(lead: RepairLead): boolean {
   const prospect = lead.prospect;
@@ -205,122 +226,166 @@ async function validatePendingNames(pending: readonly RepairTarget[]): Promise<M
   );
 }
 
-async function applyRepair(input: {
+const productionRepairPersistence: ActiveNameRepairPersistence<Prisma.TransactionClient> = {
+  runTransaction: (callback) =>
+    prisma.$transaction(callback, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 30_000,
+    }),
+  lockTargets,
+  loadScopedLeads,
+  async updateCompany(transaction, target, company) {
+    const result = await transaction.contactSubmission.updateMany({
+      where: {
+        id: target.lead.id,
+        intentLevel: "OUTBOUND",
+        sourceKey: "google_maps",
+        externalLeadId: `gplaces:${target.placeId}`,
+        stage: target.lead.stage,
+        migrationReviewRequired: false,
+        name: null,
+        company: null,
+        ownerId: target.lead.ownerId,
+        eligibleSellerId: target.lead.eligibleSellerId,
+        prospect: {
+          is: { id: target.lead.prospect!.id, promotedLeadId: target.lead.id },
+        },
+      },
+      data: { company },
+    });
+    return result.count;
+  },
+  async appendRepairEvent(transaction, target, occurredAt) {
+    const event = await appendLeadEventOnce(transaction, {
+      leadId: target.lead.id,
+      type: "MIGRATED",
+      actor: { type: "SYSTEM", occurredAt },
+      fromStage: target.lead.stage,
+      toStage: target.lead.stage,
+      occurredAt,
+      dedupeKey: publicPlaceNameRepairDedupeKey(target.lead.id),
+      metadata: {
+        action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
+        provider: "GOOGLE_PLACES",
+        version: 1,
+      },
+    });
+    return event.created;
+  },
+};
+
+export async function applyRepair<TTransaction>(
+  persistence: ActiveNameRepairPersistence<TTransaction>,
+  input: {
   targets: readonly RepairTarget[];
-  expectedTargetCount: number;
   manifestHash: string;
   names: ReadonlyMap<string, string>;
   repairStartedAt: Date;
-}): Promise<{ updated: number; eventsCreated: number }> {
-  const result = await runActiveNameRepairTransaction<
-    Prisma.TransactionClient,
-    {
-      updated: number;
-      eventsCreated: number;
-      pendingCount: number;
-      expectedCompanyByLeadId: Map<string, string>;
+  },
+): Promise<{ updated: number; eventsCreated: number }> {
+  return persistence.runTransaction(async (transaction) => {
+    if (
+      input.targets.length !== EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT ||
+      new Set(input.targets.map(({ lead }) => lead.id)).size !==
+        EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT
+    ) {
+      throw new Error(
+        "Transaction validation failed: unexpected active historical target count",
+      );
     }
-  >({
-    runTransaction: (callback) =>
-      prisma.$transaction(callback, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 10_000,
-        timeout: 30_000,
-      }),
-    write: async (transaction) => {
-      await lockTargets(transaction, input.targets);
-      const reloaded = await loadScopedLeads(transaction);
-      const lockedTargets = validatedTargets(reloaded, input.expectedTargetCount);
-      assertSameManifest(input.manifestHash, lockedTargets);
-      const pending = lockedTargets.filter((target) => target.state === "pending");
-      if (pending.length !== input.names.size) {
-        throw new Error("Transaction validation failed: pending target set changed");
+    await persistence.lockTargets(transaction, input.targets);
+    const reloaded = await persistence.loadScopedLeads(transaction);
+    const lockedTargets = validatedTargets(
+      reloaded,
+      EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT,
+    );
+    const lockedTargetIds = new Set(
+      lockedTargets.map(({ lead }) => lead.id),
+    );
+    if (
+      input.targets.some(({ lead }) => !lockedTargetIds.has(lead.id))
+    ) {
+      throw new Error("Transaction validation failed: locked target set changed");
+    }
+    assertSameManifest(input.manifestHash, lockedTargets);
+    const pending = lockedTargets.filter((target) => target.state === "pending");
+    if (
+      pending.length !== input.names.size ||
+      pending.some(({ lead }) => !input.names.has(lead.id))
+    ) {
+      throw new Error("Transaction validation failed: pending target set changed");
+    }
+    const expectedCompanyByLeadId = new Map<string, string>();
+    for (const target of lockedTargets) {
+      const company =
+        target.state === "pending"
+          ? input.names.get(target.lead.id)
+          : target.lead.company;
+      if (!company) {
+        throw new Error("Transaction validation failed: expected company is missing");
       }
-      const expectedCompanyByLeadId = new Map<string, string>();
-      for (const target of lockedTargets) {
-        const company =
-          target.state === "pending"
-            ? input.names.get(target.lead.id)
-            : target.lead.company;
-        if (!company) {
-          throw new Error("Transaction validation failed: expected company is missing");
-        }
-        expectedCompanyByLeadId.set(target.lead.id, company);
-      }
+      expectedCompanyByLeadId.set(target.lead.id, company);
+    }
 
-      let updated = 0;
-      let eventsCreated = 0;
-      for (const target of pending) {
-        const company = input.names.get(target.lead.id);
-        if (!company) throw new Error("Transaction validation failed: public business name missing");
-        const result = await transaction.contactSubmission.updateMany({
-          where: {
-            id: target.lead.id,
-            intentLevel: "OUTBOUND",
-            sourceKey: "google_maps",
-            externalLeadId: `gplaces:${target.placeId}`,
-            stage: target.lead.stage,
-            migrationReviewRequired: false,
-            name: null,
-            company: null,
-            ownerId: target.lead.ownerId,
-            eligibleSellerId: target.lead.eligibleSellerId,
-            prospect: {
-              is: { id: target.lead.prospect!.id, promotedLeadId: target.lead.id },
-            },
-          },
-          data: { company },
-        });
-        if (result.count !== 1) {
-          throw new Error("Transaction validation failed: company update count mismatch");
-        }
-        updated += result.count;
-        const event = await appendLeadEventOnce(transaction, {
-          leadId: target.lead.id,
-          type: "MIGRATED",
-          actor: { type: "SYSTEM", occurredAt: input.repairStartedAt },
-          fromStage: target.lead.stage,
-          toStage: target.lead.stage,
-          occurredAt: input.repairStartedAt,
-          dedupeKey: publicPlaceNameRepairDedupeKey(target.lead.id),
-          metadata: {
-            action: "PUBLIC_PLACE_COMPANY_NAME_BACKFILLED",
-            provider: "GOOGLE_PLACES",
-            version: 1,
-          },
-        });
-        if (!event.created) throw new Error("Transaction validation failed: repair event already exists");
-        eventsCreated += 1;
+    let updated = 0;
+    let eventsCreated = 0;
+    for (const target of pending) {
+      const company = input.names.get(target.lead.id);
+      if (!company) {
+        throw new Error(
+          "Transaction validation failed: public business name missing",
+        );
       }
-      return {
-        updated,
-        eventsCreated,
-        pendingCount: pending.length,
-        expectedCompanyByLeadId,
-      };
-    },
-    validate: async (transaction, writeResult) => {
-      const postWriteLeads = await loadScopedLeads(transaction);
-      const postWriteTargets = validatedTargets(postWriteLeads, input.expectedTargetCount);
-      assertPostWriteActiveNameRepairTargets({
-        expectedTargetCount: input.expectedTargetCount,
-        targetCount: postWriteTargets.length,
-        pendingCount: postWriteTargets.filter((target) => target.state === "pending").length,
-      });
-      if (
-        writeResult.updated !== writeResult.pendingCount ||
-        writeResult.eventsCreated !== writeResult.pendingCount ||
-        postWriteTargets.some(
-          (target) =>
-            target.lead.company !== writeResult.expectedCompanyByLeadId.get(target.lead.id),
-        )
-      ) {
-        throw new Error("Post-write company or event result mismatch");
+      const count = await persistence.updateCompany(
+        transaction,
+        target,
+        company,
+      );
+      if (count !== 1) {
+        throw new Error(
+          "Transaction validation failed: company update count mismatch",
+        );
       }
-      assertSameManifest(input.manifestHash, postWriteTargets);
-    },
+      updated += count;
+      const created = await persistence.appendRepairEvent(
+        transaction,
+        target,
+        input.repairStartedAt,
+      );
+      if (!created) {
+        throw new Error(
+          "Transaction validation failed: repair event already exists",
+        );
+      }
+      eventsCreated += 1;
+    }
+
+    const postWriteLeads = await persistence.loadScopedLeads(transaction);
+    const postWriteTargets = validatedTargets(
+      postWriteLeads,
+      EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT,
+    );
+    assertPostWriteActiveNameRepairTargets({
+      expectedTargetCount: EXPECTED_ACTIVE_NAME_REPAIR_TARGET_COUNT,
+      targetCount: postWriteTargets.length,
+      pendingCount: postWriteTargets.filter(
+        (target) => target.state === "pending",
+      ).length,
+    });
+    if (
+      updated !== pending.length ||
+      eventsCreated !== pending.length ||
+      postWriteTargets.some(
+        (target) =>
+          target.lead.company !== expectedCompanyByLeadId.get(target.lead.id),
+      )
+    ) {
+      throw new Error("Post-write company or event result mismatch");
+    }
+    assertSameManifest(input.manifestHash, postWriteTargets);
+    return { updated, eventsCreated };
   });
-  return { updated: result.updated, eventsCreated: result.eventsCreated };
 }
 
 async function main(): Promise<void> {
@@ -350,9 +415,8 @@ async function main(): Promise<void> {
   }
 
   const repairStartedAt = new Date();
-  const result = await applyRepair({
+  const result = await applyRepair(productionRepairPersistence, {
     targets,
-    expectedTargetCount,
     manifestHash,
     names,
     repairStartedAt,
