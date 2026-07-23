@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   const cycles = await prisma.prospectingCycle.findMany({
-    orderBy: { weekStart: "desc" },
+    orderBy: [{ weekStart: "desc" }, { revision: "desc" }],
     take: 20,
     include: {
       proposals: { orderBy: { createdAt: "desc" } },

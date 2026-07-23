@@ -23,8 +23,13 @@ export default function CycleProgress({ cycle }: { cycle: ProspectingCycleView }
         <div>
           <h2 className="font-bold text-white">
             שבוע {new Date(cycle.weekStart).toLocaleDateString("he-IL")}
+            {cycle.revision > 1 ? ` · גרסה ${cycle.revision}` : ""}
           </h2>
-          <p className="mt-1 text-xs text-gray-500">{statusLabels[cycle.status] ?? cycle.status}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {cycle.supersededAt
+              ? `הוחלף · ${cycle.supersededReason ?? "נוצרה רשימה חדשה"}`
+              : (statusLabels[cycle.status] ?? cycle.status)}
+          </p>
         </div>
         <span
           className={`rounded-full px-3 py-1 text-xs font-bold ${

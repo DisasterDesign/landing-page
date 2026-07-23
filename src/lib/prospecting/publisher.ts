@@ -171,7 +171,13 @@ export async function publishProspectingCycle(
 
   await prisma.$transaction(async (transaction) => {
     const batch = await transaction.weeklyProspectBatch.create({
-      data: { cycleId, weekStart: cycle.weekStart, sellerId, publishedAt },
+      data: {
+        cycleId,
+        weekStart: cycle.weekStart,
+        revision: cycle.revision,
+        sellerId,
+        publishedAt,
+      },
     });
     if (selectedIds.length > 0) {
       await transaction.prospect.updateMany({

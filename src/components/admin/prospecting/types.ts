@@ -53,6 +53,7 @@ export interface ProspectView {
 export interface ProspectingCycleView {
   id: string;
   weekStart: string;
+  revision: number;
   status: string;
   targetCount: number;
   placesSearchCalls: number;
@@ -63,9 +64,16 @@ export interface ProspectingCycleView {
   lastError: string | null;
   createdAt: string;
   publishedAt: string | null;
+  supersededAt: string | null;
+  supersededReason: string | null;
   proposals: TerritoryProposalView[];
   prospects?: ProspectView[];
   prospectCounts?: Record<string, number>;
   scoreCounts?: Record<string, number>;
-  batch: { id: string; publishedAt: string } | null;
+  batch: {
+    id: string;
+    publishedAt: string;
+    supersededAt: string | null;
+    supersededReason: string | null;
+  } | null;
 }
