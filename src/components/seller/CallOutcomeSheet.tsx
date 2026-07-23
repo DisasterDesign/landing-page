@@ -25,6 +25,7 @@ export default function CallOutcomeSheet({
     return id ? [{ id, text, version: 1 }] : [];
   });
   const adaptedLead: LeadOutcomeLead = {
+    displayName: lead.business.displayName,
     name: lead.business.displayName,
     company: lead.business.displayName,
     preparation: { callAngles },

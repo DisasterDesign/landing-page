@@ -108,6 +108,7 @@ export interface LeadPreparationContext {
 
 export interface LeadListItem {
   id: string;
+  displayName: string;
   name: string | null;
   company: string | null;
   email: string | null;
@@ -819,12 +820,12 @@ export function projectLeadRecord(
 ): LeadDetail {
   const snapshot = objectValue(lead.sourceSnapshot);
   const placeId = placeIdFor(lead, snapshot);
-  const displayName =
-    lead.company ??
-    lead.name ??
-    options.live?.displayName ??
-    lead.prospect?.auditedDomain ??
-    "עסק ללא שם";
+  const displayName = [
+    lead.company,
+    lead.name,
+    options.live?.displayName,
+    lead.prospect?.auditedDomain,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? "עסק ללא שם";
   const websiteStatus =
     stringValue(snapshot, "websiteStatus") ??
     lead.prospect?.websiteStatus ??
@@ -847,6 +848,7 @@ export function projectLeadRecord(
 
   return {
     id: lead.id,
+    displayName,
     name: lead.name,
     company: lead.company,
     email: lead.email,

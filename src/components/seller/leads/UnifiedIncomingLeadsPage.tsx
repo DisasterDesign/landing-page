@@ -165,8 +165,7 @@ export default function UnifiedIncomingLeadsPage() {
         ) : (
           <div className="space-y-3">
             {leads.map((lead) => {
-              const displayName =
-                lead.company ?? lead.name ?? "ליד ללא שם";
+              const displayName = lead.displayName;
               const sla = lead.responseSla;
               return (
                 <article

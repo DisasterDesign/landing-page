@@ -358,7 +358,7 @@ export default function LeadWorkspace({
     );
   }
 
-  const displayName = lead.company ?? lead.name ?? "ליד ללא שם";
+  const displayName = lead.displayName;
   const nextActionLabel = nextActionLabels[lead.nextAction.kind];
 
   return (

@@ -179,6 +179,7 @@ type CanonicalSellerProspectLead = Pick<
   | "nextFollowUpAt"
   | "interactions"
   | "preparation"
+  | "displayName"
   | "company"
   | "name"
   | "phone"
@@ -232,7 +233,7 @@ export function serializeCanonicalSellerProspect(
       lead.interactions.at(-1)?.occurredAt ?? null,
     liveStatus: preparation?.liveStatus ?? "NOT_APPLICABLE",
     business: {
-      displayName: lead.company ?? lead.name ?? "עסק ללא שם",
+      displayName: lead.displayName,
       phone: lead.phone,
       address: lead.address,
       website: lead.website,

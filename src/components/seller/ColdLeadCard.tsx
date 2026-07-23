@@ -73,7 +73,7 @@ export default function ColdLeadCard({
             />
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold text-white">
-                {lead.company ?? lead.name ?? "עסק ללא שם"}
+                {lead.displayName}
               </h2>
               <QualityScoreBadge score={score} />
             </div>
