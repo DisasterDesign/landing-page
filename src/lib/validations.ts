@@ -131,6 +131,238 @@ export const prospectingSettingsSchema = z.object({
   adminKillSwitch: z.boolean().optional().default(false),
 });
 
+// ==================
+// UNIFIED LEADS
+// ==================
+
+const leadLossReasonSchema = z.enum([
+  "NO_INTEREST",
+  "NO_BUDGET",
+  "BAD_TIMING",
+  "EXISTING_PROVIDER",
+  "DECISION_MAKER_UNREACHABLE",
+  "NOT_FIT",
+  "BAD_CONTACT",
+  "DUPLICATE",
+  "BATCH_SUPERSEDED",
+  "DO_NOT_CONTACT",
+  "OTHER",
+]);
+
+const futureDateTimeSchema = z
+  .string()
+  .datetime({ offset: true })
+  .refine((value) => new Date(value).getTime() > Date.now(), "Follow-up must be in the future");
+
+export const leadInteractionSchema = z
+  .object({
+    channel: z.enum(["PHONE", "WHATSAPP", "EMAIL", "OTHER"]),
+    outcome: z.enum([
+      "NO_ANSWER",
+      "CALLBACK",
+      "NON_DECISION_MAKER",
+      "INTERESTED",
+      "NOT_INTERESTED",
+      "WRONG_NUMBER",
+      "DO_NOT_CALL",
+    ]),
+    decisionMakerReached: z.boolean(),
+    note: z.string().trim().max(2_000).optional(),
+    followUpAction: z.enum(["SCHEDULE", "END_AS_LOST"]).optional(),
+    followUpAt: futureDateTimeSchema.optional(),
+    lossReason: leadLossReasonSchema.optional(),
+    lossReasonDetails: z.string().trim().max(500).optional(),
+    usedCallAngleIds: z.array(z.string().min(1).max(100)).max(3).default([]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const requiresExplicitNextAction =
+      value.outcome === "NO_ANSWER" || value.outcome === "NON_DECISION_MAKER";
+
+    if (requiresExplicitNextAction && !value.followUpAction) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpAction"],
+        message: "An explicit next action is required",
+      });
+    }
+
+    if (value.outcome === "CALLBACK" && value.followUpAction !== "SCHEDULE") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpAction"],
+        message: "A callback must schedule a follow-up",
+      });
+    }
+
+    if (value.followUpAction === "SCHEDULE" && !value.followUpAt) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpAt"],
+        message: "A scheduled follow-up requires a date",
+      });
+    }
+
+    if (value.followUpAction === "END_AS_LOST" && !value.lossReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lossReason"],
+        message: "Ending a lead requires a loss reason",
+      });
+    }
+
+    if (
+      (value.outcome === "INTERESTED" || value.outcome === "NOT_INTERESTED") &&
+      !value.decisionMakerReached
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["decisionMakerReached"],
+        message: "This outcome requires reaching the decision maker",
+      });
+    }
+
+    if (value.outcome === "NON_DECISION_MAKER" && value.decisionMakerReached) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["decisionMakerReached"],
+        message: "A non-decision-maker outcome cannot reach the decision maker",
+      });
+    }
+
+    if (value.outcome === "NOT_INTERESTED" && !value.lossReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lossReason"],
+        message: "A not-interested outcome requires a loss reason",
+      });
+    }
+
+    if (value.lossReason === "OTHER" && !value.lossReasonDetails) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lossReasonDetails"],
+        message: "Other loss reasons require details",
+      });
+    }
+
+    if (
+      (value.outcome === "DO_NOT_CALL" || value.outcome === "WRONG_NUMBER") &&
+      value.followUpAction === "SCHEDULE"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["followUpAction"],
+        message: "This outcome cannot schedule a follow-up",
+      });
+    }
+  });
+
+export const leadOwnershipSchema = z
+  .object({
+    action: z.enum(["reassign", "release"]),
+    sellerId: z.string().min(1).max(200).optional(),
+    reason: z.string().trim().min(3).max(500),
+    cancelFollowUps: z.boolean().optional().default(false),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === "reassign" && !value.sellerId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sellerId"],
+        message: "Reassignment requires a seller",
+      });
+    }
+  });
+
+export const leadCompanyNoteSchema = z
+  .object({
+    body: z.string().trim().min(1).max(5_000),
+  })
+  .strict();
+
+export const leadContactCorrectionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    company: z.string().trim().min(1).max(200).optional(),
+    email: z.string().email().optional(),
+    phone: z.string().trim().min(9).max(30).optional(),
+    confirmedBySeller: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.company !== undefined ||
+      value.email !== undefined ||
+      value.phone !== undefined,
+    { message: "At least one contact detail is required" },
+  );
+
+export const leadSourceCorrectionSchema = z
+  .object({
+    intentLevel: z.enum(["OUTBOUND", "AD_RESPONSE", "INBOUND"]),
+    sourceKey: z.string().trim().min(1).max(100),
+    externalLeadId: z.string().trim().min(1).max(300).optional(),
+    sourceSnapshot: z.record(z.string(), z.unknown()),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+
+export const leadStageCorrectionSchema = z
+  .object({
+    action: z.enum(["mark-lost", "mark-spam", "reopen-lost"]),
+    reason: z.string().trim().min(3).max(500).optional(),
+    lossReason: leadLossReasonSchema.optional(),
+    lossReasonDetails: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === "reopen-lost" && !value.reason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reason"],
+        message: "Reopening a lost lead requires a reason",
+      });
+    }
+    if (value.action === "mark-lost" && !value.lossReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lossReason"],
+        message: "Marking a lead lost requires a reason",
+      });
+    }
+    if (value.lossReason === "OTHER" && !value.lossReasonDetails) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lossReasonDetails"],
+        message: "Other loss reasons require details",
+      });
+    }
+  });
+
+export const leadFollowUpScheduleSchema = z
+  .object({
+    dueAt: futureDateTimeSchema,
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const leadFollowUpRescheduleSchema = z
+  .object({
+    followUpId: z.string().min(1).max(200),
+    dueAt: futureDateTimeSchema,
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const leadFollowUpCompleteSchema = z
+  .object({
+    followUpId: z.string().min(1).max(200),
+  })
+  .strict();
+
 export const updateAgreementSchema = z.object({
   status: agreementStatusEnum.optional(),
   tier: agreementTierEnum.nullable().optional(),

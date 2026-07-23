@@ -72,8 +72,14 @@ enum NotificationType {
   CONTACT_RECEIVED
   AGREEMENT_SIGNED
   LEAD_FOLLOWUP
+  LEAD_REASSIGNED
+  LEAD_SLA_BREACH
+  LEAD_SLA_ESCALATION
+  PAYMENT_FAILED
+  PAYMENT_MISMATCH
   PROSPECTING_APPROVAL
   PROSPECTING_BATCH_READY
+  PROSPECTING_BATCH_SHORTFALL
 }
 
 enum ContactStatus {
@@ -90,6 +96,111 @@ enum AcquisitionChannel {
   GOOGLE_PROSPECTING
   MANUAL
   OTHER
+}
+
+enum LeadIntentLevel {
+  OUTBOUND
+  AD_RESPONSE
+  INBOUND
+}
+
+enum LeadStage {
+  NEW
+  PREPARING
+  CONTACTING
+  QUALIFIED
+  AGREEMENT_DRAFT
+  AGREEMENT_SENT
+  AGREEMENT_SIGNED
+  WON
+  LOST
+  SPAM
+}
+
+enum LeadPhoneProvenance {
+  FIRST_PARTY_FORM
+  SELLER_CONFIRMED
+  ADMIN_CONFIRMED
+  MIGRATED
+}
+
+enum LeadActorType {
+  USER
+  SYSTEM
+  INTEGRATION
+}
+
+enum LeadEventType {
+  CREATED
+  PUBLISHED
+  CLAIMED
+  RELEASED
+  REASSIGNED
+  PREPARATION_STARTED
+  CONTACT_ATTEMPTED
+  DECISION_MAKER_REACHED
+  CONTACT_DETAILS_UPDATED
+  NOTE_ADDED
+  FOLLOW_UP_SCHEDULED
+  FOLLOW_UP_RESCHEDULED
+  FOLLOW_UP_COMPLETED
+  QUALIFIED
+  AGREEMENT_CREATED
+  AGREEMENT_SENT
+  AGREEMENT_SIGNED
+  AGREEMENT_CANCELLED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  WON
+  LOST
+  REOPENED
+  SPAM_MARKED
+  DO_NOT_CALL
+  COMMISSION_CREDIT_CHANGED
+  SOURCE_CORRECTED
+  MIGRATED
+}
+
+enum LeadInteractionChannel {
+  PHONE
+  WHATSAPP
+  EMAIL
+  OTHER
+}
+
+enum LeadInteractionOutcome {
+  NO_ANSWER
+  CALLBACK
+  NON_DECISION_MAKER
+  INTERESTED
+  NOT_INTERESTED
+  WRONG_NUMBER
+  DO_NOT_CALL
+}
+
+enum LeadLossReason {
+  NO_INTEREST
+  NO_BUDGET
+  BAD_TIMING
+  EXISTING_PROVIDER
+  DECISION_MAKER_UNREACHABLE
+  NOT_FIT
+  BAD_CONTACT
+  DUPLICATE
+  BATCH_SUPERSEDED
+  DO_NOT_CONTACT
+  OTHER
+}
+
+enum LeadFollowUpStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum CommissionAgreementLinkStatus {
+  LINKED
+  LEGACY_ORPHAN
 }
 
 enum ProspectingCycleStatus {
@@ -184,42 +295,57 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  assignedTasks        Task[]                @relation("TaskAssignees")
-  createdTasks         Task[]                @relation("CreatedTasks")
-  comments             Comment[]
-  attachments          TaskAttachment[]      @relation("UploadedAttachments")
-  blogPosts            BlogPost[]
-  notifications        Notification[]        @relation("NotificationRecipient")
-  googleIntegration    GoogleIntegration?
-  facebookIntegrations FacebookIntegration[]
-  utmLinks             UtmLink[]
-  pushSubscriptions    PushSubscription[]
-  contactNotes         ContactNote[]
-  clientNotes          ClientNote[]          @relation("ClientNoteAuthor")
-  assignedLeads        ContactSubmission[]   @relation("LeadAssignees")
-  commissions          SellerCommission[]    @relation("SellerCommissions")
-  prospectingCycles    ProspectingCycle[]    @relation("ProspectingCycleSeller")
-  territoryApprovals   TerritoryProposal[]   @relation("TerritoryApprover")
-  assignedProspects    Prospect[]            @relation("ProspectSeller")
-  prospectBatches      WeeklyProspectBatch[] @relation("WeeklyBatchSeller")
-  prospectInteractions ProspectInteraction[] @relation("ProspectInteractionAuthor")
+  assignedTasks           Task[]                @relation("TaskAssignees")
+  createdTasks            Task[]                @relation("CreatedTasks")
+  comments                Comment[]
+  attachments             TaskAttachment[]      @relation("UploadedAttachments")
+  blogPosts               BlogPost[]
+  notifications           Notification[]        @relation("NotificationRecipient")
+  googleIntegration       GoogleIntegration?
+  facebookIntegrations    FacebookIntegration[]
+  utmLinks                UtmLink[]
+  pushSubscriptions       PushSubscription[]
+  contactNotes            ContactNote[]
+  clientNotes             ClientNote[]          @relation("ClientNoteAuthor")
+  assignedLeads           ContactSubmission[]   @relation("LeadAssignees")
+  ownedLeads              ContactSubmission[]   @relation("LeadOwner")
+  eligibleLeads           ContactSubmission[]   @relation("LeadEligibleSeller")
+  leadEvents              LeadEvent[]
+  leadInteractions        LeadInteraction[]
+  ownedLeadFollowUps      LeadFollowUp[]        @relation("LeadFollowUpOwner")
+  createdLeadFollowUps    LeadFollowUp[]        @relation("LeadFollowUpCreator")
+  creditedAgreements      Agreement[]           @relation("AgreementCreditedSeller")
+  commissions             SellerCommission[]    @relation("SellerCommissions")
+  reviewedCommissionLinks SellerCommission[]    @relation("CommissionLinkReviewer")
+  prospectingCycles       ProspectingCycle[]    @relation("ProspectingCycleSeller")
+  territoryApprovals      TerritoryProposal[]   @relation("TerritoryApprover")
+  assignedProspects       Prospect[]            @relation("ProspectSeller")
+  prospectBatches         WeeklyProspectBatch[] @relation("WeeklyBatchSeller")
+  prospectInteractions    ProspectInteraction[] @relation("ProspectInteractionAuthor")
 }
 
 /// First-month commission earned by a seller when an agreement THEY created
 /// reaches a confirmed payment (paymentStatus = COMPLETED). One row per
 /// agreement (agreementId unique → idempotent against webhook retries).
 model SellerCommission {
-  id          String           @id @default(cuid())
-  sellerId    String
-  seller      User             @relation("SellerCommissions", fields: [sellerId], references: [id])
-  agreementId String           @unique
-  clientName  String
-  amount      Float // first-month monthly price the deal closed at
-  status      CommissionStatus @default(PENDING)
-  paidAt      DateTime?
+  id                        String                         @id @default(cuid())
+  sellerId                  String
+  seller                    User                           @relation("SellerCommissions", fields: [sellerId], references: [id])
+  agreementId               String                         @unique
+  agreementRefId            String?                        @unique
+  agreementRef              Agreement?                     @relation("SellerCommissionAgreement", fields: [agreementRefId], references: [id], onDelete: Restrict)
+  agreementLinkStatus       CommissionAgreementLinkStatus?
+  agreementLinkReviewedAt   DateTime?
+  agreementLinkReviewReason String?
+  agreementLinkReviewedById String?
+  agreementLinkReviewedBy   User?                          @relation("CommissionLinkReviewer", fields: [agreementLinkReviewedById], references: [id], onDelete: Restrict)
+  clientName                String
+  amount                    Float // first-month monthly price the deal closed at
+  status                    CommissionStatus               @default(PENDING)
+  paidAt                    DateTime?
   /// Task created when the seller submits the site brief to the admins.
-  briefTaskId String?
-  createdAt   DateTime         @default(now())
+  briefTaskId               String?
+  createdAt                 DateTime                       @default(now())
 
   @@index([sellerId, status])
   @@index([createdAt])
@@ -292,6 +418,7 @@ model TaskAttachment {
 model Notification {
   id        String           @id @default(cuid())
   type      NotificationType
+  dedupeKey String?          @unique
   title     String
   body      String?
   actionUrl String?
@@ -326,50 +453,145 @@ model Comment {
 }
 
 model ContactSubmission {
-  id                 String              @id @default(cuid())
-  name               String
-  email              String?
-  phone              String?
-  company            String?
-  message            String
-  service            String?
-  isRead             Boolean             @default(false)
-  status             ContactStatus       @default(NEW)
-  tags               String[]
-  source             String?
-  acquisitionChannel AcquisitionChannel?
-  externalLeadId     String?             @unique
-  externalFormId     String?
-  externalFormName   String?
-  externalCampaignId String?
-  externalAdId       String?
-  nextFollowUpAt     DateTime?
-  lastContactedAt    DateTime?
-  closedAt           DateTime?
-  createdAt          DateTime            @default(now())
+  id                      String               @id @default(cuid())
+  name                    String?
+  email                   String?
+  phone                   String?
+  company                 String?
+  message                 String?
+  service                 String?
+  isRead                  Boolean              @default(false)
+  status                  ContactStatus        @default(NEW)
+  tags                    String[]
+  source                  String?
+  acquisitionChannel      AcquisitionChannel?
+  intentLevel             LeadIntentLevel?
+  sourceKey               String?
+  sourceSnapshot          Json?
+  phoneProvenance         LeadPhoneProvenance?
+  stage                   LeadStage?
+  externalLeadId          String?              @unique
+  externalFormId          String?
+  externalFormName        String?
+  externalCampaignId      String?
+  externalAdId            String?
+  ownerId                 String?
+  owner                   User?                @relation("LeadOwner", fields: [ownerId], references: [id])
+  eligibleSellerId        String?
+  eligibleSeller          User?                @relation("LeadEligibleSeller", fields: [eligibleSellerId], references: [id])
+  firstClaimedAt          DateTime?
+  ownerAssignedAt         DateTime?
+  firstContactedAt        DateTime?
+  decisionMakerReachedAt  DateTime?
+  qualifiedAt             DateTime?
+  wonAt                   DateTime?
+  lostAt                  DateTime?
+  lossReason              LeadLossReason?
+  lossReasonDetails       String?
+  doNotContactAt          DateTime?
+  slaAlertedAt            DateTime?
+  slaEscalatedAt          DateTime?
+  migrationReviewRequired Boolean              @default(true)
+  migrationReviewReason   String?
+  legacyStateHash         String?
+  nextFollowUpAt          DateTime?
+  lastContactedAt         DateTime?
+  closedAt                DateTime?
+  createdAt               DateTime             @default(now())
 
   notes         ContactNote[]
-  assignees     User[]         @relation("LeadAssignees")
+  assignees     User[]            @relation("LeadAssignees")
   notifications Notification[]
-  prospect      Prospect?      @relation("PromotedProspect")
+  prospect      Prospect?         @relation("PromotedProspect")
   agreements    Agreement[]
+  events        LeadEvent[]
+  interactions  LeadInteraction[]
+  followUps     LeadFollowUp[]
 
+  @@unique([sourceKey, externalLeadId], map: "Lead_source_external_unique")
   @@index([isRead])
   @@index([status])
   @@index([nextFollowUpAt])
   @@index([createdAt])
+  @@index([eligibleSellerId, ownerId, stage, createdAt])
+  @@index([ownerId, stage, nextFollowUpAt])
+  @@index([intentLevel, sourceKey, stage, createdAt])
+  @@index([stage, ownerId, slaAlertedAt, createdAt])
 }
 
 model ContactNote {
   id        String            @id @default(cuid())
   contactId String
-  contact   ContactSubmission @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact   ContactSubmission @relation(fields: [contactId], references: [id], onDelete: Restrict)
   authorId  String
   author    User              @relation(fields: [authorId], references: [id])
   body      String
   createdAt DateTime          @default(now())
 
   @@index([contactId, createdAt])
+}
+
+model LeadEvent {
+  id          String            @id @default(cuid())
+  leadId      String
+  lead        ContactSubmission @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  type        LeadEventType
+  actorType   LeadActorType
+  actorUserId String?
+  actorUser   User?             @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  fromStage   LeadStage?
+  toStage     LeadStage?
+  metadata    Json?
+  dedupeKey   String?           @unique
+  occurredAt  DateTime
+  recordedAt  DateTime          @default(now())
+
+  @@index([leadId, occurredAt, recordedAt])
+  @@index([actorUserId, occurredAt])
+}
+
+model LeadInteraction {
+  id                          String                 @id @default(cuid())
+  leadId                      String
+  lead                        ContactSubmission      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  authorId                    String
+  author                      User                   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  channel                     LeadInteractionChannel
+  outcome                     LeadInteractionOutcome
+  decisionMakerReached        Boolean
+  note                        String?
+  nextFollowUpAt              DateTime?
+  lossReason                  LeadLossReason?
+  lossReasonDetails           String?
+  usedCallAngleIds            String[]
+  legacyProspectInteractionId String?                @unique
+  occurredAt                  DateTime
+  recordedAt                  DateTime               @default(now())
+
+  @@index([leadId, occurredAt, recordedAt])
+  @@index([authorId, occurredAt])
+}
+
+model LeadFollowUp {
+  id             String             @id @default(cuid())
+  leadId         String
+  lead           ContactSubmission  @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  ownerId        String
+  owner          User               @relation("LeadFollowUpOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdById    String
+  createdBy      User               @relation("LeadFollowUpCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  dueAt          DateTime
+  reason         String
+  status         LeadFollowUpStatus @default(SCHEDULED)
+  reminderSentAt DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status, dueAt, reminderSentAt])
+  @@index([ownerId, status, dueAt])
+  @@index([leadId, status])
 }
 
 // ==================
@@ -412,70 +634,71 @@ model ProspectingCycle {
 }
 
 model TerritoryProposal {
-  id                    String                  @id @default(cuid())
-  cycleId               String
-  cycle                 ProspectingCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  displayName           String
-  city                  String
-  kind                  TerritoryKind
-  searchQuery           String
-  searchQueries         String[]                @default([])
-  coverageKey           String
-  rationale             String
+  id                           String                  @id @default(cuid())
+  cycleId                      String
+  cycle                        ProspectingCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  displayName                  String
+  city                         String
+  kind                         TerritoryKind
+  searchQuery                  String
+  searchQueries                String[]                @default([])
+  coverageKey                  String
+  rationale                    String
   independentBusinessRationale String?
-  riskFactors           String[]                @default([])
-  expectedBusinessTypes String[]
-  confidence            Float
-  status                TerritoryProposalStatus @default(PROPOSED)
-  rejectionReason       String?
-  approvedById          String?
-  approvedBy            User?                   @relation("TerritoryApprover", fields: [approvedById], references: [id])
-  approvedAt            DateTime?
-  createdAt             DateTime                @default(now())
+  riskFactors                  String[]                @default([])
+  expectedBusinessTypes        String[]
+  confidence                   Float
+  status                       TerritoryProposalStatus @default(PROPOSED)
+  rejectionReason              String?
+  approvedById                 String?
+  approvedBy                   User?                   @relation("TerritoryApprover", fields: [approvedById], references: [id])
+  approvedAt                   DateTime?
+  createdAt                    DateTime                @default(now())
 
   @@unique([cycleId, coverageKey])
   @@index([status, createdAt])
 }
 
 model Prospect {
-  id                  String                 @id @default(cuid())
-  placeId             String                 @unique
-  cycleId             String
-  cycle               ProspectingCycle       @relation(fields: [cycleId], references: [id], onDelete: Restrict)
-  status              ProspectStatus         @default(DISCOVERED)
-  websiteStatus       WebsiteStatus          @default(UNKNOWN)
-  auditedDomain       String?
-  businessShape       String?
-  qualityScore        Int?
-  rawQualityScore     Int?
-  auditConfidence     Float?
-  opportunitySummary  String?
-  callAngles          String[]
-  scoringVersion      Int?
+  id                     String                  @id @default(cuid())
+  placeId                String                  @unique
+  cycleId                String
+  cycle                  ProspectingCycle        @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  status                 ProspectStatus          @default(DISCOVERED)
+  websiteStatus          WebsiteStatus           @default(UNKNOWN)
+  auditedDomain          String?
+  businessShape          String?
+  businessShapeVersion   Int?
+  qualityScore           Int?
+  rawQualityScore        Int?
+  auditConfidence        Float?
+  opportunitySummary     String?
+  callAngles             String[]
+  scoringVersion         Int?
   salesFitClassification SalesFitClassification?
-  salesFitConfidence  Float?
+  salesFitConfidence     Float?
   ownerReachabilityScore Int?
-  salesFitReason      String?
-  salesFitEvidence    String[]
-  salesFitVersion     Int?
-  salesFitAssessedAt  DateTime?
-  assignedSellerId    String?
-  assignedSeller      User?                  @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
-  batchId             String?
-  batch               WeeklyProspectBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  promotedLeadId      String?                @unique
-  promotedLead        ContactSubmission?     @relation("PromotedProspect", fields: [promotedLeadId], references: [id], onDelete: SetNull)
-  lastContactedAt     DateTime?
-  nextFollowUpAt      DateTime?
-  publishedAt         DateTime?
-  firstAuditFailureAt DateTime?
-  lastAuditFailureAt  DateTime?
-  nextAuditAt         DateTime?
-  auditFailureCount   Int                    @default(0)
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  audits              ProspectWebsiteAudit[]
-  interactions        ProspectInteraction[]
+  salesFitReason         String?
+  salesFitEvidence       String[]
+  salesFitVersion        Int?
+  salesFitAssessedAt     DateTime?
+  assignedSellerId       String?
+  assignedSeller         User?                   @relation("ProspectSeller", fields: [assignedSellerId], references: [id])
+  batchId                String?
+  batch                  WeeklyProspectBatch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  promotedLeadId         String?                 @unique
+  promotedLead           ContactSubmission?      @relation("PromotedProspect", fields: [promotedLeadId], references: [id], onDelete: SetNull)
+  lastContactedAt        DateTime?
+  nextFollowUpAt         DateTime?
+  publishedAt            DateTime?
+  firstAuditFailureAt    DateTime?
+  lastAuditFailureAt     DateTime?
+  nextAuditAt            DateTime?
+  auditFailureCount      Int                     @default(0)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  audits                 ProspectWebsiteAudit[]
+  interactions           ProspectInteraction[]
 
   @@index([cycleId, status])
   @@index([assignedSellerId, status, nextFollowUpAt])
@@ -507,15 +730,15 @@ model ProspectWebsiteAudit {
 }
 
 model WeeklyProspectBatch {
-  id          String           @id @default(cuid())
-  cycleId     String           @unique
-  cycle       ProspectingCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
-  weekStart   DateTime
-  revision    Int              @default(1)
-  sellerId    String
-  seller      User             @relation("WeeklyBatchSeller", fields: [sellerId], references: [id])
-  publishedAt DateTime         @default(now())
-  supersededAt DateTime?
+  id               String           @id @default(cuid())
+  cycleId          String           @unique
+  cycle            ProspectingCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  weekStart        DateTime
+  revision         Int              @default(1)
+  sellerId         String
+  seller           User             @relation("WeeklyBatchSeller", fields: [sellerId], references: [id])
+  publishedAt      DateTime         @default(now())
+  supersededAt     DateTime?
   supersededReason String?
 
   prospects Prospect[]
@@ -835,7 +1058,11 @@ model Agreement {
   client   Client? @relation(fields: [clientId], references: [id])
 
   leadId String?
-  lead   ContactSubmission? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead   ContactSubmission? @relation(fields: [leadId], references: [id], onDelete: Restrict)
+
+  creditedSellerId String?
+  creditedSeller   User?             @relation("AgreementCreditedSeller", fields: [creditedSellerId], references: [id])
+  commission       SellerCommission? @relation("SellerCommissionAgreement")
 
   // Cardcom payment integration
   paymentStatus       PaymentStatus @default(PENDING)

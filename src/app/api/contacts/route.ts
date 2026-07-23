@@ -33,16 +33,16 @@ export async function POST(request: NextRequest) {
 
     await notifyAllAdmins({
       type: "CONTACT_RECEIVED",
-      title: `פנייה חדשה — ${contact.name}`,
-      body: contact.message.slice(0, 120),
+      title: `פנייה חדשה — ${contact.company ?? contact.name ?? "ליד"}`,
+      body: contact.message?.slice(0, 120) ?? "פנייה חדשה",
       leadId: contact.id,
     });
 
     // Sellers work the lead pool — ping their phones with a seller-scoped URL.
     await notifyAllSellers({
       type: "CONTACT_RECEIVED",
-      title: `🔔 ליד חדש — ${contact.name}`,
-      body: contact.message.slice(0, 120),
+      title: `🔔 ליד חדש — ${contact.company ?? contact.name ?? "ליד"}`,
+      body: contact.message?.slice(0, 120) ?? "פנייה חדשה",
       leadId: contact.id,
       url: "/seller/leads",
     });
