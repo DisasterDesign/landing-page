@@ -597,8 +597,8 @@ Worker מתוזמן יאתר פולואפים שהגיע זמנם וטרם נש�
 
 העבודה משנה היררכיית מידע והתנהגות בלבד. היא **אינה redesign**.
 
-- טקסט רץ נשאר ב־`Birzia`.
-- כותרות נשארות ב־`Meruba` / `Anomalia` לפי השימוש הקיים.
+- מעטפות האדמין והמוכר נשארות עם `Heebo` שמוחל כיום ב־`src/app/admin/layout.tsx` וב־`src/app/seller/layout.tsx`.
+- רכיבים שכבר מחילים `font-birzia`, `Meruba` או `Anomalia` ממשיכים לעשות זאת באותם מקומות בלבד. הפיצ'ר אינו מוסיף או מסיר override של פונט.
 - הצבעים נשארים מתוך ה־tokens הקיימים בלבד:
   - ורוד `#E503A2`, ורוד בהיר `#FF2DBF`, ורוד כהה `#B80282`.
   - ציאן `#01FFFF` וציאן כהה `#00CCCC`.
@@ -606,7 +606,7 @@ Worker מתוזמן יאתר פולואפים שהגיע זמנם וטרם נש�
 - לא מוסיפים palette, font, gradient, shadow language או icon style חדשים.
 - לא משנים את ה־sidebar, header, ריווחים כלליים או מבנה המעטפת.
 - נעשה שימוש חוזר ב־cards, buttons, badges, sheets, dialogs ו־form controls קיימים.
-- אין שינוי ב־`globals.css` או ב־design tokens אלא אם נמצא באג נגישות מוכח ומתקבל עליו אישור נפרד.
+- אין שינוי ב־`globals.css`, ב־design tokens, ב־`src/app/admin/layout.tsx` או ב־`src/app/seller/layout.tsx` אלא אם נמצא באג נגישות מוכח ומתקבל עליו אישור נפרד.
 - כל מסך נשאר RTL, רספונסיבי ותומך keyboard focus בהתאם להתנהגות הקיימת.
 - ורוד וציאן ישמשו באותה היררכיה סמנטית הקיימת; לא ניצור “שפה חדשה” לסטטוסים.
 

@@ -82,7 +82,7 @@ Ownership is exclusive and claimed atomically. A lead is `WON` only after the fi
 
 The seller sees only the final assigned cold list and does not participate in research approval or scoring. Public business phone and the existing website are actionable in both seller and admin interfaces. Google phone data remains live by Place ID rather than being persisted; first-party or seller-confirmed contact data may be stored with provenance. Cold-lead preparation shows source context, the current site, the Fuzion audit and concrete call angles before dialing.
 
-The feature changes information hierarchy and behavior only. It reuses the existing admin/seller shell, components, RTL behavior, Birzia/Meruba/Anomalia fonts and existing pink/cyan/gray tokens. It does not introduce a new visual language or modify global design tokens.
+The feature changes information hierarchy and behavior only. It reuses the existing admin/seller shell, components, RTL behavior and existing pink/cyan/gray tokens. The admin and seller root layouts keep their current Heebo runtime font; components that already opt into Birzia/Meruba/Anomalia retain those local classes. It does not introduce a new visual language or modify global design tokens.
 
 ### Rationale
 
