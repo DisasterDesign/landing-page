@@ -65,6 +65,7 @@ export default function UnifiedAdminLeadsPage() {
     openCount: 0,
     dueThisWeekCount: 0,
     newThisWeekCount: 0,
+    openByIntent: { OUTBOUND: 0, AD_RESPONSE: 0, INBOUND: 0 },
   });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,15 +187,12 @@ export default function UnifiedAdminLeadsPage() {
             ] as const
           ).map(([value, label]) => {
             const active = filters.intent === value;
+            // OPEN leads only — "how many are alive in each temperature",
+            // not all-time history (which read as "70 new leads waiting").
             const count =
               value === ""
-                ? metrics
-                  ? Object.values(metrics.byIntent).reduce(
-                      (sum, funnel) => sum + funnel.created,
-                      0,
-                    )
-                  : null
-                : metrics?.byIntent[value]?.created ?? 0;
+                ? stats.openCount
+                : stats.openByIntent[value] ?? 0;
             return (
               <button
                 key={value || "all"}
@@ -213,11 +211,9 @@ export default function UnifiedAdminLeadsPage() {
                 }`}
               >
                 {label}
-                {count !== null && (
-                  <span className="mr-1.5 text-xs text-gray-500">
-                    ({count})
-                  </span>
-                )}
+                <span className="mr-1.5 text-xs text-gray-500">
+                  ({count} פתוחים)
+                </span>
               </button>
             );
           })}

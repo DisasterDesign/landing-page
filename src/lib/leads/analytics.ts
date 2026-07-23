@@ -1,4 +1,4 @@
-import type { LeadEventType, LeadIntentLevel, Prisma } from "@prisma/client";
+import type { LeadEventType, LeadIntentLevel, LeadStage, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -14,6 +14,7 @@ export interface LeadAnalyticsRow {
   id: string;
   createdAt: Date;
   intentLevel: LeadIntentLevel | null;
+  stage: LeadStage | null;
   sourceKey: string | null;
   lossReason: string | null;
   sourceSnapshot: unknown;
@@ -94,6 +95,42 @@ const funnelEvent: Record<Exclude<keyof Omit<FunnelCounts, "created">, "paid">, 
   agreementCreated: "AGREEMENT_CREATED",
   agreementSent: "AGREEMENT_SENT",
   agreementSigned: "AGREEMENT_SIGNED",
+};
+
+/**
+ * Milestone rank each funnel step sits at, and the rank a lead's CURRENT
+ * stage implies it must have passed.
+ *
+ * Migrated leads (the pre-unified history and the old admin statuses) carry
+ * a stage but no milestone events — the backfill could not invent timestamps
+ * that were never recorded. Counting events alone therefore rendered the
+ * whole past as zeros ("everything disappeared", Elad, 24.7). A lead sitting
+ * in CONTACTING has by definition been claimed and contacted, so the funnel
+ * counts attainment as: event exists OR current stage implies it. Terminal
+ * LOST/SPAM imply nothing beyond creation — we honestly don't know how far
+ * they got; only their recorded events count.
+ */
+const funnelRank: Record<Exclude<keyof Omit<FunnelCounts, "created">, "paid">, number> = {
+  claimed: 1,
+  contacted: 2,
+  decisionMakerReached: 3,
+  qualified: 4,
+  agreementCreated: 5,
+  agreementSent: 6,
+  agreementSigned: 7,
+};
+
+const stageImpliedRank: Record<LeadStage, number> = {
+  NEW: 0,
+  PREPARING: 1,
+  CONTACTING: 2,
+  QUALIFIED: 4,
+  AGREEMENT_DRAFT: 5,
+  AGREEMENT_SENT: 6,
+  AGREEMENT_SIGNED: 7,
+  WON: 7,
+  LOST: 0,
+  SPAM: 0,
 };
 
 const zeroFunnel = (): FunnelCounts => ({
@@ -251,15 +288,20 @@ export function calculateLeadMetrics(
       }
     }
 
+    const impliedRank = row.stage ? stageImpliedRank[row.stage] : 0;
     for (const [key, eventType] of Object.entries(funnelEvent) as Array<[
       Exclude<keyof Omit<FunnelCounts, "created">, "paid">,
       LeadEventType,
     ]>) {
       const event = firstEvent(row, eventType);
-      if (!event) continue;
+      // Attained = recorded event OR implied by the lead's current stage.
+      // Timing medians and per-seller attribution stay event-only — a stage
+      // cannot tell us WHEN or WHO.
+      if (!event && impliedRank < funnelRank[key]) continue;
       metrics[key] += 1;
       if (intentMetrics) intentMetrics[key] += 1;
       if (sourceMetrics) sourceMetrics[key] += 1;
+      if (!event) continue;
       const sellerMetrics = sellerFor(metrics.bySeller, event.actorUserId);
       if (sellerMetrics) sellerMetrics[key] += 1;
       if (key === "claimed") {

@@ -47,6 +47,8 @@ export interface AdminLeadPage {
     openCount: number;
     dueThisWeekCount: number;
     newThisWeekCount: number;
+    /** OPEN (non-terminal) leads per temperature — what is alive right now. */
+    openByIntent: Record<"OUTBOUND" | "AD_RESPONSE" | "INBOUND", number>;
   };
 }
 
@@ -385,6 +387,28 @@ export async function getAdminLeadList(
     }),
   ]);
 
+  // Open leads per temperature, IGNORING the intent filter itself — the
+  // temperature tabs must show all three live counts even while one of them
+  // is selected.
+  const openByIntentWhere = buildAdminLeadWhere(
+    { ...filters, intent: undefined, cursor: undefined, limit: filters.limit },
+    now,
+  );
+  const openByIntentRows = await db.contactSubmission.groupBy({
+    by: ["intentLevel"],
+    where: {
+      AND: [openByIntentWhere, { stage: { notIn: ["WON", "LOST", "SPAM"] } }],
+    },
+    _count: true,
+  });
+  const openByIntent = { OUTBOUND: 0, AD_RESPONSE: 0, INBOUND: 0 };
+  for (const row of openByIntentRows) {
+    if (row.intentLevel in openByIntent) {
+      openByIntent[row.intentLevel as keyof typeof openByIntent] =
+        typeof row._count === "number" ? row._count : 0;
+    }
+  }
+
   const items = pageRows.map((row) =>
     projectLeadRecord(row, {
       audience: "ADMIN",
@@ -406,7 +430,7 @@ export async function getAdminLeadList(
             id: last.id,
           })
         : null,
-    stats: { openCount, dueThisWeekCount, newThisWeekCount },
+    stats: { openCount, dueThisWeekCount, newThisWeekCount, openByIntent },
   };
 }
 
