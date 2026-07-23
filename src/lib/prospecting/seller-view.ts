@@ -1,4 +1,5 @@
 import type { LivePlaceDetails } from "./types";
+import type { SellerLeadDetail } from "@/lib/leads/projection";
 
 interface SellerProspectRecord {
   id: string;
@@ -74,6 +75,24 @@ function googleMapsUrl(placeId: string, displayName: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayName)}&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
+export function safePublicWebsite(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.username ||
+      url.password
+    ) {
+      return null;
+    }
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 export function serializeSellerProspect(
   prospect: SellerProspectRecord,
   live?: LivePlaceDetails,
@@ -82,7 +101,8 @@ export function serializeSellerProspect(
     prospect.auditedDomain,
     prospect.websiteStatus,
   );
-  const website = live?.websiteUri ?? auditedWebsite;
+  const liveWebsite = safePublicWebsite(live?.websiteUri);
+  const website = liveWebsite ?? auditedWebsite;
   const displayName =
     live?.displayName || prospect.auditedDomain || "פרטי העסק לא זמינים";
   const audit = prospect.audits[0];
@@ -109,7 +129,7 @@ export function serializeSellerProspect(
       phone: live?.nationalPhoneNumber ?? null,
       address: live?.formattedAddress ?? null,
       website,
-      websiteSource: live?.websiteUri
+      websiteSource: liveWebsite
         ? ("GOOGLE" as const)
         : auditedWebsite
           ? ("AUDITED_DOMAIN" as const)
@@ -149,3 +169,69 @@ export function serializeSellerProspect(
 }
 
 export type SellerProspectView = ReturnType<typeof serializeSellerProspect>;
+
+function legacyProspectStatus(lead: SellerLeadDetail): string {
+  if (lead.stage === "QUALIFIED" || lead.stage.startsWith("AGREEMENT_")) {
+    return "QUALIFIED";
+  }
+  if (lead.stage === "LOST") {
+    return lead.doNotContactAt ? "DO_NOT_CALL" : "NOT_INTERESTED";
+  }
+  if (lead.stage === "SPAM") return "INVALID";
+  if (
+    lead.nextAction.kind === "COMPLETE_FOLLOW_UP" ||
+    lead.nextFollowUpAt
+  ) {
+    return "FOLLOW_UP";
+  }
+  return "PUBLISHED";
+}
+
+export function serializeCanonicalSellerProspect(lead: SellerLeadDetail) {
+  const preparation = lead.preparation;
+  return {
+    id: preparation?.prospectId ?? lead.id,
+    leadId: lead.id,
+    status: legacyProspectStatus(lead),
+    websiteStatus: preparation?.websiteStatus ?? "UNKNOWN",
+    auditedDomain: preparation?.auditedDomain ?? null,
+    qualityScore: preparation?.qualityScore ?? null,
+    rawQualityScore: preparation?.rawQualityScore ?? null,
+    auditConfidence: preparation?.auditConfidence ?? null,
+    opportunitySummary: preparation?.opportunitySummary ?? null,
+    callAngles:
+      preparation?.callAngles.map((callAngle) => callAngle.text) ?? [],
+    nextFollowUpAt: lead.nextFollowUpAt,
+    lastContactedAt:
+      lead.interactions.at(-1)?.occurredAt ?? null,
+    liveStatus: preparation?.liveStatus ?? "NOT_APPLICABLE",
+    business: {
+      displayName: lead.company ?? lead.name ?? "עסק ללא שם",
+      phone: lead.phone,
+      address: lead.address,
+      website: lead.website,
+      websiteSource: lead.websiteSource,
+      mapUrl: lead.mapUrl,
+      category: lead.category,
+      rating: preparation?.rating ?? null,
+      reviewCount: preparation?.reviewCount ?? null,
+      weekdayDescriptions: preparation?.weekdayDescriptions ?? [],
+      businessStatus: preparation?.businessStatus ?? null,
+    },
+    salesFit: preparation?.salesFit ?? {
+      classification: null,
+      confidence: null,
+      ownerReachabilityScore: null,
+      reason: null,
+      evidence: [],
+    },
+    scoreBreakdown: preparation?.scoreBreakdown ?? null,
+    interactions: lead.interactions.map((interaction) => ({
+      id: interaction.id,
+      outcome: interaction.outcome,
+      note: interaction.note,
+      nextFollowUpAt: interaction.nextFollowUpAt,
+      createdAt: interaction.occurredAt,
+    })),
+  };
+}

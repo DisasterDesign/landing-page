@@ -106,4 +106,11 @@ test("unsafe audited-domain fallback and no-site prospects never create website 
   );
   assert.equal(noSite.business.website, null);
   assert.equal(noSite.business.websiteSource, "NONE");
+
+  const unsafeLive = serializeSellerProspect(
+    prospect(),
+    live({ websiteUri: "javascript:alert(1)" }),
+  );
+  assert.equal(unsafeLive.business.website, "https://local-business.co.il/");
+  assert.equal(unsafeLive.business.websiteSource, "AUDITED_DOMAIN");
 });

@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { LeadDomainError } from "@/lib/leads/errors";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import {
   claimLead,
   qualifyLeadFromLegacyClosed,
 } from "@/lib/leads/lifecycle";
+import { getSellerLeadDetail } from "@/lib/leads/projection";
+import { legacyStatusForStage } from "@/lib/leads/stage-machine";
 
 const patchSchema = z
   .object({
@@ -18,6 +21,43 @@ const patchSchema = z
   .refine((value) => Number(Boolean(value.action)) + Number(Boolean(value.status)) === 1, {
     message: "Exactly one legacy action is required",
   });
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    const { id } = await params;
+    const lead = await getSellerLeadDetail({
+      id,
+      sellerId: session.user.id,
+    });
+    if (getLeadLifecycleConfig().enabled) {
+      return NextResponse.json(lead);
+    }
+    return NextResponse.json({
+      id: lead.id,
+      name: lead.name ?? lead.company ?? "ליד ללא שם",
+      email: lead.email ?? "",
+      phone: lead.phone,
+      company: lead.company,
+      service: lead.service,
+      message: lead.message ?? "",
+      status: legacyStatusForStage(lead.stage),
+      source: lead.sourceKey,
+      createdAt: lead.createdAt,
+      nextFollowUpAt: lead.nextFollowUpAt,
+      assignees: lead.owner ? [lead.owner] : [],
+      notes: lead.notes,
+    });
+  } catch (error) {
+    return leadDomainErrorResponse(error);
+  }
+}
 
 export async function PATCH(
   request: Request,

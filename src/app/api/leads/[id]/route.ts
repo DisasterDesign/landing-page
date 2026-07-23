@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { getLeadLifecycleConfig } from "@/lib/leads/config";
 import { LeadDomainError } from "@/lib/leads/errors";
 import {
   rescheduleFollowUp,
@@ -11,6 +12,8 @@ import {
 } from "@/lib/leads/follow-ups";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { markLeadRead } from "@/lib/leads/lifecycle";
+import { getAdminLeadDetail } from "@/lib/leads/projection";
+import { legacyStatusForStage } from "@/lib/leads/stage-machine";
 import { prisma } from "@/lib/prisma";
 
 const patchSchema = z
@@ -38,19 +41,34 @@ export async function GET(
   if (role?.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const lead = await prisma.contactSubmission.findUnique({
-    where: { id },
-    include: {
-      notes: {
-        orderBy: { createdAt: "asc" },
-        include: { author: { select: { id: true, name: true } } },
-      },
-      assignees: { select: { id: true, name: true } },
-    },
-  });
-  return lead
-    ? NextResponse.json(lead)
-    : NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const lead = await getAdminLeadDetail(id);
+    if (getLeadLifecycleConfig().enabled) {
+      return NextResponse.json(lead);
+    }
+    return NextResponse.json({
+      id: lead.id,
+      name: lead.name ?? lead.company ?? "ליד ללא שם",
+      email: lead.email ?? "",
+      phone: lead.phone,
+      company: lead.company,
+      message: lead.message ?? "",
+      service: lead.service,
+      isRead: lead.isRead,
+      status: lead.stage
+        ? legacyStatusForStage(lead.stage)
+        : lead.legacyStatus,
+      source: lead.sourceKey,
+      nextFollowUpAt: lead.nextFollowUpAt,
+      lastContactedAt: lead.lastContactedAt,
+      closedAt: lead.closedAt,
+      createdAt: lead.createdAt,
+      assignees: lead.owner ? [lead.owner] : [],
+      notes: lead.notes,
+    });
+  } catch (error) {
+    return leadDomainErrorResponse(error);
+  }
 }
 
 export async function PATCH(

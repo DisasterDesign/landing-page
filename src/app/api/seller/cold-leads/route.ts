@@ -1,112 +1,156 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { sellerLeadScope } from "@/lib/leads/authorization";
+import { getLeadLifecycleConfig } from "@/lib/leads/config";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
+import {
+  getSellerLeadDetailsByIds,
+  getSellerLeadList,
+  type SellerLeadDetail,
+} from "@/lib/leads/projection";
 import { prisma } from "@/lib/prisma";
-import { getProspectingConfig } from "@/lib/prospecting/config";
-import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
-import { serializeSellerProspect } from "@/lib/prospecting/seller-view";
-import type { LivePlaceDetails } from "@/lib/prospecting/types";
+import { serializeCanonicalSellerProspect } from "@/lib/prospecting/seller-view";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function loadColdPages(input: {
+  sellerId: string;
+  cursor?: string;
+  legacy: boolean;
+}) {
+  const items: SellerLeadDetail[] = [];
+  let cursor = input.cursor;
+  do {
+    const page = await getSellerLeadList({
+      sellerId: input.sellerId,
+      intents: ["OUTBOUND"],
+      cursor,
+      limit: input.legacy ? 100 : 50,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+    if (!input.legacy) {
+      return { items, nextCursor: page.nextCursor };
+    }
+  } while (cursor && items.length < 300);
+  return { items: items.slice(0, 300), nextCursor: null };
+}
+
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const sellerId = session.user.id;
-  const now = new Date();
-
-  const currentBatch = await prisma.weeklyProspectBatch.findFirst({
-    where: { sellerId, supersededAt: null },
-    orderBy: { publishedAt: "desc" },
-    include: {
-      cycle: {
+  try {
+    const sellerId = session.user.id;
+    const url = new URL(request.url);
+    const now = new Date();
+    const config = getLeadLifecycleConfig();
+    const unified = config.enabled && config.coldPreparationEnabled;
+    const [page, currentBatch, dueTasks] = await Promise.all([
+      loadColdPages({
+        sellerId,
+        cursor: url.searchParams.get("cursor") ?? undefined,
+        legacy: !unified,
+      }),
+      prisma.weeklyProspectBatch.findFirst({
+        where: { sellerId, supersededAt: null },
+        orderBy: { publishedAt: "desc" },
         include: {
-          proposals: { where: { status: "APPROVED" }, orderBy: { approvedAt: "desc" }, take: 1 },
+          cycle: {
+            include: {
+              proposals: {
+                where: { status: "APPROVED" },
+                orderBy: { approvedAt: "desc" },
+                take: 1,
+              },
+            },
+          },
+          prospects: {
+            select: {
+              promotedLead: {
+                select: { stage: true, interactions: { select: { id: true } } },
+              },
+            },
+          },
         },
-      },
-      prospects: {
+      }),
+      prisma.leadFollowUp.findMany({
         where: {
-          assignedSellerId: sellerId,
-          qualityScore: { lte: 4 },
+          ownerId: sellerId,
+          status: "SCHEDULED",
+          dueAt: { lte: now },
+          lead: {
+            is: {
+              AND: [
+                sellerLeadScope(sellerId),
+                {
+                  ownerId: sellerId,
+                  intentLevel: "OUTBOUND",
+                  stage: { notIn: ["WON", "LOST", "SPAM"] },
+                },
+              ],
+            },
+          },
         },
-        include: {
-          audits: { orderBy: { auditedAt: "desc" }, take: 1 },
-          interactions: { orderBy: { createdAt: "desc" } },
-        },
-        orderBy: [
-          { qualityScore: "asc" },
-          { ownerReachabilityScore: "desc" },
-          { salesFitConfidence: "desc" },
-          { auditConfidence: "desc" },
-          { createdAt: "asc" },
-        ],
-      },
-    },
-  });
+        select: { leadId: true },
+        orderBy: { dueAt: "asc" },
+        take: 50,
+      }),
+    ]);
 
-  const dueFollowUps = await prisma.prospect.findMany({
-    where: {
-      assignedSellerId: sellerId,
-      status: "FOLLOW_UP",
-      nextFollowUpAt: { lte: now },
-      qualityScore: { lte: 4 },
-      ...(currentBatch ? { batchId: { not: currentBatch.id } } : {}),
-    },
-    include: {
-      audits: { orderBy: { auditedAt: "desc" }, take: 1 },
-      interactions: { orderBy: { createdAt: "desc" } },
-    },
-    orderBy: { nextFollowUpAt: "asc" },
-    take: 50,
-  });
-
-  const currentActionable =
-    currentBatch?.prospects.filter((prospect) =>
-      ["PUBLISHED", "FOLLOW_UP", "QUALIFIED"].includes(prospect.status),
-    ) ?? [];
-  const allProspects = [...currentActionable, ...dueFollowUps];
-  const config = getProspectingConfig();
-  let liveDetails = new Map<string, LivePlaceDetails>();
-  if (config.placesApiKey) {
-    try {
-      liveDetails = await new GooglePlacesProspectingProvider({
-        apiKey: config.placesApiKey,
-        maxDiscoveredPerCycle: config.maxDiscoveredPerCycle,
-        maxPlacesCallsPerCycle: config.maxPlacesCallsPerCycle,
-      }).getLiveDetails(Array.from(new Set(allProspects.map(({ placeId }) => placeId))));
-    } catch {
-      // The seller can still see derived audit data while live Places is temporarily unavailable.
-    }
-  }
-
-  const batchProspects = currentBatch?.prospects ?? [];
-  const completedStatuses = new Set([
-    "QUALIFIED",
-    "NOT_INTERESTED",
-    "DO_NOT_CALL",
-    "INVALID",
-  ]);
-  return NextResponse.json({
-    batch: currentBatch
+    const pageById = new Map(page.items.map((lead) => [lead.id, lead]));
+    const missingDueIds = dueTasks
+      .map(({ leadId }) => leadId)
+      .filter((leadId) => !pageById.has(leadId));
+    const missingDue = await getSellerLeadDetailsByIds({
+      ids: missingDueIds,
+      sellerId,
+    });
+    for (const lead of missingDue) pageById.set(lead.id, lead);
+    const due = dueTasks.flatMap(({ leadId }) => {
+      const lead = pageById.get(leadId);
+      return lead ? [lead] : [];
+    });
+    const dueIds = new Set(
+      due.map((lead) => lead.id),
+    );
+    const current = page.items.filter((lead) => !dueIds.has(lead.id));
+    const responseBatch = currentBatch
       ? {
           id: currentBatch.id,
           weekStart: currentBatch.weekStart,
-          territory: currentBatch.cycle.proposals[0]?.displayName ?? "אזור שבועי",
+          territory:
+            currentBatch.cycle.proposals[0]?.displayName ?? "אזור שבועי",
           target: currentBatch.cycle.targetCount,
-          total: batchProspects.length,
-          completed: batchProspects.filter(
-            (prospect) =>
-              completedStatuses.has(prospect.status) || prospect.interactions.length > 0,
-          ).length,
+          total: currentBatch.prospects.length,
+          completed: currentBatch.prospects.filter(({ promotedLead }) => {
+            if (!promotedLead?.stage) return false;
+            return (
+              promotedLead.stage !== "NEW" ||
+              promotedLead.interactions.length > 0
+            );
+          }).length,
         }
-      : null,
-    current: currentActionable.map((prospect) =>
-      serializeSellerProspect(prospect, liveDetails.get(prospect.placeId)),
-    ),
-    followUps: dueFollowUps.map((prospect) =>
-      serializeSellerProspect(prospect, liveDetails.get(prospect.placeId)),
-    ),
-  });
+      : null;
+
+    if (unified) {
+      return NextResponse.json({
+        batch: responseBatch,
+        current,
+        followUps: due,
+        nextCursor: page.nextCursor,
+      });
+    }
+    return NextResponse.json({
+      batch: responseBatch,
+      current: current.map(serializeCanonicalSellerProspect),
+      followUps: due.map(serializeCanonicalSellerProspect),
+      nextCursor: page.nextCursor,
+    });
+  } catch (error) {
+    console.error("Error listing seller cold leads:", error);
+    return leadDomainErrorResponse(error);
+  }
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
+import { sellerLeadScope } from "@/lib/leads/authorization";
 import { LeadDomainError } from "@/lib/leads/errors";
 
 export interface PublishedLeadLookupStore {
@@ -10,9 +11,14 @@ export interface PublishedLeadLookupStore {
 }
 
 const prismaPublishedLeadLookupStore: PublishedLeadLookupStore = {
+  // Canonical ownership is authoritative; stale Prospect.assignedSellerId
+  // must neither block a real reassignment nor grant access after one.
   findPublishedLead: (prospectId, sellerId) =>
     prisma.prospect.findFirst({
-      where: { id: prospectId, assignedSellerId: sellerId },
+      where: {
+        id: prospectId,
+        promotedLead: { is: sellerLeadScope(sellerId) },
+      },
       select: { promotedLeadId: true },
     }),
 };

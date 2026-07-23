@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
+import { getLeadIntentForSeller } from "@/lib/leads/projection";
 import { getPublishedLeadForProspect } from "@/lib/prospecting/promotion";
 
 export async function POST(
@@ -13,8 +14,16 @@ export async function POST(
   const sellerId = session.user.id;
   const { id } = await params;
   try {
+    const published = await getPublishedLeadForProspect(id, sellerId);
+    const intent = await getLeadIntentForSeller(published.leadId, sellerId);
+    if (intent !== "OUTBOUND") {
+      return NextResponse.json(
+        { error: "Published lead not found" },
+        { status: 404 },
+      );
+    }
     return NextResponse.json(
-      await getPublishedLeadForProspect(id, sellerId),
+      published,
       { status: 200 },
     );
   } catch (error) {

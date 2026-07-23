@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { recordLegacyColdInteraction } from "@/lib/leads/interactions";
+import { getLeadIntentForSeller } from "@/lib/leads/projection";
 import { prisma } from "@/lib/prisma";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
@@ -28,15 +29,21 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const prospect = await prisma.prospect.findFirst({
-      where: {
-        id,
-        assignedSellerId: session.user.id,
-        qualityScore: { lte: 4 },
-      },
+    const prospect = await prisma.prospect.findUnique({
+      where: { id },
       select: { placeId: true, promotedLeadId: true },
     });
     if (!prospect?.promotedLeadId) {
+      return NextResponse.json(
+        { error: "Published cold lead not found" },
+        { status: 404 },
+      );
+    }
+    const intent = await getLeadIntentForSeller(
+      prospect.promotedLeadId,
+      session.user.id,
+    );
+    if (intent !== "OUTBOUND") {
       return NextResponse.json(
         { error: "Published cold lead not found" },
         { status: 404 },

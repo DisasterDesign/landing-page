@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { sellerLeadScope } from "@/lib/leads/authorization";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { recordInteraction } from "@/lib/leads/interactions";
 import { prisma } from "@/lib/prisma";
@@ -30,9 +31,10 @@ export async function POST(
     const { id } = await params;
     const trustedLead = await prisma.contactSubmission.findFirst({
       where: {
-        id,
-        ownerId: session.user.id,
-        migrationReviewRequired: false,
+        AND: [
+          { id, ownerId: session.user.id },
+          sellerLeadScope(session.user.id),
+        ],
       },
       select: { prospect: { select: { placeId: true } } },
     });
