@@ -16,12 +16,25 @@ export type SalesFitClassification =
   | "UNSUITABLE_CATEGORY"
   | "UNCERTAIN";
 
+export type SalesFitEvidenceCode =
+  | "LOCAL_BRAND"
+  | "STREET_FACING"
+  | "SINGLE_LOCATION_SIGNAL"
+  | "DIRECT_PUBLIC_PHONE"
+  | "OWNER_LANGUAGE"
+  | "MULTI_LOCATION"
+  | "FRANCHISE_LANGUAGE"
+  | "CORPORATE_LANGUAGE"
+  | "INSTITUTIONAL_TYPE"
+  | "INDUSTRIAL_TYPE"
+  | "INSUFFICIENT_EVIDENCE";
+
 export interface SalesFitAssessment {
   classification: SalesFitClassification;
   confidence: number;
   ownerReachabilityScore: number;
   reason: string;
-  evidence: readonly string[];
+  evidence: readonly SalesFitEvidenceCode[];
 }
 
 export interface WebsiteScoreDimensions {
