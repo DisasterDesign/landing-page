@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { pathToFileURL } from "node:url";
 
 import { appendLeadEventOnce } from "@/lib/leads/events";
 import { validateSourceSnapshot } from "@/lib/leads/source";
@@ -24,35 +25,14 @@ import {
 } from "./public-place-name-repair";
 
 const leadInclude = {
-  prospect: {
-    select: {
-      id: true,
-      placeId: true,
-      promotedLeadId: true,
-      cycleId: true,
-      batchId: true,
-    },
-  },
+  prospect: { include: { batch: { select: { id: true, cycleId: true } } } },
   assignees: { select: { id: true } },
-  notes: { select: { id: true } },
-  notifications: { select: { id: true } },
-  agreements: { select: { id: true } },
-  interactions: { select: { id: true } },
-  followUps: { select: { id: true } },
-  events: {
-    select: {
-      id: true,
-      type: true,
-      actorType: true,
-      actorUserId: true,
-      fromStage: true,
-      toStage: true,
-      metadata: true,
-      dedupeKey: true,
-      occurredAt: true,
-      recordedAt: true,
-    },
-  },
+  notes: true,
+  notifications: true,
+  agreements: true,
+  interactions: true,
+  followUps: true,
+  events: true,
 } satisfies Prisma.ContactSubmissionInclude;
 
 type RepairLead = Prisma.ContactSubmissionGetPayload<{
@@ -73,6 +53,9 @@ function hasCreatedByBackfillEvent(lead: RepairLead): boolean {
     (event) =>
       event.type === "MIGRATED" &&
       event.actorType === "SYSTEM" &&
+      event.actorUserId === null &&
+      event.fromStage === null &&
+      event.toStage === null &&
       event.dedupeKey === prospectCreatedByBackfillDedupeKey(lead.id) &&
       hasPublishedProspectLeadCreatedMetadata(event.metadata, {
         prospectId: prospect.id,
@@ -87,7 +70,7 @@ function hasBackfillProvenanceDedupeKey(lead: RepairLead): boolean {
   );
 }
 
-function targetForLead(lead: RepairLead): RepairTarget | null {
+export function targetForLead(lead: RepairLead): RepairTarget | null {
   if (
     lead.intentLevel !== "OUTBOUND" ||
     lead.sourceKey !== "google_maps" ||
@@ -98,6 +81,14 @@ function targetForLead(lead: RepairLead): RepairTarget | null {
   if (!hasBackfillProvenanceDedupeKey(lead)) return null;
   if (!lead.prospect || lead.prospect.promotedLeadId !== lead.id) {
     throw new Error("Target validation failed: Prospect link drift");
+  }
+  if (
+    !lead.prospect.batchId ||
+    !lead.prospect.batch ||
+    lead.prospect.batch.id !== lead.prospect.batchId ||
+    lead.prospect.batch.cycleId !== lead.prospect.cycleId
+  ) {
+    throw new Error("Target validation failed: Prospect batch lineage drift");
   }
   if (!hasCreatedByBackfillEvent(lead)) {
     throw new Error("Target validation failed: backfill provenance drift");
@@ -132,7 +123,7 @@ function targetForLead(lead: RepairLead): RepairTarget | null {
   };
 }
 
-function validatedTargets(leads: RepairLead[], expectedTargetCount: number): RepairTarget[] {
+export function validatedTargets(leads: RepairLead[], expectedTargetCount: number): RepairTarget[] {
   const targets = leads
     .map(targetForLead)
     .filter((target): target is RepairTarget => target !== null)
@@ -221,9 +212,14 @@ async function applyRepair(input: {
   names: ReadonlyMap<string, string>;
   repairStartedAt: Date;
 }): Promise<{ updated: number; eventsCreated: number }> {
-  return runActiveNameRepairTransaction<
+  const result = await runActiveNameRepairTransaction<
     Prisma.TransactionClient,
-    { updated: number; eventsCreated: number }
+    {
+      updated: number;
+      eventsCreated: number;
+      pendingCount: number;
+      expectedCompanyByLeadId: Map<string, string>;
+    }
   >({
     runTransaction: (callback) =>
       prisma.$transaction(callback, {
@@ -239,6 +235,17 @@ async function applyRepair(input: {
       const pending = lockedTargets.filter((target) => target.state === "pending");
       if (pending.length !== input.names.size) {
         throw new Error("Transaction validation failed: pending target set changed");
+      }
+      const expectedCompanyByLeadId = new Map<string, string>();
+      for (const target of lockedTargets) {
+        const company =
+          target.state === "pending"
+            ? input.names.get(target.lead.id)
+            : target.lead.company;
+        if (!company) {
+          throw new Error("Transaction validation failed: expected company is missing");
+        }
+        expectedCompanyByLeadId.set(target.lead.id, company);
       }
 
       let updated = 0;
@@ -285,9 +292,14 @@ async function applyRepair(input: {
         if (!event.created) throw new Error("Transaction validation failed: repair event already exists");
         eventsCreated += 1;
       }
-      return { updated, eventsCreated };
+      return {
+        updated,
+        eventsCreated,
+        pendingCount: pending.length,
+        expectedCompanyByLeadId,
+      };
     },
-    validate: async (transaction) => {
+    validate: async (transaction, writeResult) => {
       const postWriteLeads = await loadScopedLeads(transaction);
       const postWriteTargets = validatedTargets(postWriteLeads, input.expectedTargetCount);
       assertPostWriteActiveNameRepairTargets({
@@ -295,9 +307,20 @@ async function applyRepair(input: {
         targetCount: postWriteTargets.length,
         pendingCount: postWriteTargets.filter((target) => target.state === "pending").length,
       });
+      if (
+        writeResult.updated !== writeResult.pendingCount ||
+        writeResult.eventsCreated !== writeResult.pendingCount ||
+        postWriteTargets.some(
+          (target) =>
+            target.lead.company !== writeResult.expectedCompanyByLeadId.get(target.lead.id),
+        )
+      ) {
+        throw new Error("Post-write company or event result mismatch");
+      }
       assertSameManifest(input.manifestHash, postWriteTargets);
     },
   });
+  return { updated: result.updated, eventsCreated: result.eventsCreated };
 }
 
 async function main(): Promise<void> {
@@ -348,11 +371,13 @@ async function main(): Promise<void> {
   );
 }
 
-void main()
-  .catch(() => {
-    console.error("Active name repair failed; no repair summary was produced");
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  void main()
+    .catch(() => {
+      console.error("Active name repair failed; no repair summary was produced");
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

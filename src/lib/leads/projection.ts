@@ -820,12 +820,12 @@ export function projectLeadRecord(
 ): LeadDetail {
   const snapshot = objectValue(lead.sourceSnapshot);
   const placeId = placeIdFor(lead, snapshot);
-  const displayName =
-    lead.company ??
-    lead.name ??
-    options.live?.displayName ??
-    lead.prospect?.auditedDomain ??
-    "עסק ללא שם";
+  const displayName = [
+    lead.company,
+    lead.name,
+    options.live?.displayName,
+    lead.prospect?.auditedDomain,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? "עסק ללא שם";
   const websiteStatus =
     stringValue(snapshot, "websiteStatus") ??
     lead.prospect?.websiteStatus ??

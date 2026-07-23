@@ -166,6 +166,31 @@ test("projection preserves a live public business name when CRM names are absent
   assert.equal(result.displayName, "עסק Google חי");
 });
 
+test("projection skips a whitespace-only live business name for the audited domain", () => {
+  const result = projectLeadRecord(
+    lead({ company: null, name: null }),
+    {
+      audience: "SELLER",
+      viewerId: "seller-1",
+      now: new Date("2026-07-23T10:00:00.000Z"),
+      live: {
+        placeId: "place-1",
+        displayName: "   ",
+        nationalPhoneNumber: null,
+        formattedAddress: null,
+        websiteUri: null,
+        businessStatus: null,
+        category: null,
+        rating: null,
+        reviewCount: null,
+        weekdayDescriptions: [],
+      },
+    },
+  );
+
+  assert.equal(result.displayName, "noa.co.il");
+});
+
 test("projection falls back to the audited domain when no live details are available", () => {
   const result = projectLeadRecord(
     lead({ company: null, name: null }),

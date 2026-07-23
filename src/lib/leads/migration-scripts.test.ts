@@ -31,6 +31,10 @@ import {
   stableJson,
   validPublicPlaceCompanyName,
 } from "../../../scripts/public-place-name-repair";
+import {
+  targetForLead as repairTargetForLead,
+  validatedTargets as validatedRepairTargets,
+} from "../../../scripts/repair-production-outbound-names";
 
 const backfillSource = readFileSync(
   new URL("../../../scripts/backfill-unified-lead-lifecycle.ts", import.meta.url),
@@ -814,5 +818,67 @@ test("post-write target guard rejects a changed target count or a pending target
   assert.equal(
     assertPostWriteActiveNameRepairTargets({ expectedTargetCount: 11, targetCount: 11, pendingCount: 0 }),
     undefined,
+  );
+});
+
+test("actual repair target selector isolates eleven active historical rows from fifty LOST rows", () => {
+  const sourceSnapshot = (id: string) => ({
+    territory: "test",
+    cycleId: "cycle-1",
+    batchId: "batch-1",
+    weekStart: "2026-07-20T00:00:00.000Z",
+    placeId: `place-${id}`,
+    websiteStatus: "UNKNOWN",
+    auditedDomain: null,
+    internalBusinessCategory: "UNKNOWN",
+    internalBusinessCategoryVersion: 1,
+    qualityScore: 1,
+    scoringVersion: 1,
+    opportunitySummary: "הזדמנות עסקית תקינה",
+    callAngles: [],
+  });
+  const lead = (id: string, stage = "NEW") => ({
+    id,
+    intentLevel: "OUTBOUND",
+    sourceKey: "google_maps",
+    stage,
+    externalLeadId: `gplaces:place-${id}`,
+    sourceSnapshot: sourceSnapshot(id),
+    migrationReviewRequired: false,
+    name: null,
+    company: null,
+    prospect: {
+      id: `prospect-${id}`,
+      placeId: `place-${id}`,
+      promotedLeadId: id,
+      cycleId: "cycle-1",
+      batchId: "batch-1",
+      batch: { id: "batch-1", cycleId: "cycle-1" },
+    },
+    events: [
+      {
+        type: "MIGRATED",
+        actorType: "SYSTEM",
+        actorUserId: null,
+        fromStage: null,
+        toStage: null,
+        dedupeKey: `lead:${id}:prospect-created-by-backfill:v1`,
+        metadata: {
+          action: "PUBLISHED_PROSPECT_LEAD_CREATED",
+          version: 1,
+          prospectId: `prospect-${id}`,
+          cycleId: "cycle-1",
+        },
+      },
+    ],
+    assignees: [], notes: [], notifications: [], agreements: [], interactions: [], followUps: [],
+  });
+  const active = Array.from({ length: 11 }, (_, index) => lead(`active-${index}`));
+  const lost = Array.from({ length: 50 }, (_, index) => lead(`lost-${index}`, "LOST"));
+  assert.equal(validatedRepairTargets([...active, ...lost] as never, 11).length, 11);
+  assert.equal(repairTargetForLead(lost[0] as never), null);
+  assert.throws(
+    () => validatedRepairTargets([{ ...active[0], events: [{ ...active[0].events[0], actorUserId: "forged" }] }] as never, 1),
+    /provenance/i,
   );
 });
