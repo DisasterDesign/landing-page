@@ -3,10 +3,25 @@ import test from "node:test";
 
 import {
   supersedePublishedCycle,
+  untouchedPublishedLeadScope,
   type ProspectingReplacementStore,
   type ReplacementSource,
   type ReplacementTransactionInput,
 } from "./replacement";
+
+test("only an unclaimed NEW canonical lead without interactions is replaceable", () => {
+  assert.deepEqual(untouchedPublishedLeadScope("cycle-1"), {
+    cycleId: "cycle-1",
+    status: "PUBLISHED",
+    promotedLead: {
+      is: {
+        stage: "NEW",
+        ownerId: null,
+        interactions: { none: {} },
+      },
+    },
+  });
+});
 
 function publishedSource(overrides: Partial<ReplacementSource> = {}): ReplacementSource {
   return {

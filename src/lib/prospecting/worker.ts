@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 import { assessBusinessSalesFit, assessWebsiteVisuals } from "./ai";
 import { classifyWebsiteUrl, looksParked } from "./classify-website";
-import { auditCommerce } from "./commerce-audit";
+import { auditCommerce, COMMERCE_AUDIT_VERSION } from "./commerce-audit";
 import { getProspectingConfig } from "./config";
 import { hasPageSpeedScreenshot, runPageSpeed } from "./pagespeed";
 import { GooglePlacesProspectingProvider } from "./places";
@@ -262,6 +262,7 @@ async function saveTerminalAudit(input: {
         websiteStatus: input.websiteStatus,
         auditedDomain: input.auditedDomain,
         businessShape: input.businessShape,
+        businessShapeVersion: COMMERCE_AUDIT_VERSION,
         qualityScore: input.qualityScore,
         rawQualityScore: input.rawScore,
         auditConfidence: input.confidence,

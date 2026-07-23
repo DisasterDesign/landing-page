@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { auditCommerce } from "./commerce-audit";
+import {
+  auditCommerce,
+  COMMERCE_AUDIT_VERSION,
+} from "./commerce-audit";
 import { auditHtml } from "./technical-audit";
 
 const HEALTHY_STORE_HTML = `<!doctype html>
@@ -73,6 +76,7 @@ test("non-indexable thin pages expose missing fundamentals and stale dates", () 
 });
 
 test("commerce audit recognizes a functioning store funnel", () => {
+  assert.equal(COMMERCE_AUDIT_VERSION, 1);
   const result = auditCommerce({
     url: "https://shop.example/products",
     html: HEALTHY_STORE_HTML,

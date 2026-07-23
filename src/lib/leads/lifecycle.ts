@@ -553,13 +553,11 @@ function eventTypeForTransition(
   }
 }
 
-export async function transitionLeadStage(
+export async function transitionLeadStageInTransaction(
+  transaction: Prisma.TransactionClient,
   input: TransitionLeadStageInput,
-  dependencies: { store?: LeadLifecycleStore } = {},
 ): Promise<LeadRecord> {
-  const store = dependencies.store ?? prismaLifecycleStore;
-  return store.transaction(async (transaction) => {
-    const existing = await transaction.contactSubmission.findUnique({
+  const existing = await transaction.contactSubmission.findUnique({
       where: { id: input.leadId },
       include: { assignees: { select: { id: true } } },
     });
@@ -650,8 +648,17 @@ export async function transitionLeadStage(
           : {}),
       },
     });
-    return updated;
-  });
+  return updated;
+}
+
+export async function transitionLeadStage(
+  input: TransitionLeadStageInput,
+  dependencies: { store?: LeadLifecycleStore } = {},
+): Promise<LeadRecord> {
+  const store = dependencies.store ?? prismaLifecycleStore;
+  return store.transaction((transaction) =>
+    transitionLeadStageInTransaction(transaction, input),
+  );
 }
 
 export async function markLeadRead(

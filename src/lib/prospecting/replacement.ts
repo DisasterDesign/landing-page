@@ -1,6 +1,25 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
+import { transitionLeadStageInTransaction } from "@/lib/leads/lifecycle";
 
 import { createReplacementProposal } from "./territory";
+
+export function untouchedPublishedLeadScope(
+  cycleId: string,
+): Prisma.ProspectWhereInput {
+  return {
+    cycleId,
+    status: "PUBLISHED",
+    promotedLead: {
+      is: {
+        stage: "NEW",
+        ownerId: null,
+        interactions: { none: {} },
+      },
+    },
+  };
+}
 
 export interface ReplacementSource {
   id: string;
@@ -83,12 +102,22 @@ const prismaReplacementStore: ProspectingReplacementStore = {
           supersededReason: input.reason,
         },
       });
+      const untouched = await transaction.prospect.findMany({
+        where: untouchedPublishedLeadScope(input.cycleId),
+        select: { id: true, promotedLeadId: true },
+      });
+      for (const prospect of untouched) {
+        if (!prospect.promotedLeadId) continue;
+        await transitionLeadStageInTransaction(transaction, {
+          leadId: prospect.promotedLeadId,
+          toStage: "LOST",
+          reason: input.reason,
+          lossReason: "BATCH_SUPERSEDED",
+          actor: { type: "SYSTEM", occurredAt: input.supersededAt },
+        });
+      }
       const invalidated = await transaction.prospect.updateMany({
-        where: {
-          cycleId: input.cycleId,
-          status: "PUBLISHED",
-          interactions: { none: {} },
-        },
+        where: { id: { in: untouched.map(({ id }) => id) } },
         data: {
           status: "INVALID",
           salesFitReason: input.reason,

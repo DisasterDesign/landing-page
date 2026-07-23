@@ -1,5 +1,7 @@
 import type { BusinessShape } from "./types";
 
+export const COMMERCE_AUDIT_VERSION = 1;
+
 export interface CommerceAuditEvidence {
   hasProductStructuredData: boolean;
   hasProductLink: boolean;
