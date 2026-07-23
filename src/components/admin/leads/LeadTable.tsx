@@ -45,7 +45,7 @@ export default function LeadTable({ leads }: { leads: LeadDetail[] }) {
             <tr key={lead.id} className="hover:bg-gray-800/40">
               <td className="px-4 py-3">
                 <div className="font-bold text-white">
-                  {lead.company ?? lead.name ?? "ליד ללא שם"}
+                  {lead.displayName}
                 </div>
                 <div className="mt-2">
                   <LeadSourceBadge

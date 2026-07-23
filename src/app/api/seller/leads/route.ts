@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       leads: focused.leads.map((lead) => ({
         id: lead.id,
-        name: lead.name ?? lead.company ?? "ליד ללא שם",
+        name: lead.name ?? lead.company ?? lead.displayName,
         email: lead.email ?? "",
         phone: lead.phone,
         company: lead.company,

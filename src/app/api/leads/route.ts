@@ -41,7 +41,7 @@ async function loadLegacyAdminPages(filters: AdminLeadFilters) {
 function legacyLead(lead: LeadDetail) {
   return {
     id: lead.id,
-    name: lead.name ?? lead.company ?? "ליד ללא שם",
+    name: lead.name ?? lead.company ?? lead.displayName,
     email: lead.email ?? "",
     phone: lead.phone,
     company: lead.company,

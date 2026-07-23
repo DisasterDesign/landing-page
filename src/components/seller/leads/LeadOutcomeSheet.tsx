@@ -11,6 +11,7 @@ import Modal from "@/components/ui/Modal";
 import { initialLeadOutcomeFormState } from "@/lib/leads/ui-state";
 
 export interface LeadOutcomeLead {
+  displayName: string;
   name: string | null;
   company: string | null;
   preparation: {
@@ -175,7 +176,7 @@ export default function LeadOutcomeSheet({
     <Modal isOpen={isOpen} onClose={onClose} title="תוצאת שיחה">
       <div dir="rtl">
         <p className="text-xs text-gray-500">
-          {lead.company ?? lead.name ?? "ליד"}
+          {lead.displayName}
         </p>
 
         <label className="mt-4 block space-y-2 text-sm text-gray-300">

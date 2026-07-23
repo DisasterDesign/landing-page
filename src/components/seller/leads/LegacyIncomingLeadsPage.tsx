@@ -500,6 +500,10 @@ export default function LegacyIncomingLeadsPage() {
       {selectedForOutcome && (
         <LeadOutcomeSheet
           lead={{
+            displayName:
+              selectedForOutcome.company ??
+              selectedForOutcome.name ??
+              "ליד ללא שם",
             name: selectedForOutcome.name,
             company: selectedForOutcome.company,
             preparation: null,

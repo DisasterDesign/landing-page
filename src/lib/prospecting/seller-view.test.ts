@@ -138,6 +138,7 @@ test("legacy canonical cold view exposes company-note count and canonical write 
   const result = serializeCanonicalSellerProspect({
     id: "lead-1",
     stage: "CONTACTING",
+    displayName: "סטודיו נועה",
     company: "סטודיו נועה",
     name: "נועה",
     phone: "03-1234567",

@@ -108,6 +108,7 @@ export interface LeadPreparationContext {
 
 export interface LeadListItem {
   id: string;
+  displayName: string;
   name: string | null;
   company: string | null;
   email: string | null;
@@ -847,6 +848,7 @@ export function projectLeadRecord(
 
   return {
     id: lead.id,
+    displayName,
     name: lead.name,
     company: lead.company,
     email: lead.email,
