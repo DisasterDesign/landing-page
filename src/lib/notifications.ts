@@ -83,6 +83,26 @@ function persistedNotificationInput(
   };
 }
 
+export async function sendNotificationPush(
+  input: CreateNotificationInput,
+): Promise<void> {
+  try {
+    await sendPushToUser(input.recipientId, {
+      title: input.title,
+      body: input.body,
+      url:
+        input.url ??
+        defaultUrl(input.type, {
+          taskId: input.taskId,
+          leadId: input.leadId,
+        }),
+      tag: `fw-${input.type.toLowerCase()}`,
+    });
+  } catch (error) {
+    console.error("Failed to send push:", error);
+  }
+}
+
 export async function createNotificationOnceInTransaction(
   transaction: NotificationPersistence,
   input: CreateNotificationInput,
@@ -151,18 +171,7 @@ export async function createNotification(
   }
   if (!created) return;
 
-  try {
-    await sendPushToUser(input.recipientId, {
-      title: input.title,
-      body: input.body,
-      url:
-        input.url ??
-        defaultUrl(input.type, { taskId: input.taskId, leadId: input.leadId }),
-      tag: `fw-${input.type.toLowerCase()}`,
-    });
-  } catch (err) {
-    console.error("Failed to send push:", err);
-  }
+  await sendNotificationPush(input);
 }
 
 /**

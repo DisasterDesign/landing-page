@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import SellerSidebar from "@/components/seller/SellerSidebar";
 import { ConfirmSheetHost } from "@/components/ui/ConfirmSheet";
 import AdminToaster from "@/components/admin/AdminToaster";
+import NotificationBell from "@/components/admin/NotificationBell";
 
 export default async function SellerDashboardLayout({
   children,
@@ -35,6 +36,7 @@ export default async function SellerDashboardLayout({
           <div className="h-16 flex items-center justify-between px-6 safe-px">
             <h1 className="text-lg font-bold text-white">אזור מוכרים</h1>
             <div className="flex items-center gap-2">
+              <NotificationBell />
               <span className="text-sm text-gray-400 hidden md:block">
                 {session.user.name}
               </span>

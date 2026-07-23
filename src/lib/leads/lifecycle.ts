@@ -11,7 +11,6 @@ import {
   type CreateNotificationInput,
 } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { getLeadLifecycleConfig } from "./config";
 import { hashSuppressionValue } from "@/lib/prospecting/suppression";
 
 import {
@@ -28,6 +27,7 @@ import {
   isLeadSourceKey,
   validateSourceSnapshot,
 } from "./source";
+import { leadActionUrlFor, sellerLeadActionUrl } from "./action-url";
 import type {
   AuthenticatedLeadActor,
   ClaimLeadInput,
@@ -507,7 +507,7 @@ export async function releaseOrReassignLead(
               title: "ליד הועבר אליך",
               body: "הליד ממתין לטיפול שלך",
               leadId: input.leadId,
-              url: `/seller/leads?focus=${input.leadId}`,
+              url: sellerLeadActionUrl(existing),
               dedupeKey: `${input.sellerId}:lead-reassigned:${input.leadId}:${now.toISOString()}`,
             } satisfies CreateNotificationInput)
           : null,
@@ -1048,7 +1048,7 @@ export async function createLeadInTransaction(
           body: reviewReason ?? "נדרש אימות ידני",
           leadId: lead.id,
           dedupeKey: `${admin.id}:lead-review:${lead.id}:${reviewReason}`,
-          url: `/admin/leads?focus=${lead.id}`,
+          url: leadActionUrlFor({ audience: "ADMIN", lead }),
         },
       });
     }
@@ -1060,7 +1060,6 @@ export async function createLeadInTransaction(
     input.captureMode !== "HISTORICAL_SYNC" &&
     input.eligibleSellerId
   ) {
-    const unifiedEnabled = getLeadLifecycleConfig().enabled;
     effects.push({
       kind: "NOTIFICATION",
       input: {
@@ -1072,9 +1071,7 @@ export async function createLeadInTransaction(
             : "ליד חדש ממתין לטיפול",
         leadId: lead.id,
         dedupeKey: `${input.eligibleSellerId}:lead-created:${lead.id}`,
-        url: unifiedEnabled
-          ? `/seller/leads/${lead.id}`
-          : `/seller/leads?focus=${lead.id}`,
+        url: sellerLeadActionUrl(lead),
       },
     });
   }

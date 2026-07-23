@@ -109,6 +109,22 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Notification rows are always recipient-scoped, so both backend roles may
+  // read and acknowledge their own bell feed.
+  if (
+    pathname === "/api/notifications" ||
+    pathname.startsWith("/api/notifications/")
+  ) {
+    if (!isLoggedIn) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userRole = (req.auth?.user as Record<string, unknown>)?.role;
+    if (userRole !== "SELLER" && userRole !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+
   // Seller-scoped API: open to SELLER and ADMIN only. Must come BEFORE the
   // ADMIN-only blanket gate below.
   if (pathname.startsWith("/api/seller/")) {

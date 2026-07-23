@@ -10,8 +10,14 @@ type NotifType =
   | "CONTACT_RECEIVED"
   | "AGREEMENT_SIGNED"
   | "LEAD_FOLLOWUP"
+  | "LEAD_REASSIGNED"
+  | "LEAD_SLA_BREACH"
+  | "LEAD_SLA_ESCALATION"
+  | "PAYMENT_FAILED"
+  | "PAYMENT_MISMATCH"
   | "PROSPECTING_APPROVAL"
-  | "PROSPECTING_BATCH_READY";
+  | "PROSPECTING_BATCH_READY"
+  | "PROSPECTING_BATCH_SHORTFALL";
 
 interface NotificationItem {
   id: string;
@@ -42,6 +48,16 @@ function targetUrlFor(n: NotificationItem): string | null {
       return "/admin/prospecting";
     case "PROSPECTING_BATCH_READY":
       return "/seller/cold-leads";
+    case "LEAD_REASSIGNED":
+    case "LEAD_SLA_BREACH":
+    case "LEAD_SLA_ESCALATION":
+    case "PAYMENT_FAILED":
+    case "PAYMENT_MISMATCH":
+      return n.leadId ? `/admin/leads?focus=${n.leadId}` : "/admin/leads";
+    case "PROSPECTING_BATCH_SHORTFALL":
+      return "/admin/prospecting";
+    default:
+      return null;
   }
 }
 

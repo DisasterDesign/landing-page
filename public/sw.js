@@ -44,7 +44,7 @@ self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
-  } catch (e) {
+  } catch {
     data = { title: 'Fuzion Webz', body: event.data ? event.data.text() : '' };
   }
 
@@ -54,7 +54,7 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/icons/icon-192x192.png',
     badge: '/icons/icon-192x192.png',
     tag: data.tag || 'fw-notification',
-    data: { url: data.url || '/admin' },
+    data: { url: data.url || '/' },
     dir: 'rtl',
     lang: 'he',
     requireInteraction: false,
@@ -65,16 +65,16 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/admin';
+  const target = (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientsArr) => {
-        // Focus existing tab if open
+        // Navigate an existing app tab to the exact deep link before focusing.
         for (const client of clientsArr) {
-          if (client.url.includes(target.split('?')[0]) && 'focus' in client) {
-            return client.focus();
+          if ('navigate' in client && 'focus' in client) {
+            return client.navigate(target).then(() => client.focus());
           }
         }
         // Otherwise open a new one

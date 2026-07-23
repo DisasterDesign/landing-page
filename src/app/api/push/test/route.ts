@@ -13,7 +13,10 @@ export async function POST() {
     await sendPushToUser(session.user.id, {
       title: "התראת בדיקה ✓",
       body: "ההתראות פעילות. כל פעולה במערכת תקפיץ הודעה למסך.",
-      url: "/admin",
+      url:
+        (session.user as { role?: string }).role === "SELLER"
+          ? "/seller"
+          : "/admin",
       tag: "fw-test",
     });
 
