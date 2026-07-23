@@ -10,13 +10,27 @@ export interface SellerColdLead {
   callAngles: string[];
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
-  live: {
+  liveStatus: "READY" | "UNAVAILABLE" | "NO_PHONE";
+  business: {
     displayName: string;
     phone: string | null;
     address: string | null;
     website: string | null;
+    websiteSource: "GOOGLE" | "AUDITED_DOMAIN" | "NONE";
+    mapUrl: string;
+    category: string | null;
+    rating: number | null;
+    reviewCount: number | null;
+    weekdayDescriptions: string[];
     businessStatus: string | null;
-  } | null;
+  };
+  salesFit: {
+    classification: string | null;
+    confidence: number | null;
+    ownerReachabilityScore: number | null;
+    reason: string | null;
+    evidence: string[];
+  };
   scoreBreakdown: {
     availability: number | null;
     performance: number | null;

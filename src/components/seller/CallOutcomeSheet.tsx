@@ -41,7 +41,7 @@ export default function CallOutcomeSheet({
           <div>
             <h2 className="text-lg font-bold text-white">תוצאת שיחה</h2>
             <p className="mt-1 text-xs text-gray-500">
-              {lead.live?.displayName ?? lead.auditedDomain ?? "עסק"}
+              {lead.business.displayName}
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-white" aria-label="סגור">

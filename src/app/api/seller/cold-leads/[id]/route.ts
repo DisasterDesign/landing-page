@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
+import { serializeSellerProspect } from "@/lib/prospecting/seller-view";
 
 export async function GET(
   _request: Request,
@@ -37,5 +38,5 @@ export async function GET(
       live = null;
     }
   }
-  return NextResponse.json({ prospect, live: live ?? null });
+  return NextResponse.json(serializeSellerProspect(prospect, live ?? undefined));
 }

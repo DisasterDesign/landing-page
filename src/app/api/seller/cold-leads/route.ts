@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
+import { serializeSellerProspect } from "@/lib/prospecting/seller-view";
 import type { LivePlaceDetails } from "@/lib/prospecting/types";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,8 @@ export async function GET() {
   const now = new Date();
 
   const currentBatch = await prisma.weeklyProspectBatch.findFirst({
-    where: { sellerId },
-    orderBy: { weekStart: "desc" },
+    where: { sellerId, supersededAt: null },
+    orderBy: { publishedAt: "desc" },
     include: {
       cycle: {
         include: {
@@ -34,7 +35,13 @@ export async function GET() {
           audits: { orderBy: { auditedAt: "desc" }, take: 1 },
           interactions: { orderBy: { createdAt: "desc" } },
         },
-        orderBy: [{ qualityScore: "asc" }, { auditConfidence: "desc" }, { createdAt: "asc" }],
+        orderBy: [
+          { qualityScore: "asc" },
+          { ownerReachabilityScore: "desc" },
+          { salesFitConfidence: "desc" },
+          { auditConfidence: "desc" },
+          { createdAt: "asc" },
+        ],
       },
     },
   });
@@ -74,49 +81,6 @@ export async function GET() {
     }
   }
 
-  const serialize = (prospect: (typeof allProspects)[number]) => {
-    const live = liveDetails.get(prospect.placeId);
-    return {
-      id: prospect.id,
-      status: prospect.status,
-      websiteStatus: prospect.websiteStatus,
-      auditedDomain: prospect.auditedDomain,
-      qualityScore: prospect.qualityScore,
-      rawQualityScore: prospect.rawQualityScore,
-      auditConfidence: prospect.auditConfidence,
-      opportunitySummary: prospect.opportunitySummary,
-      callAngles: prospect.callAngles,
-      nextFollowUpAt: prospect.nextFollowUpAt,
-      lastContactedAt: prospect.lastContactedAt,
-      live: live
-        ? {
-            displayName: live.displayName,
-            phone: live.nationalPhoneNumber,
-            address: live.formattedAddress,
-            website: live.websiteUri,
-            businessStatus: live.businessStatus,
-          }
-        : null,
-      scoreBreakdown: prospect.audits[0]
-        ? {
-            availability: prospect.audits[0].availabilityScore,
-            performance: prospect.audits[0].performanceScore,
-            seo: prospect.audits[0].seoScore,
-            maintenance: prospect.audits[0].maintenanceScore,
-            visual: prospect.audits[0].visualScore,
-            commercial: prospect.audits[0].commercialScore,
-          }
-        : null,
-      interactions: prospect.interactions.map((interaction) => ({
-        id: interaction.id,
-        outcome: interaction.outcome,
-        note: interaction.note,
-        nextFollowUpAt: interaction.nextFollowUpAt,
-        createdAt: interaction.createdAt,
-      })),
-    };
-  };
-
   const batchProspects = currentBatch?.prospects ?? [];
   const completedStatuses = new Set([
     "QUALIFIED",
@@ -138,7 +102,11 @@ export async function GET() {
           ).length,
         }
       : null,
-    current: currentActionable.map(serialize),
-    followUps: dueFollowUps.map(serialize),
+    current: currentActionable.map((prospect) =>
+      serializeSellerProspect(prospect, liveDetails.get(prospect.placeId)),
+    ),
+    followUps: dueFollowUps.map((prospect) =>
+      serializeSellerProspect(prospect, liveDetails.get(prospect.placeId)),
+    ),
   });
 }

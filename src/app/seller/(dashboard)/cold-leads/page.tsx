@@ -145,6 +145,7 @@ export default function SellerColdLeadsPage() {
               lead={lead}
               onOutcome={() => setSelected(lead)}
               onPromote={() => promote(lead)}
+              onRetry={load}
               promoting={promotingId === lead.id}
             />
           ))}
