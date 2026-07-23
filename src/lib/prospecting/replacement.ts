@@ -118,6 +118,7 @@ export async function supersedePublishedCycle(
   dependencies: {
     store?: ProspectingReplacementStore;
     createProposal?: (cycleId: string) => Promise<void>;
+    markProposalFailed?: (cycleId: string, message: string) => Promise<void>;
   } = {},
 ): Promise<{ replacementCycleId: string; invalidatedProspects: number }> {
   const store = dependencies.store ?? prismaReplacementStore;
@@ -129,9 +130,7 @@ export async function supersedePublishedCycle(
       throw new Error("Superseded cycle has no replacement revision");
     }
     if (!source.existingReplacement.hasProposal) {
-      await (dependencies.createProposal ?? defaultCreateProposal)(
-        source.existingReplacement.id,
-      );
+      await createProposalOrMarkFailed(source.existingReplacement.id, dependencies);
     }
     return {
       replacementCycleId: source.existingReplacement.id,
@@ -163,12 +162,36 @@ export async function supersedePublishedCycle(
     supersededAt: now,
     invalidateOnlyUntouched: true,
   });
-  await (dependencies.createProposal ?? defaultCreateProposal)(
-    result.replacementCycleId,
-  );
+  await createProposalOrMarkFailed(result.replacementCycleId, dependencies);
   return result;
+}
+
+async function createProposalOrMarkFailed(
+  cycleId: string,
+  dependencies: {
+    createProposal?: (cycleId: string) => Promise<void>;
+    markProposalFailed?: (cycleId: string, message: string) => Promise<void>;
+  },
+): Promise<void> {
+  try {
+    await (dependencies.createProposal ?? defaultCreateProposal)(cycleId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown proposal error";
+    await (dependencies.markProposalFailed ?? defaultMarkProposalFailed)(cycleId, message);
+    throw error;
+  }
 }
 
 async function defaultCreateProposal(cycleId: string): Promise<void> {
   await createReplacementProposal(cycleId);
+}
+
+async function defaultMarkProposalFailed(
+  cycleId: string,
+  message: string,
+): Promise<void> {
+  await prisma.prospectingCycle.updateMany({
+    where: { id: cycleId, status: "PROPOSING" },
+    data: { status: "FAILED", lastError: message },
+  });
 }

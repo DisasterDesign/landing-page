@@ -88,6 +88,33 @@ test("replacement is idempotent when the published cycle was already superseded"
   assert.equal(proposalCalls, 0);
 });
 
+test("a proposal failure marks the replacement cycle as failed", async () => {
+  const fake = fakeStore(publishedSource());
+  const failed: Array<{ cycleId: string; message: string }> = [];
+
+  await assert.rejects(
+    supersedePublishedCycle(
+      "cycle-1",
+      "Initial batch failed the independent-business sales-fit criteria",
+      new Date("2026-07-23T08:00:00Z"),
+      {
+        store: fake.store,
+        createProposal: async () => {
+          throw new Error("AI provider unavailable");
+        },
+        markProposalFailed: async (cycleId, message) => {
+          failed.push({ cycleId, message });
+        },
+      },
+    ),
+    /AI provider unavailable/,
+  );
+
+  assert.deepEqual(failed, [
+    { cycleId: "cycle-2", message: "AI provider unavailable" },
+  ]);
+});
+
 test("replacement refuses a non-published cycle or a cycle without a batch", async () => {
   const notPublished = fakeStore(publishedSource({ status: "AUDITING" }));
   await assert.rejects(
