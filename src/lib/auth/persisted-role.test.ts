@@ -119,6 +119,10 @@ test("admin PII list and detail routes guard persisted ADMIN before querying", (
       "../../app/api/contacts/route.ts",
       "prisma.contactSubmission.findMany",
     ],
+    [
+      "../../app/api/users/route.ts",
+      "prisma.user.findMany",
+    ],
   ] as const;
 
   for (const [relativePath, firstPiiQuery] of routes) {

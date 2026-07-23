@@ -28,7 +28,7 @@ type FakeLead = Record<string, unknown> & {
     | "LOST"
     | "SPAM"
     | null;
-  assignees: Array<{ id: string }>;
+  assignees: Array<{ id: string; role?: "ADMIN" | "SELLER" | "MEMBER" }>;
 };
 
 function canonicalLead(overrides: Partial<FakeLead> = {}): FakeLead {
@@ -68,7 +68,7 @@ function canonicalLead(overrides: Partial<FakeLead> = {}): FakeLead {
     lossReason: null,
     lossReasonDetails: null,
     legacyStateHash: null,
-    assignees: [{ id: "seller-1" }],
+    assignees: [{ id: "seller-1", role: "SELLER" }],
     ...overrides,
   };
 }
@@ -522,6 +522,205 @@ test("migration resolution cannot clear an unverified historical payment", async
     /unverified|payment/i,
   );
   assert.equal(unverifiedStore.lead.migrationReviewRequired, true);
+});
+
+test("migration resolution may clear legacy admin-only assignments without manufacturing a seller owner", async () => {
+  const unresolved = canonicalLead({
+    ownerId: null,
+    eligibleSellerId: null,
+    migrationReviewRequired: true,
+    migrationReviewReason: "LEGACY_OWNER_NOT_SELLER",
+    assignees: [{ id: "legacy-admin", role: "ADMIN" }],
+  });
+  const store = fakeCorrectionStore(unresolved, {
+    roles: {
+      "actor-admin": "ADMIN",
+      "legacy-admin": "ADMIN",
+      "seller-1": "SELLER",
+    },
+  });
+
+  await resolveLeadMigrationReview(
+    {
+      leadId: "lead-1",
+      intentLevel: "AD_RESPONSE",
+      sourceKey: "meta_lead_ads",
+      externalLeadId: "meta-1",
+      sourceSnapshot: {
+        externalLeadId: "meta-1",
+        nonContactAnswers: [],
+        receivedAt: "2026-07-23T07:00:00.000Z",
+      },
+      stage: "LOST",
+      ownerId: null,
+      eligibleSellerId: "seller-1",
+      reason:
+        "Legacy assignment belongs only to an admin and is not seller ownership evidence",
+      version: 1,
+      actor: { userId: "actor-admin", role: "ADMIN" },
+    },
+    { store },
+  );
+
+  assert.equal(store.lead.ownerId, null);
+  assert.equal(store.lead.eligibleSellerId, "seller-1");
+  assert.deepEqual(store.lead.assignees, []);
+  assert.equal(store.lead.migrationReviewRequired, false);
+  assert.deepEqual(
+    (store.events.at(-1)?.metadata as Record<string, unknown>)?.removedLegacyAssigneeIds,
+    ["legacy-admin"],
+  );
+});
+
+test("migration resolution may not erase legacy seller ownership evidence", async () => {
+  const unresolved = canonicalLead({
+    ownerId: null,
+    migrationReviewRequired: true,
+    migrationReviewReason: "LEGACY_MULTI_ASSIGNEE",
+    assignees: [{ id: "seller-1", role: "SELLER" }],
+  });
+  const store = fakeCorrectionStore(unresolved, {
+    roles: { "actor-admin": "ADMIN", "seller-1": "SELLER" },
+  });
+
+  await assert.rejects(
+    resolveLeadMigrationReview(
+      {
+        leadId: "lead-1",
+        intentLevel: "AD_RESPONSE",
+        sourceKey: "meta_lead_ads",
+        externalLeadId: "meta-1",
+        sourceSnapshot: {
+          externalLeadId: "meta-1",
+          nonContactAnswers: [],
+          receivedAt: "2026-07-23T07:00:00.000Z",
+        },
+        stage: "LOST",
+        ownerId: null,
+        eligibleSellerId: "seller-1",
+        reason: "Trying to erase seller evidence",
+        version: 1,
+        actor: { userId: "actor-admin", role: "ADMIN" },
+      },
+      { store },
+    ),
+    /legacy admin assignment|ownership evidence/i,
+  );
+  assert.equal(store.lead.migrationReviewRequired, true);
+  assert.deepEqual(store.lead.assignees, [
+    { id: "seller-1", role: "SELLER" },
+  ]);
+});
+
+test("migration resolution may not erase a non-admin legacy assignment", async () => {
+  const unresolved = canonicalLead({
+    ownerId: null,
+    migrationReviewRequired: true,
+    migrationReviewReason: "LEGACY_MULTI_ASSIGNEE",
+    assignees: [{ id: "member-1", role: "MEMBER" }],
+  });
+  const store = fakeCorrectionStore(unresolved, {
+    roles: {
+      "actor-admin": "ADMIN",
+      "seller-1": "SELLER",
+    },
+  });
+
+  await assert.rejects(
+    resolveLeadMigrationReview(
+      {
+        leadId: "lead-1",
+        intentLevel: "AD_RESPONSE",
+        sourceKey: "meta_lead_ads",
+        externalLeadId: "meta-1",
+        sourceSnapshot: {
+          externalLeadId: "meta-1",
+          nonContactAnswers: [],
+          receivedAt: "2026-07-23T07:00:00.000Z",
+        },
+        stage: "LOST",
+        ownerId: null,
+        eligibleSellerId: "seller-1",
+        reason: "Trying to erase a non-admin assignment",
+        version: 1,
+        actor: { userId: "actor-admin", role: "ADMIN" },
+      },
+      { store },
+    ),
+    /only legacy admin|non-admin/i,
+  );
+  assert.equal(store.lead.migrationReviewRequired, true);
+  assert.deepEqual(store.lead.assignees, [
+    { id: "member-1", role: "MEMBER" },
+  ]);
+});
+
+test("migration resolution keeps the evidenced seller and removes only legacy admin assignments", async () => {
+  const unresolved = canonicalLead({
+    ownerId: null,
+    eligibleSellerId: null,
+    migrationReviewRequired: true,
+    migrationReviewReason: "LEGACY_MULTI_ASSIGNEE",
+    assignees: [
+      { id: "legacy-admin", role: "ADMIN" },
+      { id: "seller-1", role: "SELLER" },
+    ],
+  });
+  const store = fakeCorrectionStore(unresolved, {
+    roles: {
+      "actor-admin": "ADMIN",
+      "legacy-admin": "ADMIN",
+      "seller-1": "SELLER",
+    },
+  });
+
+  await resolveLeadMigrationReview(
+    {
+      leadId: "lead-1",
+      intentLevel: "AD_RESPONSE",
+      sourceKey: "meta_lead_ads",
+      externalLeadId: "meta-1",
+      sourceSnapshot: {
+        externalLeadId: "meta-1",
+        nonContactAnswers: [],
+        receivedAt: "2026-07-23T07:00:00.000Z",
+      },
+      stage: "LOST",
+      ownerId: "seller-1",
+      eligibleSellerId: "seller-1",
+      reason: "The seller assignment is supported by the legacy relation",
+      version: 1,
+      actor: { userId: "actor-admin", role: "ADMIN" },
+    },
+    { store },
+  );
+
+  assert.equal(store.lead.ownerId, "seller-1");
+  assert.deepEqual(store.lead.assignees, [{ id: "seller-1" }]);
+  const metadata = store.events.at(-1)?.metadata as
+    | Record<string, unknown>
+    | undefined;
+  assert.deepEqual(metadata?.removedLegacyAssigneeIds, ["legacy-admin"]);
+  assert.deepEqual(metadata?.before, {
+    intentLevel: "AD_RESPONSE",
+    sourceKey: "meta_lead_ads",
+    stage: "CONTACTING",
+    ownerId: null,
+    eligibleSellerId: null,
+    migrationReviewReason: "LEGACY_MULTI_ASSIGNEE",
+    legacyAssignees: [
+      { userId: "legacy-admin", role: "ADMIN" },
+      { userId: "seller-1", role: "SELLER" },
+    ],
+  });
+  assert.deepEqual(metadata?.after, {
+    intentLevel: "AD_RESPONSE",
+    sourceKey: "meta_lead_ads",
+    stage: "LOST",
+    ownerId: "seller-1",
+    eligibleSellerId: "seller-1",
+    assigneeIds: ["seller-1"],
+  });
 });
 
 test("migration resolution rejects source collisions and manufactured won stages", async () => {

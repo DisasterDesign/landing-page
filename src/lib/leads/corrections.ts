@@ -346,7 +346,7 @@ export async function resolveLeadMigrationReview(
     await assertPersistedRole(transaction, input.actor.userId, "ADMIN");
     const existing = await transaction.contactSubmission.findUnique({
       where: { id: input.leadId },
-      include: { assignees: { select: { id: true } } },
+      include: { assignees: { select: { id: true, role: true } } },
     });
     if (!existing) throw new LeadDomainError("NOT_FOUND", "Lead not found");
     if (!existing.migrationReviewRequired) {
@@ -392,10 +392,23 @@ export async function resolveLeadMigrationReview(
           "Chosen owner is not supported by legacy assignment evidence",
         );
       }
-    } else if (existing.assignees.length > 0) {
+      if (
+        existing.assignees.some(
+          ({ id, role }) =>
+            id !== input.ownerId && role !== "ADMIN",
+        )
+      ) {
+        throw new LeadDomainError(
+          "VALIDATION",
+          "Only legacy admin assignments may be removed",
+        );
+      }
+    } else if (
+      existing.assignees.some(({ role }) => role !== "ADMIN")
+    ) {
       throw new LeadDomainError(
         "VALIDATION",
-        "Unowned resolution cannot retain legacy assignees",
+        "Unowned resolution can remove only legacy admin assignments",
       );
     }
 
@@ -456,12 +469,20 @@ export async function resolveLeadMigrationReview(
     const mirror = legacySourceMirror(input.sourceKey);
     const attribution = sourceLegacyAttribution(input.sourceKey, snapshot);
     const assigneeIds = input.ownerId ? [input.ownerId] : [];
+    const removedLegacyAssigneeIds = existing.assignees
+      .map(({ id }) => id)
+      .filter((id) => !assigneeIds.includes(id))
+      .sort();
     const before = {
       intentLevel: existing.intentLevel,
       sourceKey: existing.sourceKey,
       stage: existing.stage,
       ownerId: existing.ownerId,
       eligibleSellerId: existing.eligibleSellerId,
+      migrationReviewReason: existing.migrationReviewReason,
+      legacyAssignees: existing.assignees
+        .map(({ id, role }) => ({ userId: id, role }))
+        .sort((left, right) => left.userId.localeCompare(right.userId)),
     };
     const after = {
       intentLevel: input.intentLevel,
@@ -469,6 +490,7 @@ export async function resolveLeadMigrationReview(
       stage,
       ownerId: input.ownerId,
       eligibleSellerId: input.eligibleSellerId,
+      assigneeIds,
     };
     const updated = await transaction.contactSubmission.update({
       where: { id: input.leadId },
@@ -517,6 +539,7 @@ export async function resolveLeadMigrationReview(
         version: input.version,
         before,
         after,
+        removedLegacyAssigneeIds,
       },
     });
     return updated;
