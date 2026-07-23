@@ -162,6 +162,16 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     console.warn(
       `Cardcom webhook: expected one agreement for LowProfileId=${lowProfileId}, found ${matchingAgreements.length}`,
     );
+    // A customer may have just PAID and nothing recorded it — a log line is
+    // not enough. Alert the humans; the money side self-heals via the daily
+    // reconcile, but the welcome flow (recurring order, emails) will not run
+    // until someone connects this payment to an agreement.
+    await notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: "🚨 תשלום קארדקום ללא הסכם תואם",
+      body: `LowProfileId=${lowProfileId} — נמצאו ${matchingAgreements.length} הסכמים. ייתכן תשלום אמיתי שלא נקלט.`,
+      url: "/admin/agreements",
+    }).catch((e) => console.error("webhook orphan alert failed:", e));
     return;
   }
   const agreement = matchingAgreements[0];

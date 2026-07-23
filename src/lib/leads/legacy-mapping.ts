@@ -70,6 +70,24 @@ interface LegacyAgreementStageEvidence {
   paymentStatus?: string | null;
 }
 
+/**
+ * Inverse of mapLegacyLeadSource for display: the legacy admin UI keys its
+ * badges on the OLD ContactSubmission.source values, so list responses must
+ * hand back those, not the canonical sourceKey.
+ */
+export function legacySourceForSourceKey(sourceKey: string | null): string | null {
+  switch (sourceKey) {
+    case "meta_lead_ads":
+      return "FACEBOOK";
+    case "google_maps":
+      return "GOOGLE_PROSPECTING";
+    case "website":
+      return "WEBSITE";
+    default:
+      return sourceKey;
+  }
+}
+
 export interface LegacyLeadStageInput {
   paidAt?: Date | null;
   paymentStatus?: string | null;

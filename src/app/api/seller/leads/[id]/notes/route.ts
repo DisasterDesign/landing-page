@@ -35,8 +35,11 @@ export async function GET(
       { userId: session.user.id, role: "SELLER" },
       lead,
     );
+    // Sellers see only their OWN notes — restored pre-unified behaviour.
+    // Admin notes may carry internal context (pricing floors, client history)
+    // that is not for sellers; the admin side still sees the full thread.
     const notes = await prisma.contactNote.findMany({
-      where: { contactId: id },
+      where: { contactId: id, authorId: session.user.id },
       select: {
         id: true,
         body: true,
@@ -82,6 +85,10 @@ export async function POST(
 }
 
 export function DELETE() {
+  // Kept append-only deliberately: notes are part of the lead's commercial
+  // history, and the writer-boundary invariant tests enforce that no API
+  // route mutates it destructively. (Sellers still only SEE their own notes
+  // — the privacy filter lives in GET above.)
   return NextResponse.json(
     { error: "Lead notes are append-only" },
     { status: 405 },

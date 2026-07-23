@@ -58,6 +58,14 @@ export async function PUT(request: Request) {
       create: { key: "prospecting:defaultSellerId", value: seller.id },
       update: { value: seller.id },
     }),
+    // Lead routing reads sales:defaultSellerId FIRST (assignment.ts) but no
+    // code ever wrote it — keep both keys in lockstep so warm-lead routing
+    // never silently depends on the prospecting fallback.
+    prisma.keyValue.upsert({
+      where: { key: "sales:defaultSellerId" },
+      create: { key: "sales:defaultSellerId", value: seller.id },
+      update: { value: seller.id },
+    }),
     prisma.keyValue.upsert({
       where: { key: "prospecting:adminKillSwitch" },
       create: { key: "prospecting:adminKillSwitch", value: parsed.data.adminKillSwitch },
