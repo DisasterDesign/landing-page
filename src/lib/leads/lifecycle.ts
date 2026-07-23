@@ -11,6 +11,8 @@ import {
   type CreateNotificationInput,
 } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { getLeadLifecycleConfig } from "./config";
+import { hashSuppressionValue } from "@/lib/prospecting/suppression";
 
 import { assertCommercialLeadReady, canSellerReadLead } from "./authorization";
 import { LeadDomainError } from "./errors";
@@ -63,6 +65,7 @@ export interface LeadPostCommitEffect {
 }
 
 export interface LeadCreationStore extends LeadLifecycleStore {
+  suppressionHashSecret?: string;
   runEffect?(effect: LeadPostCommitEffect): Promise<void>;
 }
 
@@ -94,6 +97,34 @@ export function legacySourceMirror(sourceKey: string): {
     default:
       throw new LeadDomainError("VALIDATION", `Unknown lead source: ${sourceKey}`);
   }
+}
+
+export function legacyAttributionForSource(
+  sourceKey: string,
+  snapshot: Record<string, unknown>,
+): {
+  externalFormId: string | null;
+  externalFormName: string | null;
+  externalCampaignId: string | null;
+  externalAdId: string | null;
+} {
+  if (sourceKey !== "meta_lead_ads") {
+    return {
+      externalFormId: null,
+      externalFormName: null,
+      externalCampaignId: null,
+      externalAdId: null,
+    };
+  }
+  return {
+    externalFormId:
+      typeof snapshot.formId === "string" ? snapshot.formId : null,
+    externalFormName:
+      typeof snapshot.formName === "string" ? snapshot.formName : null,
+    externalCampaignId:
+      typeof snapshot.campaignId === "string" ? snapshot.campaignId : null,
+    externalAdId: typeof snapshot.adId === "string" ? snapshot.adId : null,
+  };
 }
 
 export function legacyHashForLead(
@@ -689,6 +720,7 @@ export async function markLeadsRead(
 export async function createLeadInTransaction(
   transaction: Prisma.TransactionClient,
   input: CreateLeadFromSourceInput,
+  options: { suppressionHashSecret?: string } = {},
 ): Promise<{ lead: LeadRecord; effects: LeadPostCommitEffect[] }> {
   if (!isLeadSourceKey(input.sourceKey)) {
     throw new LeadDomainError(
@@ -724,7 +756,10 @@ export async function createLeadInTransaction(
           "Existing lead has different immutable intent",
         );
       }
-      return { lead: existing, effects: [] };
+      return {
+        lead: await mergeMissingContactDetails(transaction, existing, input),
+        effects: [],
+      };
     }
 
     const transitional = await transaction.contactSubmission.findFirst({
@@ -771,16 +806,54 @@ export async function createLeadInTransaction(
         dedupeKey: `lead:${transitional.id}:source-upgrade:v1`,
         metadata: { action: "LEGACY_SOURCE_UPGRADED", sourceKey: input.sourceKey },
       });
-      return { lead: upgraded, effects: [] };
+      return {
+        lead: await mergeMissingContactDetails(transaction, upgraded, input),
+        effects: [],
+      };
     }
   }
 
   const now = new Date();
   const occurredAt = input.occurredAt ?? now;
   const mirror = legacySourceMirror(input.sourceKey);
-  const reviewReason =
+  const attribution = legacyAttributionForSource(
+    input.sourceKey,
+    sourceSnapshot,
+  );
+  const suppressionHashSecret =
+    options.suppressionHashSecret ?? process.env.PROSPECTING_HASH_SECRET?.trim();
+  const suppressionFilters: Array<
+    { phoneHash: string } | { domainHash: string }
+  > = [];
+  if (suppressionHashSecret && input.phone?.trim()) {
+    suppressionFilters.push({
+      phoneHash: hashSuppressionValue(input.phone, suppressionHashSecret),
+    });
+  }
+  const auditedDomain =
+    input.sourceKey === "google_maps" &&
+    typeof sourceSnapshot.auditedDomain === "string"
+      ? sourceSnapshot.auditedDomain
+      : null;
+  if (suppressionHashSecret && auditedDomain) {
+    suppressionFilters.push({
+      domainHash: hashSuppressionValue(auditedDomain, suppressionHashSecret),
+    });
+  }
+  const suppression =
+    suppressionFilters.length > 0
+      ? await transaction.prospectSuppression.findFirst({
+          where: { OR: suppressionFilters },
+          select: { id: true },
+        })
+      : null;
+  const reviewReason: string | null =
     input.forcedReviewReason ??
-    (input.eligibleSellerId ? null : "MISSING_ELIGIBLE_SELLER");
+    (input.eligibleSellerId
+      ? suppression
+        ? "PERMANENT_SUPPRESSION_MATCH"
+        : null
+      : "MISSING_ELIGIBLE_SELLER");
   const migrationReviewRequired = reviewReason !== null;
   const phoneProvenance: LeadPhoneProvenance | null =
     input.phone &&
@@ -805,10 +878,12 @@ export async function createLeadInTransaction(
     migrationReviewReason: reviewReason,
     source: mirror.source,
     acquisitionChannel: mirror.acquisitionChannel,
+    ...attribution,
     status: "NEW" as const,
     isRead: false,
     tags: [],
     createdAt: occurredAt,
+    doNotContactAt: suppression ? now : null,
     slaAlertedAt: input.captureMode === "HISTORICAL_SYNC" ? now : null,
     slaEscalatedAt: input.captureMode === "HISTORICAL_SYNC" ? now : null,
   };
@@ -818,21 +893,20 @@ export async function createLeadInTransaction(
     source: mirror.source,
     acquisitionChannel: mirror.acquisitionChannel,
     externalLeadId: input.externalLeadId,
-    externalFormId: null,
-    externalFormName: null,
-    externalCampaignId: null,
-    externalAdId: null,
+    ...attribution,
     nextFollowUpAt: null,
     lastContactedAt: null,
     closedAt: null,
   });
 
   let lead: LeadRecord;
+  let created = true;
   if (input.externalLeadId) {
-    await transaction.contactSubmission.createMany({
+    const creation = await transaction.contactSubmission.createMany({
       data: { ...baseData, legacyStateHash },
       skipDuplicates: true,
     });
+    created = creation.count === 1;
     const persisted = await transaction.contactSubmission.findUnique({
       where: {
         sourceKey_externalLeadId: {
@@ -870,12 +944,34 @@ export async function createLeadInTransaction(
   });
 
   const effects: LeadPostCommitEffect[] = [];
+  if (created && migrationReviewRequired) {
+    const admins = await transaction.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      effects.push({
+        kind: "NOTIFICATION",
+        input: {
+          recipientId: admin.id,
+          type: "CONTACT_RECEIVED",
+          title: "ליד חדש דורש בדיקת מנהל",
+          body: reviewReason ?? "נדרש אימות ידני",
+          leadId: lead.id,
+          dedupeKey: `${admin.id}:lead-review:${lead.id}:${reviewReason}`,
+          url: `/admin/leads?focus=${lead.id}`,
+        },
+      });
+    }
+  }
   if (
+    created &&
     !migrationReviewRequired &&
-    input.notificationMode === "ELIGIBLE_SELLER" &&
+    (input.notificationMode ?? "ELIGIBLE_SELLER") === "ELIGIBLE_SELLER" &&
     input.captureMode !== "HISTORICAL_SYNC" &&
     input.eligibleSellerId
   ) {
+    const unifiedEnabled = getLeadLifecycleConfig().enabled;
     effects.push({
       kind: "NOTIFICATION",
       input: {
@@ -887,7 +983,9 @@ export async function createLeadInTransaction(
             : "ליד חדש ממתין לטיפול",
         leadId: lead.id,
         dedupeKey: `${input.eligibleSellerId}:lead-created:${lead.id}`,
-        url: `/seller/leads?focus=${lead.id}`,
+        url: unifiedEnabled
+          ? `/seller/leads/${lead.id}`
+          : `/seller/leads?focus=${lead.id}`,
       },
     });
   }
@@ -901,7 +999,9 @@ export async function createLeadFromSource(
   const store: LeadCreationStore =
     dependencies.store ?? prismaLifecycleStore;
   const result = await store.transaction((transaction) =>
-    createLeadInTransaction(transaction, input),
+    createLeadInTransaction(transaction, input, {
+      suppressionHashSecret: store.suppressionHashSecret,
+    }),
   );
   for (const effect of result.effects) {
     if (store.runEffect) {
@@ -911,4 +1011,47 @@ export async function createLeadFromSource(
     }
   }
   return result.lead;
+}
+
+async function mergeMissingContactDetails(
+  transaction: Prisma.TransactionClient,
+  existing: LeadRecord,
+  input: CreateLeadFromSourceInput,
+): Promise<LeadRecord> {
+  const candidates = {
+    name: input.name,
+    company: input.company,
+    email: input.email,
+    phone: input.phone,
+    message: input.message,
+  };
+  const changedFields = (
+    Object.keys(candidates) as Array<keyof typeof candidates>
+  ).filter((field) => {
+    const incoming = candidates[field]?.trim();
+    const current = existing[field];
+    return Boolean(incoming) && (current === null || current.trim() === "");
+  });
+  if (changedFields.length === 0) return existing;
+
+  const data = Object.fromEntries(
+    changedFields.map((field) => [field, candidates[field]!.trim()]),
+  );
+  const updated = await transaction.contactSubmission.update({
+    where: { id: existing.id },
+    data: {
+      ...data,
+      ...(changedFields.includes("phone") && !existing.phoneProvenance
+        ? { phoneProvenance: "FIRST_PARTY_FORM" as const }
+        : {}),
+    },
+  });
+  await appendLeadEventOnce(transaction, {
+    leadId: existing.id,
+    type: "CONTACT_DETAILS_UPDATED",
+    actor: { type: "SYSTEM" },
+    dedupeKey: `lead:${existing.id}:ingestion-contact-merge:${changedFields.join(",")}`,
+    metadata: { changedFields },
+  });
+  return updated;
 }

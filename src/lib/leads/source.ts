@@ -217,3 +217,31 @@ export function websiteAttributionFromReferrer(
     return { landingPage: "/contact" };
   }
 }
+
+export function metaNonContactAnswers(
+  fields: Array<{ name: string; values: string[] }>,
+): Array<{ name: string; values: string[] }> {
+  return fields
+    .filter((field) => {
+      const name = field.name
+        .replace(/_/g, " ")
+        .trim()
+        .toLocaleLowerCase("en");
+      return !(
+        /^(full name|first name|last name|name|email|e-mail|phone|phone number)$/.test(
+          name,
+        ) ||
+        /^(שם|שם מלא|שם פרטי|שם משפחה|טלפון|מספר טלפון|כתובת מייל|דוא"ל|דואל)$/.test(
+          name,
+        ) ||
+        /company|business|חברה|עסק/.test(name)
+      );
+    })
+    .map((field) => ({
+      name: field.name.trim().slice(0, 300),
+      values: field.values
+        .map((value) => value.slice(0, 1_000))
+        .slice(0, 20),
+    }))
+    .filter((field) => field.name.length > 0);
+}

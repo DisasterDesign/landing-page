@@ -5,9 +5,10 @@ import { auth } from "@/lib/auth";
 import { decrypt } from "@/lib/crypto";
 import {
   getFormLeads,
-  mapLeadFieldsToContact,
   type LeadDetail,
 } from "@/lib/facebook";
+import { resolveEligibleSellerId } from "@/lib/leads/assignment";
+import { ingestMetaLead } from "@/lib/leads/meta-ingestion";
 
 /**
  * POST /api/integrations/facebook/sync
@@ -56,56 +57,20 @@ export async function POST(req: Request) {
     let created = 0;
     let updated = 0;
     let skipped = 0;
+    const eligibleSellerId = await resolveEligibleSellerId();
 
     for (const lead of leads) {
       try {
-        const mapped = mapLeadFieldsToContact(lead);
-
-        // Check if this lead already exists
-        const existing = await prisma.contactSubmission.findUnique({
+        const existing = await prisma.contactSubmission.findFirst({
           where: { externalLeadId: lead.id },
           select: { id: true },
         });
-
-        if (existing) {
-          // Update existing record (refresh data but keep status/notes)
-          await prisma.contactSubmission.update({
-            where: { externalLeadId: lead.id },
-            data: {
-              name: mapped.name,
-              email: mapped.email,
-              phone: mapped.phone,
-              company: mapped.company,
-              message: mapped.message,
-              externalFormId: lead.form_id ?? null,
-              externalFormName: lead.form_name ?? null,
-              externalCampaignId: lead.campaign_id ?? null,
-              externalAdId: lead.ad_id ?? null,
-            },
-          });
-          updated++;
-        } else {
-          // Create new record
-          await prisma.contactSubmission.create({
-            data: {
-              name: mapped.name,
-              email: mapped.email,
-              phone: mapped.phone,
-              company: mapped.company,
-              message: mapped.message,
-              source: "FACEBOOK",
-              externalLeadId: lead.id,
-              externalFormId: lead.form_id ?? null,
-              externalFormName: lead.form_name ?? null,
-              externalCampaignId: lead.campaign_id ?? null,
-              externalAdId: lead.ad_id ?? null,
-              createdAt: lead.created_time
-                ? new Date(lead.created_time)
-                : undefined,
-            },
-          });
-          created++;
-        }
+        await ingestMetaLead(lead, {
+          mode: "MANUAL_SYNC",
+          eligibleSellerId,
+        });
+        if (existing) updated++;
+        else created++;
       } catch (err) {
         console.error(`FB sync: failed to process lead ${lead.id}:`, err);
         skipped++;

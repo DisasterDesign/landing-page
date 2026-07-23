@@ -6,10 +6,9 @@ import {
   getMetaConfig,
   verifyWebhookSignature,
   getLead,
-  mapLeadFieldsToContact,
   type LeadDetail,
 } from "@/lib/facebook";
-import { notifyAllAdmins, notifyAllSellers } from "@/lib/notifications";
+import { ingestMetaLead } from "@/lib/leads/meta-ingestion";
 
 // ===== Subscription verification (Meta GET) =====
 export async function GET(req: NextRequest) {
@@ -52,7 +51,6 @@ interface WebhookPayload {
 }
 
 async function processLead(
-  pageId: string,
   leadId: string,
   pageAccessToken: string
 ): Promise<void> {
@@ -67,51 +65,7 @@ async function processLead(
     return;
   }
 
-  const mapped = mapLeadFieldsToContact(lead);
-
-  await prisma.contactSubmission.upsert({
-    where: { externalLeadId: lead.id },
-    update: {
-      // If somehow Meta re-fires, refresh the data but keep status/notes
-      name: mapped.name,
-      email: mapped.email,
-      phone: mapped.phone,
-      company: mapped.company,
-      message: mapped.message,
-      externalFormId: lead.form_id ?? null,
-      externalFormName: lead.form_name ?? null,
-      externalCampaignId: lead.campaign_id ?? null,
-      externalAdId: lead.ad_id ?? null,
-    },
-    create: {
-      name: mapped.name,
-      email: mapped.email,
-      phone: mapped.phone,
-      company: mapped.company,
-      message: mapped.message,
-      source: "FACEBOOK",
-      externalLeadId: lead.id,
-      externalFormId: lead.form_id ?? null,
-      externalFormName: lead.form_name ?? null,
-      externalCampaignId: lead.campaign_id ?? null,
-      externalAdId: lead.ad_id ?? null,
-      createdAt: lead.created_time ? new Date(lead.created_time) : undefined,
-    },
-  });
-
-  await notifyAllAdmins({
-    type: "CONTACT_RECEIVED",
-    title: `📘 ליד חדש מפייסבוק — ${mapped.name}`,
-    body: lead.form_name ? `מטופס: ${lead.form_name}` : mapped.message.slice(0, 100),
-  });
-
-  // Sellers work the lead pool — ping their phones with a seller-scoped URL.
-  await notifyAllSellers({
-    type: "CONTACT_RECEIVED",
-    title: `🔔 ליד חדש מפייסבוק — ${mapped.name}`,
-    body: lead.form_name ? `מטופס: ${lead.form_name}` : mapped.message.slice(0, 100),
-    url: "/seller/leads",
-  });
+  await ingestMetaLead(lead, { mode: "WEBHOOK" });
 }
 
 export async function POST(req: NextRequest) {
@@ -172,7 +126,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
         const token = decrypt(integ.pageAccessToken);
-        await processLead(page_id, leadgen_id, token);
+        await processLead(leadgen_id, token);
       } catch (err) {
         console.error("FB webhook lead processing error:", err);
         // Continue with the next change — don't fail the whole batch

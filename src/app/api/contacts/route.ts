@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createContactSchema } from "@/lib/validations";
-import { notifyAllAdmins, notifyAllSellers } from "@/lib/notifications";
+import { resolveEligibleSellerId } from "@/lib/leads/assignment";
+import { createLeadFromSource } from "@/lib/leads/lifecycle";
+import { websiteAttributionFromReferrer } from "@/lib/leads/source";
 
 // POST - Public: create contact submission
 export async function POST(request: NextRequest) {
@@ -27,24 +29,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const contact = await prisma.contactSubmission.create({
-      data: parsed.data,
-    });
-
-    await notifyAllAdmins({
-      type: "CONTACT_RECEIVED",
-      title: `פנייה חדשה — ${contact.company ?? contact.name ?? "ליד"}`,
-      body: contact.message?.slice(0, 120) ?? "פנייה חדשה",
-      leadId: contact.id,
-    });
-
-    // Sellers work the lead pool — ping their phones with a seller-scoped URL.
-    await notifyAllSellers({
-      type: "CONTACT_RECEIVED",
-      title: `🔔 ליד חדש — ${contact.company ?? contact.name ?? "ליד"}`,
-      body: contact.message?.slice(0, 120) ?? "פנייה חדשה",
-      leadId: contact.id,
-      url: "/seller/leads",
+    const now = new Date();
+    const contact = await createLeadFromSource({
+      intentLevel: "INBOUND",
+      sourceKey: "website",
+      sourceSnapshot: {
+        ...websiteAttributionFromReferrer(request.headers.get("referer")),
+        ...(parsed.data.service ? { service: parsed.data.service } : {}),
+        receivedAt: now.toISOString(),
+      },
+      occurredAt: now,
+      captureMode: "LIVE",
+      eligibleSellerId: await resolveEligibleSellerId(),
+      name: parsed.data.name,
+      company: parsed.data.company,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      message: parsed.data.message,
     });
 
     return NextResponse.json(contact, { status: 201 });

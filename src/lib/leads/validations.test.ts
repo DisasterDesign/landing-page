@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createContactSchema,
   leadCompanyNoteSchema,
   leadContactCorrectionSchema,
   leadFollowUpCompleteSchema,
@@ -127,4 +128,15 @@ test("note, contact, source and follow-up schemas reject empty mutations", () =>
 test("all mutation schemas are strict", () => {
   const parsed = leadCompanyNoteSchema.safeParse({ body: "Valid note", actorId: "spoof" });
   assert.equal(parsed.success, false);
+});
+
+test("website contact capture accepts an optional company", () => {
+  const parsed = createContactSchema.safeParse({
+    name: "נועה",
+    company: "סטודיו נועה",
+    email: "noa@example.com",
+    message: "אשמח לשמוע פרטים",
+  });
+  assert.equal(parsed.success, true);
+  if (parsed.success) assert.equal(parsed.data.company, "סטודיו נועה");
 });

@@ -138,7 +138,7 @@ export interface LeadFieldDatum {
 
 export interface LeadDetail {
   id: string;
-  created_time: string;
+  created_time?: string;
   field_data: LeadFieldDatum[];
   form_id?: string;
   form_name?: string;

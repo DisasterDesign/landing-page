@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   intentForSource,
+  metaNonContactAnswers,
   validateSourceSnapshot,
   websiteAttributionFromReferrer,
 } from "./source";
@@ -106,5 +107,18 @@ test("strict source registry rejects unknown source keys and extra fields", () =
         contactAnswers: [{ email: "pii@example.com" }],
       }),
     /snapshot|unrecognized|invalid/i,
+  );
+});
+
+test("Meta snapshot filtering removes direct contact answers", () => {
+  assert.deepEqual(
+    metaNonContactAnswers([
+      { name: "full_name", values: ["נועה"] },
+      { name: "email", values: ["noa@example.com"] },
+      { name: "phone_number", values: ["0501234567"] },
+      { name: "שם_החברה/עסק", values: ["סטודיו נועה"] },
+      { name: "service_interest", values: ["online store"] },
+    ]),
+    [{ name: "service_interest", values: ["online store"] }],
   );
 });

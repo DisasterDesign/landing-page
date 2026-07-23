@@ -5,9 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import {
   getFormLeads,
-  mapLeadFieldsToContact,
   type LeadDetail,
 } from "@/lib/facebook";
+import { resolveEligibleSellerId } from "@/lib/leads/assignment";
+import { ingestMetaLead } from "@/lib/leads/meta-ingestion";
 export const maxDuration = 300;
 
 interface IntegrationResult {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
   let totalCreated = 0;
   let totalUpdated = 0;
   let totalSkipped = 0;
+  const eligibleSellerId = await resolveEligibleSellerId();
 
   for (const integ of integrations) {
     const result: IntegrationResult = {
@@ -57,50 +59,16 @@ export async function GET(req: NextRequest) {
 
       for (const lead of leads) {
         try {
-          const mapped = mapLeadFieldsToContact(lead);
-
-          const existing = await prisma.contactSubmission.findUnique({
+          const existing = await prisma.contactSubmission.findFirst({
             where: { externalLeadId: lead.id },
             select: { id: true },
           });
-
-          if (existing) {
-            await prisma.contactSubmission.update({
-              where: { externalLeadId: lead.id },
-              data: {
-                name: mapped.name,
-                email: mapped.email,
-                phone: mapped.phone,
-                company: mapped.company,
-                message: mapped.message,
-                externalFormId: lead.form_id ?? null,
-                externalFormName: lead.form_name ?? null,
-                externalCampaignId: lead.campaign_id ?? null,
-                externalAdId: lead.ad_id ?? null,
-              },
-            });
-            result.updated++;
-          } else {
-            await prisma.contactSubmission.create({
-              data: {
-                name: mapped.name,
-                email: mapped.email,
-                phone: mapped.phone,
-                company: mapped.company,
-                message: mapped.message,
-                source: "FACEBOOK",
-                externalLeadId: lead.id,
-                externalFormId: lead.form_id ?? null,
-                externalFormName: lead.form_name ?? null,
-                externalCampaignId: lead.campaign_id ?? null,
-                externalAdId: lead.ad_id ?? null,
-                createdAt: lead.created_time
-                  ? new Date(lead.created_time)
-                  : undefined,
-              },
-            });
-            result.created++;
-          }
+          await ingestMetaLead(lead, {
+            mode: "CRON_SYNC",
+            eligibleSellerId,
+          });
+          if (existing) result.updated++;
+          else result.created++;
         } catch (err) {
           console.error(
             `cron facebook-sync: failed lead ${lead.id} on page ${integ.pageId}:`,
