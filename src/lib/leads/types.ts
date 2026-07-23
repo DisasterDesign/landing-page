@@ -202,9 +202,12 @@ export interface ApplyAgreementEventInput {
 
 export interface PaymentSuccessInput {
   agreementId: string;
+  providerAttemptId: string;
+  providerReturnValue: string;
   providerTransactionId: string;
   paidAt: Date;
   paidAmount: number;
+  verifiedAt: Date;
   actor: LeadActor;
 }
 

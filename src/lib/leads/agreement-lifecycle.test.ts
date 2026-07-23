@@ -58,6 +58,7 @@ function fakeAgreementStore(options: {
     ownerId: options.ownerId === undefined ? "seller-1" : options.ownerId,
     eligibleSellerId: "seller-1",
     migrationReviewRequired: options.review ?? false,
+    migrationReviewReason: null,
     intentLevel: "AD_RESPONSE",
     sourceKey: "meta_lead_ads",
     stage: options.stage === undefined ? "QUALIFIED" : options.stage,
@@ -89,7 +90,16 @@ function fakeAgreementStore(options: {
           leadId: "lead-1",
           status: "SENT",
           paymentStatus: "PENDING",
+          paymentId: null,
           paidAt: null,
+          paidAmount: null,
+          cardcomDealId: null,
+          cardcomLowProfileId: null,
+          cardcomVerifiedLowProfileId: null,
+          cardcomVerifiedReturnValue: null,
+          cardcomVerifiedTransactionId: null,
+          cardcomVerifiedAmount: null,
+          cardcomPaymentVerifiedAt: null,
           creditedSellerId: "seller-1",
           createdBy: "seller-1",
           isSellerDeal: true,
@@ -172,8 +182,15 @@ function fakeAgreementStore(options: {
           signToken: `token-${agreements.length + 1}`,
           status: "DRAFT",
           paymentStatus: "PENDING",
+          paymentId: null,
           paidAt: null,
           paidAmount: null,
+          cardcomDealId: null,
+          cardcomVerifiedLowProfileId: null,
+          cardcomVerifiedReturnValue: null,
+          cardcomVerifiedTransactionId: null,
+          cardcomVerifiedAmount: null,
+          cardcomPaymentVerifiedAt: null,
           ...data,
         };
         agreements.push(agreement);
@@ -427,11 +444,15 @@ test("payment retry records one payment, won event and frozen commission", async
     { agreementId: agreement.id, type: "SIGNED", actor: integration },
     { store },
   );
+  agreement.paymentId = "lp-deal-1";
   const input = {
     agreementId: agreement.id,
+    providerAttemptId: "lp-deal-1",
+    providerReturnValue: agreement.id,
     providerTransactionId: "deal-1",
     paidAt: new Date("2026-07-23T10:00:00.000Z"),
     paidAmount: 599,
+    verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
     actor: integration,
   };
   await store.transaction((transaction) =>
@@ -451,6 +472,115 @@ test("payment retry records one payment, won event and frozen commission", async
   );
   assert.equal(store.commissions.length, 1);
   assert.equal(store.commissions[0]?.sellerId, "seller-1");
+  assert.equal(agreement.cardcomVerifiedLowProfileId, "lp-deal-1");
+  assert.equal(agreement.cardcomVerifiedReturnValue, agreement.id);
+  assert.equal(agreement.cardcomVerifiedTransactionId, "deal-1");
+  assert.equal(agreement.cardcomVerifiedAmount, 599);
+  assert.deepEqual(
+    agreement.cardcomPaymentVerifiedAt,
+    new Date("2026-07-23T10:00:01.000Z"),
+  );
+  assert.deepEqual(
+    store.events.find((event) => event.type === "PAYMENT_SUCCEEDED")?.metadata,
+    {
+      agreementId: agreement.id,
+      providerAttemptId: "lp-deal-1",
+      providerReturnValue: agreement.id,
+      providerTransactionId: "deal-1",
+      paidAmount: 599,
+    },
+  );
+});
+
+test("verified payment is bound to the stored attempt, return value and immutable proof", async () => {
+  const store = fakeAgreementStore();
+  const agreement = await createAgreementForLead(
+    { leadId: "lead-1", actor: seller1, agreement: draft },
+    { store },
+  );
+  agreement.paymentId = "lp-expected";
+  const eventCountBefore = store.events.length;
+
+  await assert.rejects(
+    store.transaction((transaction) =>
+      applyPaymentSuccess(transaction, {
+        agreementId: agreement.id,
+        providerAttemptId: "lp-other",
+        providerReturnValue: agreement.id,
+        providerTransactionId: "deal-1",
+        paidAt: new Date("2026-07-23T10:00:00.000Z"),
+        paidAmount: 599,
+        verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
+        actor: integration,
+      }),
+    ),
+    /attempt|low.?profile|proof/i,
+  );
+  assert.equal(agreement.paymentStatus, "PENDING");
+  assert.equal(store.events.length, eventCountBefore);
+
+  agreement.cardcomDealId = "deal-original";
+  agreement.cardcomVerifiedLowProfileId = "lp-expected";
+  agreement.cardcomVerifiedReturnValue = agreement.id;
+  agreement.cardcomVerifiedTransactionId = "deal-original";
+  agreement.cardcomVerifiedAmount = 599;
+  agreement.cardcomPaymentVerifiedAt = new Date(
+    "2026-07-23T09:00:00.000Z",
+  );
+  await assert.rejects(
+    store.transaction((transaction) =>
+      applyPaymentSuccess(transaction, {
+        agreementId: agreement.id,
+        providerAttemptId: "lp-expected",
+        providerReturnValue: agreement.id,
+        providerTransactionId: "deal-conflict",
+        paidAt: new Date("2026-07-23T10:00:00.000Z"),
+        paidAmount: 599,
+        verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
+        actor: integration,
+      }),
+    ),
+    /conflict|proof|transaction/i,
+  );
+  assert.equal(agreement.cardcomVerifiedTransactionId, "deal-original");
+});
+
+test("verified integration input repairs unverified local completed state without recording revenue twice", async () => {
+  const store = fakeAgreementStore();
+  const agreement = await createAgreementForLead(
+    { leadId: "lead-1", actor: seller1, agreement: draft },
+    { store },
+  );
+  const paidAt = new Date("2026-07-23T10:00:00.000Z");
+  const verifiedAt = new Date("2026-07-23T10:00:01.000Z");
+  Object.assign(agreement, {
+    paymentId: "lp-legacy",
+    paymentStatus: "COMPLETED",
+    paidAt,
+    paidAmount: 599,
+    cardcomDealId: "deal-legacy",
+  });
+
+  const result = await store.transaction((transaction) =>
+    applyPaymentSuccess(transaction, {
+      agreementId: agreement.id,
+      providerAttemptId: "lp-legacy",
+      providerReturnValue: agreement.id,
+      providerTransactionId: "deal-legacy",
+      paidAt,
+      paidAmount: 599,
+      verifiedAt,
+      actor: integration,
+    }),
+  );
+
+  assert.equal(result.paymentRecorded, false);
+  assert.equal(agreement.cardcomVerifiedLowProfileId, "lp-legacy");
+  assert.equal(agreement.cardcomVerifiedReturnValue, agreement.id);
+  assert.equal(agreement.cardcomVerifiedTransactionId, "deal-legacy");
+  assert.equal(agreement.cardcomVerifiedAmount, 599);
+  assert.deepEqual(agreement.cardcomPaymentVerifiedAt, verifiedAt);
+  assert.equal(store.lead.stage, "WON");
 });
 
 test("payment keeps frozen credit after reassignment and flags a lost-lead mismatch", async () => {
@@ -462,13 +592,17 @@ test("payment keeps frozen credit after reassignment and flags a lost-lead misma
   store.lead.ownerId = "seller-2";
   store.lead.assignees = [{ id: "seller-2" }];
   store.lead.stage = "LOST";
+  agreement.paymentId = "lp-after-loss";
 
   const result = await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, {
       agreementId: agreement.id,
+      providerAttemptId: "lp-after-loss",
+      providerReturnValue: agreement.id,
       providerTransactionId: "deal-after-loss",
       paidAt: new Date("2026-07-23T10:00:00.000Z"),
       paidAmount: 599,
+      verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
       actor: integration,
     }),
   );
@@ -536,13 +670,17 @@ test("verified signature preserves review truth while payment derives won", asyn
     store.events.find((event) => event.type === "AGREEMENT_SIGNED")?.toStage,
     null,
   );
+  store.agreements[0]!.paymentId = "lp-review";
 
   await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, {
       agreementId: "agreement-existing",
+      providerAttemptId: "lp-review",
+      providerReturnValue: "agreement-existing",
       providerTransactionId: "review-deal",
       paidAt: new Date("2026-07-23T10:00:00.000Z"),
       paidAmount: 599,
+      verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
       actor: integration,
     }),
   );
@@ -746,6 +884,99 @@ test("migration linking requires persisted admin, contact evidence and no active
     ),
     /evidence|contact/i,
   );
+});
+
+test("migration linking never promotes local COMPLETED state without provider-bound proof", async () => {
+  const store = fakeAgreementStore();
+  store.agreements.push({
+    id: "agreement-unverified-paid",
+    leadId: null,
+    status: "SIGNED",
+    paymentStatus: "COMPLETED",
+    paymentId: "lp-unverified",
+    paidAt: new Date("2026-07-01T08:00:00.000Z"),
+    paidAmount: 599,
+    cardcomDealId: "deal-unverified",
+    cardcomVerifiedLowProfileId: null,
+    cardcomVerifiedReturnValue: null,
+    cardcomVerifiedTransactionId: null,
+    cardcomVerifiedAmount: null,
+    cardcomPaymentVerifiedAt: null,
+    phone: "050-123-4567",
+    email: "other@example.com",
+    clientId: null,
+    creditedSellerId: "seller-1",
+    createdBy: "seller-1",
+    isSellerDeal: true,
+    customerName: "נועה",
+    monthlyPrice: 599,
+  });
+
+  const result = await store.transaction((transaction) =>
+    linkAgreementToLeadForMigrationInTransaction(transaction, {
+      agreementId: "agreement-unverified-paid",
+      leadId: "lead-1",
+      reason: "Historical contact match, payment proof unresolved",
+      actor: admin,
+    }),
+  );
+
+  assert.equal(result.stage, "QUALIFIED");
+  assert.equal(store.lead.stage, "QUALIFIED");
+  assert.equal(store.lead.migrationReviewRequired, true);
+  assert.match(
+    String(store.lead.migrationReviewReason),
+    /UNVERIFIED_FIRST_PAYMENT/,
+  );
+  assert.equal(
+    store.events.some((event) => event.type === "PAYMENT_SUCCEEDED"),
+    false,
+  );
+  assert.equal(store.events.some((event) => event.type === "WON"), false);
+});
+
+test("migration linking replays only complete immutable first-payment evidence", async () => {
+  const store = fakeAgreementStore();
+  const paidAt = new Date("2026-07-01T08:00:00.000Z");
+  const verifiedAt = new Date("2026-07-01T08:00:01.000Z");
+  store.agreements.push({
+    id: "agreement-verified-paid",
+    leadId: null,
+    status: "SIGNED",
+    paymentStatus: "COMPLETED",
+    paymentId: "lp-verified",
+    paidAt,
+    paidAmount: 599,
+    cardcomDealId: "deal-verified",
+    cardcomVerifiedLowProfileId: "lp-verified",
+    cardcomVerifiedReturnValue: "agreement-verified-paid",
+    cardcomVerifiedTransactionId: "deal-verified",
+    cardcomVerifiedAmount: 599,
+    cardcomPaymentVerifiedAt: verifiedAt,
+    phone: "050-123-4567",
+    email: "other@example.com",
+    clientId: null,
+    creditedSellerId: "seller-1",
+    createdBy: "seller-1",
+    isSellerDeal: true,
+    customerName: "נועה",
+    monthlyPrice: 599,
+  });
+
+  await store.transaction((transaction) =>
+    linkAgreementToLeadForMigrationInTransaction(transaction, {
+      agreementId: "agreement-verified-paid",
+      leadId: "lead-1",
+      reason: "Historical contact and complete provider proof match",
+      actor: admin,
+    }),
+  );
+
+  assert.equal(store.lead.stage, "WON");
+  const agreement = store.agreements[0]!;
+  assert.equal(agreement.cardcomVerifiedLowProfileId, "lp-verified");
+  assert.equal(agreement.cardcomVerifiedTransactionId, "deal-verified");
+  assert.deepEqual(agreement.cardcomPaymentVerifiedAt, verifiedAt);
 });
 
 test("migration linking rejects a clientId alone and accepts matching client contact evidence", async () => {
@@ -960,8 +1191,15 @@ test("historical commission linking is audited, idempotent and rejects conflicti
     leadId: "lead-1",
     status: "SIGNED",
     paymentStatus: "COMPLETED",
+    paymentId: "lp-historical",
     paidAt: new Date("2026-07-01T08:00:00.000Z"),
     paidAmount: 599,
+    cardcomDealId: "deal-historical",
+    cardcomVerifiedLowProfileId: "lp-historical",
+    cardcomVerifiedReturnValue: "agreement-paid",
+    cardcomVerifiedTransactionId: "deal-historical",
+    cardcomVerifiedAmount: 599,
+    cardcomPaymentVerifiedAt: new Date("2026-07-01T08:00:01.000Z"),
     monthlyPrice: 599,
     creditedSellerId: "seller-1",
     createdBy: "seller-1",

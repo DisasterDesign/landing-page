@@ -10,6 +10,7 @@ import {
   legacySourceMirror,
   type LeadLifecycleStore,
 } from "./lifecycle";
+import { verifiedFirstPaymentEvidence } from "./payment-verification";
 import { legacyStatusForStage } from "./stage-machine";
 import {
   intentForSource,
@@ -116,6 +117,41 @@ function sourceLegacyAttribution(
   };
 }
 
+function sourceRequiresExternalId(sourceKey: string): boolean {
+  return sourceKey === "google_maps" || sourceKey === "meta_lead_ads";
+}
+
+function assertExternalSourceIdentity(
+  sourceKey: string,
+  snapshot: Record<string, unknown>,
+  externalLeadId?: string,
+): void {
+  if (sourceRequiresExternalId(sourceKey) && !externalLeadId) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "This source requires an external lead ID",
+    );
+  }
+  if (
+    sourceKey === "meta_lead_ads" &&
+    snapshot.externalLeadId !== externalLeadId
+  ) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Meta snapshot external ID does not match",
+    );
+  }
+  if (
+    sourceKey === "google_maps" &&
+    externalLeadId !== `gplaces:${String(snapshot.placeId)}`
+  ) {
+    throw new LeadDomainError(
+      "VALIDATION",
+      "Google Maps external ID does not match Place ID",
+    );
+  }
+}
+
 export async function correctLeadSource(
   input: CorrectLeadSourceInput,
   dependencies: { store?: LeadLifecycleStore } = {},
@@ -137,6 +173,11 @@ export async function correctLeadSource(
       input.intentLevel,
       input.sourceKey,
       input.sourceSnapshot,
+    );
+    assertExternalSourceIdentity(
+      input.sourceKey,
+      snapshot,
+      input.externalLeadId,
     );
     await assertSourcePairAvailable(
       transaction,
@@ -293,10 +334,6 @@ export async function updateLeadContactDetails(
   });
 }
 
-function sourceRequiresExternalId(sourceKey: string): boolean {
-  return sourceKey === "google_maps" || sourceKey === "meta_lead_ads";
-}
-
 export async function resolveLeadMigrationReview(
   input: ResolveLeadMigrationReviewInput,
   dependencies: { store?: LeadLifecycleStore } = {},
@@ -321,30 +358,11 @@ export async function resolveLeadMigrationReview(
       input.sourceKey,
       input.sourceSnapshot,
     );
-    if (sourceRequiresExternalId(input.sourceKey) && !input.externalLeadId) {
-      throw new LeadDomainError(
-        "VALIDATION",
-        "This source requires an external lead ID",
-      );
-    }
-    if (
-      input.sourceKey === "meta_lead_ads" &&
-      snapshot.externalLeadId !== input.externalLeadId
-    ) {
-      throw new LeadDomainError(
-        "VALIDATION",
-        "Meta snapshot external ID does not match",
-      );
-    }
-    if (
-      input.sourceKey === "google_maps" &&
-      input.externalLeadId !== `gplaces:${String(snapshot.placeId)}`
-    ) {
-      throw new LeadDomainError(
-        "VALIDATION",
-        "Google Maps external ID does not match Place ID",
-      );
-    }
+    assertExternalSourceIdentity(
+      input.sourceKey,
+      snapshot,
+      input.externalLeadId,
+    );
     await assertSourcePairAvailable(
       transaction,
       input.leadId,
@@ -381,15 +399,42 @@ export async function resolveLeadMigrationReview(
       );
     }
 
-    const payment = await transaction.agreement.findFirst({
+    const paymentCandidates = await transaction.agreement.findMany({
       where: {
         leadId: input.leadId,
-        paymentStatus: "COMPLETED",
-        paidAt: { not: null },
+        OR: [
+          { paymentStatus: "COMPLETED" },
+          { paidAt: { not: null } },
+        ],
       },
       orderBy: { paidAt: "asc" },
-      select: { id: true, paidAt: true, paymentStatus: true },
+      select: {
+        id: true,
+        paymentId: true,
+        paymentStatus: true,
+        paidAt: true,
+        paidAmount: true,
+        cardcomDealId: true,
+        cardcomVerifiedLowProfileId: true,
+        cardcomVerifiedReturnValue: true,
+        cardcomVerifiedTransactionId: true,
+        cardcomVerifiedAmount: true,
+        cardcomPaymentVerifiedAt: true,
+      },
     });
+    const classifiedPayments = paymentCandidates.map((candidate) => ({
+      candidate,
+      evidence: verifiedFirstPaymentEvidence(candidate),
+    }));
+    if (classifiedPayments.some(({ evidence }) => evidence === null)) {
+      throw new LeadDomainError(
+        "VALIDATION",
+        "Unverified historical payment requires finance review",
+      );
+    }
+    const payment =
+      classifiedPayments.find(({ evidence }) => evidence !== null)?.evidence ??
+      null;
     if (!payment && (input.stage as LeadStage | undefined) === "WON") {
       throw new LeadDomainError(
         "VALIDATION",

@@ -94,7 +94,7 @@ function makeLead(overrides: Partial<FakeLead> = {}): FakeLead {
 function fakeLifecycleStore(
   lead: FakeLead,
   options: {
-    actorRoles?: Record<string, "ADMIN" | "SELLER">;
+    actorRoles?: Record<string, "ADMIN" | "SELLER" | "MEMBER">;
     scheduledFollowUps?: Array<{
       id: string;
       ownerId: string;
@@ -104,15 +104,18 @@ function fakeLifecycleStore(
 ): LeadLifecycleStore & {
   events: Array<Record<string, unknown>>;
   notifications: Array<Record<string, unknown>>;
+  calls: string[];
   lead: FakeLead;
 } {
   const events: Array<Record<string, unknown>> = [];
   const notifications: Array<Record<string, unknown>> = [];
+  const calls: string[] = [];
   const followUps = options.scheduledFollowUps ?? [];
 
   const transaction = {
     contactSubmission: {
       async findUnique() {
+        calls.push("contactSubmission.findUnique");
         return lead;
       },
       async updateMany({
@@ -145,8 +148,22 @@ function fakeLifecycleStore(
       },
     },
     user: {
-      async findUnique({ where }: { where: { id: string } }) {
-        const role = options.actorRoles?.[where.id];
+      async findUnique({
+        where,
+        select,
+      }: {
+        where: { id: string };
+        select: { role: true };
+      }) {
+        calls.push("user.findUnique");
+        assert.deepEqual(select, { role: true });
+        const defaultRoles = {
+          "seller-1": "SELLER",
+          "seller-2": "SELLER",
+        } as const;
+        const role = options.actorRoles?.[where.id] ?? defaultRoles[
+          where.id as keyof typeof defaultRoles
+        ];
         return role ? { id: where.id, role } : null;
       },
     },
@@ -196,7 +213,9 @@ function fakeLifecycleStore(
     lead,
     events,
     notifications,
+    calls,
     async transaction(callback) {
+      calls.push("transaction");
       return callback(transaction as never);
     },
     async findLead() {
@@ -204,6 +223,48 @@ function fakeLifecycleStore(
     },
   };
 }
+
+test("claim fails closed when the persisted seller role was revoked", async () => {
+  const store = fakeLifecycleStore(makeLead(), {
+    actorRoles: { "seller-1": "MEMBER" },
+  });
+
+  await assert.rejects(
+    claimLead({ leadId: "lead-1", sellerId: "seller-1" }, { store }),
+    /seller|role|authorized|forbidden/i,
+  );
+
+  assert.deepEqual(store.calls, ["transaction", "user.findUnique"]);
+  assert.equal(store.lead.ownerId, null);
+  assert.equal(store.events.length, 0);
+});
+
+test("claim never converts exhausted serialization retries into unauthorised success", async () => {
+  const owned = makeLead({
+    ownerId: "seller-1",
+    assignees: [{ id: "seller-1" }],
+  });
+  let transactionCalls = 0;
+  let unguardedReads = 0;
+  const store: LeadLifecycleStore = {
+    async transaction() {
+      transactionCalls += 1;
+      throw new Error("serialization write conflict");
+    },
+    async findLead() {
+      unguardedReads += 1;
+      return owned as never;
+    },
+  };
+
+  await assert.rejects(
+    claimLead({ leadId: "lead-1", sellerId: "seller-1" }, { store }),
+    /serialization|write conflict/i,
+  );
+
+  assert.equal(transactionCalls, 3);
+  assert.equal(unguardedReads, 0);
+});
 
 test("claim succeeds once and is idempotent for the same owner", async () => {
   const store = fakeLifecycleStore(makeLead());

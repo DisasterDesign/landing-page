@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { createContactSchema } from "@/lib/validations";
 import { resolveEligibleSellerId } from "@/lib/leads/assignment";
 import { createLeadFromSource } from "@/lib/leads/lifecycle";
@@ -62,9 +66,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -85,6 +90,9 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching contacts:", error);
     return NextResponse.json(
       { error: "Internal server error" },

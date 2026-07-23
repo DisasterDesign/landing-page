@@ -101,3 +101,23 @@ Promoting a prospect only after interest splits one sales journey across two rec
 ### Reversibility
 
 Schema changes are additive and the new UI and domain flow remain behind independent server-only feature flags. Legacy fields and routes are retained through the migration window. Disabling the flags restores the prior interface without deleting the new audit history or bypassing canonical writers. Code must never be rolled back to a version that does not understand the additive schema; the ordered rollout and recovery gates are defined in `docs/LEAD_LIFECYCLE_RUNBOOK.md`.
+
+## 2026-07-23 — Fail closed on payment proof and revoked access
+
+**Status:** Accepted for the unified-lifecycle rollout.
+
+### Decision
+
+First-payment lifecycle state is derived only from immutable evidence copied from an authenticated Cardcom `GetLpResult` read: LowProfile ID, Agreement `ReturnValue`, provider transaction ID, paid amount and verification time. `GetLpResult` uses its documented `POST` JSON transport and is not routed through the recurring APIs' GET-with-body client. Historical `COMPLETED` or `paidAt` fields without that full evidence never create `WON` or commission state. Backfill, reconciliation, migration linking and admin migration resolution all use the same evidence classifier and leave ambiguous rows in review.
+
+Recurring charges from the legacy callback, the dedicated callback and the authenticated reconciliation cron share one Serializable writer. A unique provider charge key deduplicates the financial event, while a revenue marker is committed atomically with the Client/Product increment. Existing legacy charge rows are classified conservatively; ambiguous revenue provenance is flagged for finance review rather than incremented.
+
+Session role claims are not sufficient for sensitive operations. Seller claim and admin Agreement/contact/client/finance reads, client mutations and billing actions re-check the persisted role before reading or mutating scoped data. Exhausted claim serialization retries remain failures instead of being converted to success by an unguarded owner read. Reassignment removes operational phone and signing-token access from the former seller while preserving earned commission history. `DO_NOT_CALL` suppression covers canonical and live public identities without storing raw phone data in the event log, and the whole interaction transaction fails closed when the suppression hash secret is absent.
+
+### Rationale
+
+Local status fields, replayable callback bodies and stale sessions are not authoritative evidence. Centralizing payment writes and checking current database authorization prevents duplicate revenue, fabricated conversion state and access that outlives a role or ownership change.
+
+### Reversibility
+
+The evidence and recurring-idempotency columns are additive and nullable for legacy data. The application remains fail-closed if evidence or secrets are absent. UI flags can still restore the prior screens, but payment proof, canonical suppression and persisted-role checks are invariant and are not disabled by UI rollback.

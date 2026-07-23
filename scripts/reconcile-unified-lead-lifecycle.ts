@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
 
 import { legacyLeadStateHash } from "@/lib/leads/legacy-compat";
+import { verifiedFirstPaymentEvidence } from "@/lib/leads/payment-verification";
 import {
   baselineNoteHistoryIsIntact,
   missingBaselineLeadIds,
@@ -80,8 +81,16 @@ async function main(): Promise<void> {
           agreements: {
             select: {
               id: true,
+              paymentId: true,
               paymentStatus: true,
               paidAt: true,
+              paidAmount: true,
+              cardcomDealId: true,
+              cardcomVerifiedLowProfileId: true,
+              cardcomVerifiedReturnValue: true,
+              cardcomVerifiedTransactionId: true,
+              cardcomVerifiedAmount: true,
+              cardcomPaymentVerifiedAt: true,
             },
           },
         },
@@ -222,6 +231,7 @@ async function main(): Promise<void> {
   let ownershipMismatches = 0;
   let wonWithoutPayment = 0;
   let paymentWithoutWon = 0;
+  let unverifiedPaymentWithoutReview = 0;
   for (const lead of leads) {
     const assigneeIds = lead.assignees.map(({ id }) => id);
     const expectedHash = legacyLeadStateHash({
@@ -250,9 +260,17 @@ async function main(): Promise<void> {
       ownershipMismatches += 1;
     }
     const hasVerifiedFirstPayment = lead.agreements.some(
-      (agreement) =>
-        agreement.paymentStatus === "COMPLETED" && agreement.paidAt,
+      (agreement) => verifiedFirstPaymentEvidence(agreement) !== null,
     );
+    const hasUnverifiedFirstPayment = lead.agreements.some(
+      (agreement) =>
+        (agreement.paymentStatus === "COMPLETED" ||
+          agreement.paidAt !== null) &&
+        verifiedFirstPaymentEvidence(agreement) === null,
+    );
+    if (hasUnverifiedFirstPayment && !lead.migrationReviewRequired) {
+      unverifiedPaymentWithoutReview += 1;
+    }
     if (
       (lead.status === "CLOSED" || lead.stage === "WON") &&
       !hasVerifiedFirstPayment
@@ -284,6 +302,11 @@ async function main(): Promise<void> {
   invariants.push({
     name: "VERIFIED_FIRST_PAYMENT_IS_WON",
     failures: paymentWithoutWon,
+    remediation: "ORPHAN_SELLER_AGREEMENT",
+  });
+  invariants.push({
+    name: "UNVERIFIED_FIRST_PAYMENT_REQUIRES_REVIEW",
+    failures: unverifiedPaymentWithoutReview,
     remediation: "ORPHAN_SELLER_AGREEMENT",
   });
 

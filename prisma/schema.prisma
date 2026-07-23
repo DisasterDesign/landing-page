@@ -1069,6 +1069,14 @@ model Agreement {
   paymentUrl          String? // LowProfile checkout URL returned by Cardcom
   paymentId           String? // Cardcom LowProfileId (per-attempt)
   cardcomDealId       String? // Cardcom InternalDealNumber after successful charge
+  // Immutable proof copied only from a successful GetLpResult verification.
+  // Nullable keeps the rollout additive and leaves historical local-only
+  // COMPLETED rows explicitly unverified.
+  cardcomVerifiedLowProfileId  String?   @unique
+  cardcomVerifiedReturnValue   String?
+  cardcomVerifiedTransactionId String?   @unique
+  cardcomVerifiedAmount        Float?
+  cardcomPaymentVerifiedAt     DateTime?
   cardcomToken        String? // Token for future recurring charges
   cardcomRecurringId  Int? // Cardcom's ID for the recurring schedule (BillGoldService)
   cardcomLowProfileId String? // LowProfile GUID — used to create recurring order via Name-to-Value API
@@ -1097,6 +1105,7 @@ model AgreementCharge {
   agreement          Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
   amount             Float
   cardcomDealId      String? // InternalDealNumber for this specific charge (unique per Cardcom deal)
+  providerChargeKey  String?   @unique // canonical recurring-charge idempotency key; nullable for legacy rows
   invoiceNumber      String? // DocumentNumber (חשבונית מס)
   cardcomRecurringId Int? // null for the first/LowProfile charge; populated for recurring auto-charges
   success            Boolean   @default(true)
@@ -1110,6 +1119,8 @@ model AgreementCharge {
   cardcomChargeDate  DateTime? // the actual billing date at Cardcom (chargedAt is webhook-arrival time)
   chargedAt          DateTime  @default(now())
   rawPayload         Json? // raw webhook body for debugging
+  revenueAppliedAt   DateTime? // exactly-once marker set in the same transaction as the revenue write
+  revenueReviewRequired Boolean @default(false) // ambiguous legacy revenue provenance; never guess
 
   @@index([agreementId, chargedAt])
   @@index([cardcomDealId])

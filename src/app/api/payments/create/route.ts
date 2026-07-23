@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
 import { CardcomError } from "@/lib/cardcom";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const body = await request.json().catch(() => ({}));
     const agreementId = String(body?.agreementId ?? "").trim();
@@ -26,6 +31,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error creating payment page:", error);
     if (error instanceof CardcomError) {
       return NextResponse.json({ error: error.message }, { status: 502 });

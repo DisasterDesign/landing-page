@@ -24,6 +24,10 @@ Both legacy and unified interfaces write through the same canonical lifecycle se
 - Never delete a Lead, note, event, interaction, follow-up, Agreement or commission to repair history.
 - Never roll application code back to a version that does not understand the additive schema. Roll back the interface with flags.
 - Treat every Cardcom callback body as untrusted. Before any `COMPLETED`, `WON` or commission mutation, re-read the LowProfile through authenticated `GetLpResult`/LowProfile verification and require the stored LowProfile ID, `ReturnValue`, amount and stable provider transaction ID to match. A provider read failure is retryable and must leave lifecycle and financial state unchanged.
+- Call `/api/v11/LowProfile/GetLpResult` with Cardcom's `POST` JSON contract. Do not reuse the GET-with-body transport that exists only for the recurring-history endpoints; Cardcom returns `405` for the wrong method.
+- Persist the verified LowProfile ID, `ReturnValue`, provider transaction ID, amount and verification time as immutable first-payment evidence. A historical local `COMPLETED`/`paidAt` row without all five fields is not payment proof: it stays in migration review and cannot create `WON` or a commission.
+- Configure `CARDCOM_RECURRING_WEBHOOK_SECRET` in the environment and in Cardcom before recurring callbacks are enabled. Both recurring entry points fail closed when it is missing or mismatched. A recurring callback without `InternalDealNumber` is deferred to the authenticated daily reconciliation instead of creating a non-idempotent revenue write.
+- All three recurring-charge entry points use the same Serializable writer. `providerChargeKey` is the provider-level idempotency key and `revenueAppliedAt` is written in the same transaction as the client/product revenue increment. Reconciliation refuses a successful row without Cardcom's transaction ID; synthetic date keys are used only for non-revenue failure attempts. Ambiguous legacy charges are marked `revenueReviewRequired`; revenue is never guessed.
 
 ## Preview rollout
 
@@ -161,16 +165,28 @@ Do not proceed unless all commands exit successfully and reconciliation reports 
 - Exercise one `OUTBOUND`, one `AD_RESPONSE` and one `INBOUND` Lead.
 - Race two seller claims: exactly one owner.
 - Seller B cannot read or mutate seller A’s Lead.
+- Revoke a seller in the database while an old session is still valid: claim is rejected and no Lead mutation occurs.
+- Revoke an admin in the database while an old session is still valid: Agreement and contact PII reads are rejected.
+- With that revoked session, verify Agreement GET, empty PATCH and HTML download all return `403` before reading the Agreement.
+- With that revoked session, verify client list/detail reads and client create/update/delete all return `403` before any client query or mutation.
+- With that revoked session, verify payment-page creation, debtors read/refresh and recurring-payment repair endpoints return `403` before provider or database work.
 - Admin and seller can see the intent level, actual acquisition channel, phone provenance, website and map.
+- Reassign a Lead after an Agreement exists: the previous seller retains commission history but receives neither the phone nor the signing token.
 - A company note survives reassignment and remains attributed to its author.
 - A due follow-up emits one notification on the next one-minute cron tick; retry emits no duplicate.
 - A notification opens the exact Lead in both unified and legacy UI modes.
 - `DO_NOT_CALL` hides contact/follow-up actions and the APIs reject them.
+- `DO_NOT_CALL` suppresses re-ingestion by both the canonical inbound/Meta phone and any current live public phone, without writing raw phone data to events.
+- Temporarily omit `PROSPECTING_HASH_SECRET`: `DO_NOT_CALL` and `WRONG_NUMBER` must fail the complete interaction transaction rather than record an unsuppressible outcome.
 - Race two Agreement creates: one active Agreement.
 - Agreement sent, signature and first payment appear once in the timeline.
 - Send a forged Cardcom success body without a matching authenticated LowProfile result: no Agreement, Lead, revenue or commission mutation occurs.
 - Make the authenticated Cardcom LowProfile read fail: the callback returns a retryable error and performs no lifecycle or financial mutation.
+- Send an unsigned or wrongly signed recurring callback: it returns `503` when the secret is unconfigured or `403` on mismatch and creates no charge or revenue mutation.
+- Replay the same correctly signed recurring callback concurrently: one `AgreementCharge` and one client/product revenue increment are recorded.
+- Return a successful reconciliation row without `TranzactionId`: no charge or revenue write occurs and the row is reported as an error for provider/finance review.
 - Payment retry creates one `WON`, one payment event and one commission.
+- A historical `COMPLETED` Agreement without immutable provider evidence remains in migration review and creates no `WON` or commission during backfill, reconciliation or manual linking.
 - Failed first payment creates a recovery next action, not a fake seller follow-up.
 - Payment after `LOST` records the authoritative `WON` and alerts admins.
 - Resolve one migration-review Lead: the audit event is present and seller access begins only after resolution.
@@ -212,6 +228,12 @@ Leave both UI flags false. Do not manually edit rows. Rerun the dry-run, then th
 ### Duplicate webhook or sync replay
 
 Retry the same payload. Source idempotency is the pair `(sourceKey, externalLeadId)`. Confirm one Lead and one source-specific created event. A conflict with the same raw ID under another channel must not be “fixed” by merging the records.
+
+For recurring charges, retry the same provider deal. Confirm that the existing `providerChargeKey` row is reused and that `revenueAppliedAt` changes at most once. A row marked `revenueReviewRequired` requires an audited finance review; do not clear it or increment revenue manually.
+
+### Historical local payment without provider proof
+
+Keep the Lead in migration review with `UNVERIFIED_FIRST_PAYMENT`. Do not reconstruct a provider transaction ID from `cardcomDealId`, a callback body, `paidAt`, an invoice number or an operator note. Resolve it only from authenticated Cardcom evidence that matches the stored LowProfile attempt, Agreement `ReturnValue` and amount; otherwise preserve the row for manual finance review without creating `WON` or commission state.
 
 ### Missing or ambiguous seller assignment
 

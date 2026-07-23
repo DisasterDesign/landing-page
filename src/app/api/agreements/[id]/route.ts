@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { updateAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import {
@@ -18,6 +22,7 @@ export async function GET(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const agreement = await prisma.agreement.findUnique({
@@ -31,6 +36,9 @@ export async function GET(
 
     return NextResponse.json(agreement);
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching agreement:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -48,6 +56,7 @@ export async function PATCH(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const body = await request.json();
@@ -163,6 +172,9 @@ export async function PATCH(
 
     return NextResponse.json(agreement);
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error updating agreement:", error);
     return leadDomainErrorResponse(error);
   }

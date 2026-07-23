@@ -132,6 +132,15 @@ export function canSellerManageAgreement(
   );
 }
 
+export function sellerAgreementOperationalFields(
+  canManage: boolean,
+  fields: { phone: string; signToken: string },
+): Partial<{ phone: string; signToken: string }> {
+  return canManage
+    ? { phone: fields.phone, signToken: fields.signToken }
+    : {};
+}
+
 export function canSellerReadLead(
   sellerId: string,
   lead: SellerReadableLead,

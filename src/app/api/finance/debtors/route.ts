@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { bucketDebtors, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
 
 /**
@@ -12,9 +16,10 @@ import { bucketDebtors, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const [problemCharges, inactiveOrders, snapshotRow] = await Promise.all([
       prisma.agreementCharge.findMany({
@@ -80,6 +85,9 @@ export async function GET() {
       snapshotUpdatedAt: snapshotRow?.updatedAt ?? null,
     });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching debtors:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

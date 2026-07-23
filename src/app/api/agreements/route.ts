@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { withVat } from "@/lib/vat";
@@ -15,9 +19,10 @@ import { leadDomainErrorResponse } from "@/lib/leads/http";
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const url = new URL(request.url);
     const status = url.searchParams.get("status") as AgreementStatus | null;
@@ -34,6 +39,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: agreements });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching agreements:", error);
     return NextResponse.json(
       { error: "Internal server error" },

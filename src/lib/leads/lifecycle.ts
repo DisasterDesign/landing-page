@@ -228,6 +228,17 @@ export async function claimLeadInTransaction(
   transaction: Prisma.TransactionClient,
   input: ClaimLeadInput,
 ): Promise<LeadRecord> {
+  const seller = await transaction.user.findUnique({
+    where: { id: input.sellerId },
+    select: { role: true },
+  });
+  if (seller?.role !== "SELLER") {
+    throw new LeadDomainError(
+      "FORBIDDEN",
+      "Current user no longer has the seller role",
+    );
+  }
+
   const existing = await transaction.contactSubmission.findUnique({
     where: { id: input.leadId },
     include: { assignees: { select: { id: true } } },
@@ -352,18 +363,10 @@ export async function claimLead(
     }
   }
 
-  const current = await store.findLead(input.leadId);
-  if (
-    current &&
-    !current.migrationReviewRequired &&
-    current.ownerId === input.sellerId
-  ) {
-    return current;
-  }
-  if (current) {
-    throw new LeadDomainError("CONFLICT", "Lead was already claimed");
-  }
-  throw lastRetryableError ?? new LeadDomainError("NOT_FOUND", "Lead not found");
+  // A read outside the Serializable claim transaction cannot prove that the
+  // seller still has the persisted SELLER role. Never turn exhausted retries
+  // into an apparent success from an unguarded owner snapshot.
+  throw lastRetryableError ?? new LeadDomainError("CONFLICT", "Claim retry failed");
 }
 
 export async function releaseOrReassignLead(

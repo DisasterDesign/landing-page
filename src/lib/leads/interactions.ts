@@ -221,32 +221,64 @@ async function persistSuppression(
   input: {
     leadId: string;
     prospect: { id: string; placeId: string; auditedDomain: string | null } | null;
+    sourceSnapshot: Prisma.JsonValue | null;
     actorId: string;
     reason: string;
+    canonicalPhone?: string | null;
     livePhone?: string | null;
     hashSecret?: string;
     badPhoneOnly: boolean;
   },
 ): Promise<void> {
-  const secret = input.hashSecret ?? getProspectingConfig().hashSecret;
-  const phoneHash =
-    secret && input.livePhone
-      ? hashSuppressionValue(normalizePhone(input.livePhone), secret)
-      : null;
-  if (input.badPhoneOnly) {
-    if (!phoneHash) return;
+  const secret = (
+    input.hashSecret ?? getProspectingConfig().hashSecret
+  ).trim();
+  if (!secret) {
+    throw new Error(
+      "PROSPECTING_HASH_SECRET is required to persist contact suppression",
+    );
   }
-  const domainHash =
-    !input.badPhoneOnly && secret && input.prospect?.auditedDomain
-      ? hashSuppressionValue(
-          normalizeDomain(input.prospect.auditedDomain),
-          secret,
-        )
+  const phoneValues = input.badPhoneOnly
+    ? [input.livePhone ?? input.canonicalPhone]
+    : [input.livePhone, input.canonicalPhone];
+  const phoneHashes = Array.from(
+    new Set(
+      phoneValues.flatMap((phone) => {
+        const normalized = phone ? normalizePhone(phone) : "";
+        return normalized
+          ? [hashSuppressionValue(normalized, secret)]
+          : [];
+      }),
+    ),
+  );
+  if (input.badPhoneOnly && phoneHashes.length === 0) return;
+  const snapshot =
+    input.sourceSnapshot &&
+    typeof input.sourceSnapshot === "object" &&
+    !Array.isArray(input.sourceSnapshot)
+      ? (input.sourceSnapshot as Record<string, unknown>)
+      : {};
+  const snapshotPlaceId =
+    typeof snapshot.placeId === "string" && snapshot.placeId.trim()
+      ? snapshot.placeId.trim()
       : null;
-  const placeId = input.badPhoneOnly ? null : input.prospect?.placeId ?? null;
+  const snapshotDomain =
+    typeof snapshot.auditedDomain === "string" &&
+    snapshot.auditedDomain.trim()
+      ? snapshot.auditedDomain
+      : null;
+  const domain = input.prospect?.auditedDomain ?? snapshotDomain;
+  const normalizedDomain =
+    !input.badPhoneOnly && domain ? normalizeDomain(domain) : "";
+  const domainHash = normalizedDomain
+    ? hashSuppressionValue(normalizedDomain, secret)
+    : null;
+  const placeId = input.badPhoneOnly
+    ? null
+    : input.prospect?.placeId ?? snapshotPlaceId;
   const filters = [
     ...(placeId ? [{ placeId }] : []),
-    ...(phoneHash ? [{ phoneHash }] : []),
+    ...phoneHashes.map((phoneHash) => ({ phoneHash })),
     ...(domainHash ? [{ domainHash }] : []),
   ];
   if (filters.length === 0) return;
@@ -260,37 +292,59 @@ async function persistSuppression(
       sourceProspectId: true,
     },
   });
-  if (existing.length > 0) {
-    const primary = existing[0]!;
+  let pendingPlaceId =
+    placeId && !existing.some((row) => row.placeId === placeId)
+      ? placeId
+      : null;
+  let pendingDomainHash =
+    domainHash && !existing.some((row) => row.domainHash === domainHash)
+      ? domainHash
+      : null;
+  const pendingPhoneHashes = phoneHashes.filter(
+    (phoneHash) => !existing.some((row) => row.phoneHash === phoneHash),
+  );
+  const primary = existing[0];
+  if (primary) {
+    const primaryPhoneHash =
+      !primary.phoneHash && pendingPhoneHashes.length > 0
+        ? pendingPhoneHashes.shift()!
+        : null;
+    const primaryPlaceId = !primary.placeId ? pendingPlaceId : null;
+    const primaryDomainHash = !primary.domainHash
+      ? pendingDomainHash
+      : null;
+    if (primaryPlaceId) pendingPlaceId = null;
+    if (primaryDomainHash) pendingDomainHash = null;
     await transaction.prospectSuppression.update({
       where: { id: primary.id },
       data: {
         reason: input.reason,
-        ...(placeId && !existing.some((row) => row.placeId === placeId)
-          ? { placeId }
-          : {}),
-        ...(phoneHash && !existing.some((row) => row.phoneHash === phoneHash)
-          ? { phoneHash }
-          : {}),
-        ...(domainHash && !existing.some((row) => row.domainHash === domainHash)
-          ? { domainHash }
-          : {}),
+        ...(primaryPlaceId ? { placeId: primaryPlaceId } : {}),
+        ...(primaryPhoneHash ? { phoneHash: primaryPhoneHash } : {}),
+        ...(primaryDomainHash ? { domainHash: primaryDomainHash } : {}),
         ...(!primary.sourceProspectId && input.prospect?.id
           ? { sourceProspectId: input.prospect.id }
           : {}),
       },
     });
-  } else {
+  }
+  while (
+    pendingPlaceId ||
+    pendingDomainHash ||
+    pendingPhoneHashes.length > 0
+  ) {
     await transaction.prospectSuppression.create({
       data: {
-        placeId,
-        phoneHash,
-        domainHash,
+        placeId: pendingPlaceId,
+        phoneHash: pendingPhoneHashes.shift() ?? null,
+        domainHash: pendingDomainHash,
         reason: input.reason,
         sourceProspectId: input.prospect?.id ?? null,
         createdById: input.actorId,
       },
     });
+    pendingPlaceId = null;
+    pendingDomainHash = null;
   }
 }
 
@@ -365,8 +419,10 @@ export async function recordInteractionInTransaction(
     await persistSuppression(transaction, {
       leadId: lead.id,
       prospect: lead.prospect,
+      sourceSnapshot: lead.sourceSnapshot,
       actorId: input.actor.userId,
       reason: input.note?.trim() || input.outcome,
+      canonicalPhone: lead.phone,
       livePhone: trusted.livePhone,
       hashSecret: trusted.hashSecret,
       badPhoneOnly: input.outcome === "WRONG_NUMBER",

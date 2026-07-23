@@ -8,6 +8,11 @@ import {
   type RecurringHistoryRow,
 } from "@/lib/cardcom";
 import { sweepTerminalFailures } from "@/lib/cardcom-debtors";
+import {
+  cardcomRecurringHistoryProviderDealId,
+  recordVerifiedRecurringCharge,
+} from "@/lib/cardcom-recurring-charge";
+import { sendPaymentReceivedEmail } from "@/lib/email";
 import { notifyAllAdmins } from "@/lib/notifications";
 
 export const maxDuration = 60;
@@ -127,75 +132,85 @@ async function syncHistoryRow(
   row: RecurringHistoryRow,
   summary: { chargesCreated: number; chargesUpdated: number; failuresNotified: number }
 ) {
-  const dealId = row.TranzactionId != null ? String(row.TranzactionId) : null;
+  const dealId = cardcomRecurringHistoryProviderDealId(row);
+  if (!dealId) {
+    throw new Error(
+      `Recurring history row for ${customerName} has no stable provider identity`,
+    );
+  }
   const isSuccess = row.Status === "SUCCESSFUL";
   const isFailure = FAILURE_STATUSES.has(row.Status);
-
   const chargeDate = row.CreateDate ?? row.LastDate;
-  const debtFields = {
+  const amount = row.SumToBill;
+  if (amount == null || !Number.isFinite(amount) || amount <= 0) {
+    throw new Error(
+      `Recurring history row ${dealId} for ${customerName} has no positive amount`,
+    );
+  }
+  const providerChargedAt = chargeDate ? new Date(chargeDate) : null;
+  if (providerChargedAt && Number.isNaN(providerChargedAt.getTime())) {
+    throw new Error(
+      `Recurring history row ${dealId} for ${customerName} has an invalid date`,
+    );
+  }
+  const result = await recordVerifiedRecurringCharge({
+    recurringId: row.RecurringId,
+    providerDealId: dealId,
+    amount,
+    success: isSuccess,
     status: row.Status,
     responseCode: row.ResposeCode ?? null,
     billingAttempts: row.BillingAttempts ?? null,
-    cardcomChargeDate: chargeDate ? new Date(chargeDate) : null,
-    success: isSuccess,
-  };
-
-  // Match by deal id when Cardcom assigned one; otherwise by recurring id +
-  // billing date (failed attempts may carry no TranzactionId).
-  const existing = dealId
-    ? await prisma.agreementCharge.findFirst({ where: { cardcomDealId: dealId } })
-    : await prisma.agreementCharge.findFirst({
-        where: {
-          agreementId,
-          cardcomRecurringId: row.RecurringId,
-          cardcomChargeDate: debtFields.cardcomChargeDate,
-        },
-      });
-
-  if (existing) {
-    // Only touch rows the pull actually changes — keeps the daily run quiet.
-    if (
-      existing.status !== debtFields.status ||
-      existing.responseCode !== debtFields.responseCode ||
-      existing.billingAttempts !== debtFields.billingAttempts ||
-      (existing.cardcomChargeDate == null && debtFields.cardcomChargeDate != null)
-    ) {
-      await prisma.agreementCharge.update({ where: { id: existing.id }, data: debtFields });
-      summary.chargesUpdated++;
-      // A charge we knew about that ROLLED INTO debt is news; re-notify.
-      if (isFailure && existing.status !== debtFields.status) {
-        summary.failuresNotified++;
-        await notifyAllAdmins({
-          type: "AGREEMENT_SIGNED",
-          title: `🚨 חוב בקארדקום — ${customerName}`,
-          body: `סטטוס חיוב: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ניסיון ${row.BillingAttempts ?? "?"} · ₪${row.SumToBill ?? "?"}`,
-          url: "/admin/finance/debtors",
-        });
-      }
-    }
-    return;
-  }
-
-  await prisma.agreementCharge.create({
-    data: {
-      agreementId,
-      amount: row.SumToBill ?? 0,
-      cardcomDealId: dealId,
-      invoiceNumber: row.DocumentNumber != null ? String(row.DocumentNumber) : null,
-      cardcomRecurringId: row.RecurringId,
-      ...debtFields,
-      rawPayload: { source: "cardcom-reconcile", row: JSON.parse(JSON.stringify(row)) },
+    invoiceNumber:
+      row.DocumentNumber == null ? null : String(row.DocumentNumber),
+    providerChargedAt,
+    rawPayload: {
+      source: "cardcom-reconcile",
+      row: JSON.parse(JSON.stringify(row)),
     },
   });
-  summary.chargesCreated++;
-
-  if (isFailure || !isSuccess) {
+  if (result.agreementId !== agreementId) {
+    throw new Error(
+      `Recurring history row ${dealId} resolved to a different agreement`,
+    );
+  }
+  if (result.disposition === "created") summary.chargesCreated++;
+  if (result.disposition === "updated") summary.chargesUpdated++;
+  if (result.reviewRequired) {
+    summary.failuresNotified++;
+    await notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
+      body: `עסקה ${dealId} אומתה מול Cardcom, אך מקור רישום ההכנסה ההיסטורי אינו חד-משמעי.`,
+      url: "/admin/finance/debtors",
+    });
+    return;
+  }
+  if (
+    (isFailure || !isSuccess) &&
+    (result.disposition === "created" ||
+      result.previousStatus !== row.Status)
+  ) {
     summary.failuresNotified++;
     await notifyAllAdmins({
       type: "AGREEMENT_SIGNED",
       title: `🚨 חיוב שלא הצליח התגלה בקארדקום — ${customerName}`,
-      body: `סטטוס: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ₪${row.SumToBill ?? "?"} (התגלה ב-reconciliation, לא הגיע webhook)`,
+      body: `סטטוס: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ₪${result.amount} (התגלה ב-reconciliation, לא הגיע webhook)`,
       url: "/admin/finance/debtors",
+    });
+  } else if (result.revenueApplied) {
+    await notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: `💰 חיוב חודשי התגלה בסנכרון — ${result.customerName}`,
+      body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
+      url: "/admin/finance",
+    });
+    await sendPaymentReceivedEmail({
+      customerName: result.customerName,
+      amount: result.amount,
+      invoiceNumber: result.invoiceNumber ?? undefined,
+      agreementTier: result.tier,
+      isRecurring: true,
     });
   }
 }

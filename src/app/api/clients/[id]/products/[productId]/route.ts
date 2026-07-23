@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { syncClientMonthly, parseProductBody, CLIENT_PRODUCT_SELECT } from "@/lib/client-products";
 
 type Ctx = { params: Promise<{ id: string; productId: string }> };
@@ -9,9 +13,10 @@ type Ctx = { params: Promise<{ id: string; productId: string }> };
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id, productId } = await params;
     const existing = await prisma.clientProduct.findUnique({
@@ -38,6 +43,9 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
     return NextResponse.json({ product, monthlyAmount });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error updating client product:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -49,9 +57,10 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 export async function DELETE(_request: NextRequest, { params }: Ctx) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id, productId } = await params;
     const existing = await prisma.clientProduct.findUnique({
@@ -73,6 +82,9 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
 
     return NextResponse.json({ success: true, monthlyAmount });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error archiving client product:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   isWebhookSuccess,
@@ -17,6 +18,8 @@ import {
   applyPaymentSuccess,
   runLeadPostCommitEffects,
 } from "@/lib/leads/agreement-lifecycle";
+import { verifyRecurringWebhookSecret } from "@/lib/cardcom-webhook-auth";
+import { recordVerifiedRecurringCharge } from "@/lib/cardcom-recurring-charge";
 
 export const maxDuration = 60;
 
@@ -78,8 +81,34 @@ export async function POST(request: NextRequest) {
   });
 
   if (payload.RecurringId != null) {
-    await handleRecurringCharge(payload);
-    return NextResponse.json({ ok: true });
+    const authorization = verifyRecurringWebhookSecret({
+      expectedSecret: process.env.CARDCOM_RECURRING_WEBHOOK_SECRET,
+      receivedSecret:
+        typeof payload.Secret === "string"
+          ? payload.Secret
+          : typeof payload.secret === "string"
+            ? payload.secret
+            : null,
+    });
+    if (!authorization.ok) {
+      console.warn(
+        `Cardcom recurring webhook rejected: ${authorization.reason}`,
+      );
+      return NextResponse.json(
+        { ok: false, error: authorization.reason },
+        { status: authorization.status },
+      );
+    }
+    try {
+      await handleRecurringCharge(payload);
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      console.error("Cardcom recurring-charge processing failed:", error);
+      return NextResponse.json(
+        { ok: false, retry: true },
+        { status: 503 },
+      );
+    }
   }
 
   try {
@@ -173,13 +202,17 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   const invoiceNumber = verified.invoiceNumber;
   const paidAt = verified.occurredAt;
   const providerTransactionId = verified.transactionId;
+  const verifiedAt = new Date();
 
   const lifecycle = await prisma.$transaction(async (tx) => {
     const result = await applyPaymentSuccess(tx, {
       agreementId,
+      providerAttemptId: verified.lowProfileId,
+      providerReturnValue: verified.agreementId,
       providerTransactionId,
       paidAt,
       paidAmount,
+      verifiedAt,
       actor: { type: "INTEGRATION", occurredAt: paidAt },
     });
 
@@ -311,77 +344,112 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
 async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
   const recurringId = Number(p.RecurringId);
   if (!Number.isFinite(recurringId)) return;
-
-  const agreement = await prisma.agreement.findFirst({
-    where: { cardcomRecurringId: recurringId },
-    select: {
-      id: true,
-      tier: true,
-      clientId: true,
-      customerName: true,
-      monthlyPrice: true,
-    },
-  });
-  if (!agreement) {
-    console.warn(`Cardcom recurring webhook: unknown RecurringId=${recurringId}`);
+  const dealId = p.InternalDealNumber != null ? String(p.InternalDealNumber) : null;
+  if (!dealId) {
+    console.warn(
+      `Cardcom recurring webhook deferred: missing InternalDealNumber for RecurringId=${recurringId}`,
+    );
     return;
   }
-
-  const amount = extractWebhookAmount(p) ?? agreement.monthlyPrice;
-  const dealId = p.InternalDealNumber != null ? String(p.InternalDealNumber) : null;
-  const invoice = p.DocumentNumber != null ? String(p.DocumentNumber) : null;
-  const success = isWebhookSuccess(p);
-
-  if (dealId) {
-    const existing = await prisma.agreementCharge.findFirst({
-      where: { cardcomDealId: dealId },
-      select: { id: true },
-    });
-    if (existing) return;
+  const amount = extractWebhookAmount(p);
+  if (amount === null) {
+    throw new Error(
+      `Cardcom recurring callback ${dealId} has no verified amount`,
+    );
   }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.agreementCharge.create({
-      data: {
-        agreementId: agreement.id,
-        amount,
-        cardcomDealId: dealId,
-        invoiceNumber: invoice,
-        cardcomRecurringId: recurringId,
-        success,
-        rawPayload: p as object,
-      },
-    });
-    if (success && agreement.clientId) {
-      await tx.client.update({
-        where: { id: agreement.clientId },
-        data: {
-          amount: { increment: amount },
-          paymentDate: new Date(),
-        },
-      });
-      // A recurring charge IS the gross monthly — keep the PRODUCT fresh and
-      // re-derive the rollup (see the first-payment mirror for why not the
-      // client directly).
-      await applyPaymentToProduct(tx, agreement.clientId, agreement.id, amount, new Date());
-    }
+  const success = isWebhookSuccess(p);
+  const status =
+    typeof p.Status === "string"
+      ? p.Status.trim() || null
+      : success
+        ? "SUCCESSFUL"
+        : null;
+  const result = await recordVerifiedRecurringCharge({
+    recurringId,
+    providerDealId: dealId,
+    amount,
+    success,
+    status,
+    responseCode:
+      finiteWebhookInteger(p.ResposeCode) ??
+      finiteWebhookInteger(p.ResponseCode),
+    billingAttempts: finiteWebhookInteger(p.BillingAttempts),
+    invoiceNumber:
+      p.DocumentNumber == null ? null : String(p.DocumentNumber),
+    providerChargedAt: webhookDate(p.BillingDate),
+    rawPayload: safeRecurringAuditPayload(p),
   });
+  if (result.reviewRequired) {
+    await notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
+      body: `עסקה ${dealId} נקלטה, אך לא ניתן היה להוכיח אם ההכנסה ההיסטורית כבר נרשמה.`,
+      url: "/admin/finance/debtors",
+    });
+    return;
+  }
+  if (result.disposition === "unchanged") return;
 
   notifyAllAdmins({
     type: "AGREEMENT_SIGNED",
     title: success
-      ? `💰 חיוב חודשי התקבל — ${agreement.customerName}`
-      : `⚠️ חיוב חודשי נכשל — ${agreement.customerName}`,
-    body: `₪${amount}${invoice ? ` · חשבונית #${invoice}` : ""}`,
+      ? `💰 חיוב חודשי התקבל — ${result.customerName}`
+      : `⚠️ חיוב חודשי נכשל — ${result.customerName}`,
+    body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
   }).catch((e) => console.error("notify admins after recurring charge failed:", e));
 
-  if (success) {
+  if (result.revenueApplied) {
     sendPaymentReceivedEmail({
-      customerName: agreement.customerName,
-      amount,
-      invoiceNumber: invoice ?? undefined,
-      agreementTier: agreement.tier,
+      customerName: result.customerName,
+      amount: result.amount,
+      invoiceNumber: result.invoiceNumber ?? undefined,
+      agreementTier: result.tier,
       isRecurring: true,
     }).catch((e) => console.error("email after recurring charge failed:", e));
   }
+}
+
+function finiteWebhookInteger(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : Number.NaN;
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function webhookDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function safeRecurringAuditPayload(
+  payload: CardcomWebhookPayload,
+): Prisma.InputJsonObject {
+  const safe: Record<string, string | number | boolean> = {};
+  for (const key of [
+    "RecurringId",
+    "InternalDealNumber",
+    "DocumentNumber",
+    "Sum",
+    "Amount",
+    "DealResponse",
+    "ResponseCode",
+    "Status",
+    "ResposeCode",
+    "BillingAttempts",
+    "BillingDate",
+  ] as const) {
+    const value = payload[key];
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      safe[key] = value;
+    }
+  }
+  return safe;
 }

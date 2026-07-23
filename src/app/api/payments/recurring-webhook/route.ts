@@ -1,7 +1,11 @@
 export const dynamic = "force-dynamic";
+import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyAllAdmins } from "@/lib/notifications";
+import { verifyRecurringWebhookSecret } from "@/lib/cardcom-webhook-auth";
+import { recordVerifiedRecurringCharge } from "@/lib/cardcom-recurring-charge";
+import { sendPaymentReceivedEmail } from "@/lib/email";
 
 /**
  * Cardcom's OFFICIAL recurring-payments webhook ("דיווח למערכת חיצונית",
@@ -18,9 +22,8 @@ import { notifyAllAdmins } from "@/lib/notifications";
  * twice, or the cron re-reading what the webhook already wrote, is a no-op.
  *
  * Auth: Cardcom does not sign webhooks. The dashboard lets us attach a Secret
- * field to the payload — when CARDCOM_RECURRING_WEBHOOK_SECRET is set, a
- * mismatch is rejected. Until it's configured we accept (same trust level as
- * the existing payment webhook) but log a warning.
+ * field to the payload. This endpoint fails closed until that shared secret is
+ * configured and matches; the authenticated daily pull remains the fallback.
  */
 export async function POST(req: NextRequest) {
   let payload: Record<string, unknown>;
@@ -30,19 +33,109 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const expectedSecret = process.env.CARDCOM_RECURRING_WEBHOOK_SECRET;
-  const gotSecret = str(payload.Secret) ?? str(payload.secret);
-  if (expectedSecret) {
-    if (gotSecret !== expectedSecret) {
-      console.warn("[recurring-webhook] secret mismatch — rejecting");
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else {
-    console.warn("[recurring-webhook] CARDCOM_RECURRING_WEBHOOK_SECRET not set — accepting unsigned payload");
+  const authorization = verifyRecurringWebhookSecret({
+    expectedSecret: process.env.CARDCOM_RECURRING_WEBHOOK_SECRET,
+    receivedSecret: str(payload.Secret) ?? str(payload.secret),
+  });
+  if (!authorization.ok) {
+    console.warn(
+      `[recurring-webhook] rejected: ${authorization.reason}`,
+    );
+    return NextResponse.json(
+      { error: authorization.reason },
+      { status: authorization.status },
+    );
   }
 
   const recurringId = num(payload.RecurringId) ?? num(payload.MasterRecurringId);
   const returnValue = str(payload.ReturnValue);
+  const status = str(payload.Status);
+  const isDetail = payload.InternalDealNumber != null || status != null;
+
+  if (isDetail) {
+    const dealId =
+      payload.InternalDealNumber == null
+        ? null
+        : String(payload.InternalDealNumber).trim() || null;
+    if (!dealId) {
+      console.warn(
+        `[recurring-webhook] deferred detail without InternalDealNumber for RecurringId=${recurringId}`,
+      );
+      return NextResponse.json({ ok: true, deferred: true });
+    }
+    if (recurringId === null) {
+      console.warn(
+        `[recurring-webhook] deferred detail ${dealId} without RecurringId`,
+      );
+      return NextResponse.json({ ok: true, deferred: true });
+    }
+    const amount = num(payload.Sum) ?? num(payload.SumToBill);
+    if (amount === null || amount <= 0) {
+      console.warn(
+        `[recurring-webhook] deferred detail ${dealId} without a positive amount`,
+      );
+      return NextResponse.json({ ok: true, deferred: true });
+    }
+
+    try {
+      const result = await recordVerifiedRecurringCharge({
+        recurringId,
+        providerDealId: dealId,
+        amount,
+        success: status === "SUCCESSFUL",
+        status,
+        responseCode:
+          num(payload.ResposeCode) ?? num(payload.ResponseCode),
+        billingAttempts: num(payload.BillingAttempts),
+        invoiceNumber:
+          payload.DocumentNumber == null
+            ? null
+            : String(payload.DocumentNumber),
+        providerChargedAt: date(payload.BillingDate),
+        rawPayload: safeRecurringAuditPayload(payload),
+      });
+
+      if (result.reviewRequired) {
+        await notifyAllAdmins({
+          type: "AGREEMENT_SIGNED",
+          title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
+          body: `עסקה ${dealId} נקלטה, אך לא ניתן להוכיח אם ההכנסה ההיסטורית כבר נרשמה.`,
+          url: "/admin/finance/debtors",
+        });
+      } else if (
+        !result.success &&
+        (result.disposition === "created" ||
+          result.previousStatus !== status)
+      ) {
+        await notifyAllAdmins({
+          type: "AGREEMENT_SIGNED",
+          title: `🚨 חיוב חודשי נכשל — ${result.customerName}`,
+          body: `סטטוס: ${status ?? "?"} · קוד דחייה ${num(payload.ResposeCode) ?? num(payload.ResponseCode) ?? "?"} · ניסיון ${num(payload.BillingAttempts) ?? "?"} · ₪${result.amount}`,
+          url: "/admin/finance/debtors",
+        });
+      } else if (result.revenueApplied) {
+        await notifyAllAdmins({
+          type: "AGREEMENT_SIGNED",
+          title: `💰 חיוב חודשי התקבל — ${result.customerName}`,
+          body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
+        });
+        await sendPaymentReceivedEmail({
+          customerName: result.customerName,
+          amount: result.amount,
+          invoiceNumber: result.invoiceNumber ?? undefined,
+          agreementTier: result.tier,
+          isRecurring: true,
+        });
+      }
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      console.error("[recurring-webhook] charge processing failed:", error);
+      return NextResponse.json(
+        { ok: false, retry: true },
+        { status: 503 },
+      );
+    }
+  }
 
   // Locate the agreement: our own id echoed in ReturnValue wins; recurring id
   // is the fallback for orders created before ReturnValue was passed.
@@ -66,60 +159,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, unmatched: true });
   }
 
-  const status = str(payload.Status);
-  const isDetail = payload.InternalDealNumber != null || status != null;
-
-  if (isDetail) {
-    const dealId = payload.InternalDealNumber != null ? String(payload.InternalDealNumber) : null;
-    const isSuccess = status === "SUCCESSFUL";
-    const data = {
-      status,
-      responseCode: num(payload.ResposeCode) ?? num(payload.ResponseCode),
-      billingAttempts: num(payload.BillingAttempts),
-      cardcomChargeDate: str(payload.BillingDate) ? new Date(str(payload.BillingDate)!) : null,
-      success: isSuccess,
-      amount: num(payload.Sum) ?? 0,
-      cardcomRecurringId: recurringId,
-      rawPayload: payload as object,
-    };
-
-    const existing = dealId
-      ? await prisma.agreementCharge.findFirst({ where: { cardcomDealId: dealId } })
-      : null;
-
-    if (existing) {
-      await prisma.agreementCharge.update({ where: { id: existing.id }, data });
-    } else {
-      await prisma.agreementCharge.create({
-        data: { ...data, agreementId: agreement.id, cardcomDealId: dealId },
-      });
-    }
-
-    if (!isSuccess) {
+  // MasterRecurring — order-level change. Mirror the active flag; alert on
+  // the active→inactive transition.
+  const isActive = bool(payload.IsActive);
+  if (isActive != null) {
+    await prisma.agreement.update({
+      where: { id: agreement.id },
+      data: { cardcomIsActive: isActive, cardcomSyncedAt: new Date() },
+    });
+    if (isActive === false && agreement.cardcomIsActive !== false) {
       await notifyAllAdmins({
         type: "AGREEMENT_SIGNED",
-        title: `🚨 חיוב חודשי נכשל — ${agreement.customerName}`,
-        body: `סטטוס: ${status ?? "?"} · קוד דחייה ${data.responseCode ?? "?"} · ניסיון ${data.billingAttempts ?? "?"} · ₪${data.amount}`,
+        title: `⚠️ הוראת קבע כובתה — ${agreement.customerName}`,
+        body: "קארדקום דיווחה שההוראה אינה פעילה. הלקוח לא יחויב עד שתטופל.",
         url: "/admin/finance/debtors",
       });
-    }
-  } else {
-    // MasterRecurring — order-level change. Mirror the active flag; alert on
-    // the active→inactive transition.
-    const isActive = bool(payload.IsActive);
-    if (isActive != null) {
-      await prisma.agreement.update({
-        where: { id: agreement.id },
-        data: { cardcomIsActive: isActive, cardcomSyncedAt: new Date() },
-      });
-      if (isActive === false && agreement.cardcomIsActive !== false) {
-        await notifyAllAdmins({
-          type: "AGREEMENT_SIGNED",
-          title: `⚠️ הוראת קבע כובתה — ${agreement.customerName}`,
-          body: "קארדקום דיווחה שההוראה אינה פעילה. הלקוח לא יחויב עד שתטופל.",
-          url: "/admin/finance/debtors",
-        });
-      }
     }
   }
 
@@ -134,9 +188,44 @@ function num(v: unknown): number | null {
   if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
   return null;
 }
+function date(v: unknown): Date | null {
+  const value = str(v);
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 function bool(v: unknown): boolean | null {
   if (typeof v === "boolean") return v;
   if (v === "true" || v === "True" || v === "1" || v === 1) return true;
   if (v === "false" || v === "False" || v === "0" || v === 0) return false;
   return null;
+}
+
+function safeRecurringAuditPayload(
+  payload: Record<string, unknown>,
+): Prisma.InputJsonObject {
+  const safe: Record<string, string | number | boolean> = {};
+  for (const key of [
+    "RecurringId",
+    "MasterRecurringId",
+    "InternalDealNumber",
+    "DocumentNumber",
+    "Sum",
+    "SumToBill",
+    "Status",
+    "ResposeCode",
+    "ResponseCode",
+    "BillingAttempts",
+    "BillingDate",
+  ]) {
+    const value = payload[key];
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      safe[key] = value;
+    }
+  }
+  return safe;
 }

@@ -12,6 +12,7 @@ import {
   mapLegacyProspectInteraction,
 } from "@/lib/leads/legacy-mapping";
 import { legacySourceMirror } from "@/lib/leads/lifecycle";
+import { verifiedFirstPaymentEvidence } from "@/lib/leads/payment-verification";
 import {
   intentForSource,
   isLeadSourceKey,
@@ -55,8 +56,16 @@ const leadInclude = {
     select: {
       id: true,
       status: true,
+      paymentId: true,
       paymentStatus: true,
       paidAt: true,
+      paidAmount: true,
+      cardcomDealId: true,
+      cardcomVerifiedLowProfileId: true,
+      cardcomVerifiedReturnValue: true,
+      cardcomVerifiedTransactionId: true,
+      cardcomVerifiedAmount: true,
+      cardcomPaymentVerifiedAt: true,
       creditedSellerId: true,
       createdBy: true,
       isSellerDeal: true,
@@ -401,14 +410,23 @@ async function synchronizeLockedLead(
     lead.prospect?.interactions.filter(({ id }) => !importedIdSet.has(id))
       .length ?? 0;
   const latestProspectInteraction = lead.prospect?.interactions.at(-1);
+  const agreementPaymentEvidence = lead.agreements.map((agreement) => ({
+    agreement,
+    evidence: verifiedFirstPaymentEvidence(agreement),
+  }));
+  const paidAt =
+    agreementPaymentEvidence
+      .flatMap(({ evidence }) => (evidence ? [evidence.paidAt] : []))
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+  const hasUnverifiedFirstPayment = agreementPaymentEvidence.some(
+    ({ agreement, evidence }) =>
+      evidence === null &&
+      (agreement.paymentStatus === "COMPLETED" || agreement.paidAt !== null),
+  );
   let stage = deriveLegacyLeadStage({
-    paidAt:
-      lead.agreements.find(
-        (agreement) =>
-          agreement.paymentStatus === "COMPLETED" && agreement.paidAt,
-      )?.paidAt ?? null,
+    paidAt,
     status: lead.status,
-    agreements: lead.agreements,
+    agreements: lead.agreements.map(({ status }) => ({ status })),
     prospectStatus: lead.prospect?.status,
     prospectInteractionCount: lead.prospect?.interactions.length ?? 0,
     latestProspectOutcome: latestProspectInteraction?.outcome,
@@ -419,6 +437,7 @@ async function synchronizeLockedLead(
   if (
     compatibilityIsCurrent &&
     lead.stage &&
+    lead.stage !== "WON" &&
     !hasActiveAgreement &&
     missingLegacyInteractions === 0 &&
     stage !== "WON"
@@ -442,6 +461,9 @@ async function synchronizeLockedLead(
   stage = stageAfterSupersession(supersessionSafety);
 
   const reviewReasons: string[] = [];
+  if (hasUnverifiedFirstPayment) {
+    reviewReasons.push("UNVERIFIED_FIRST_PAYMENT");
+  }
   let plannedExternalLeadId = lead.externalLeadId;
   if (lead.prospect) {
     const expectedExternalLeadId = `gplaces:${lead.prospect.placeId}`;
@@ -560,11 +582,6 @@ async function synchronizeLockedLead(
     latestProspectInteraction?.createdAt ??
     lead.prospect?.lastContactedAt ??
     lead.lastContactedAt;
-  const paidAt =
-    lead.agreements.find(
-      (agreement) =>
-        agreement.paymentStatus === "COMPLETED" && agreement.paidAt,
-    )?.paidAt ?? null;
   const closedAt =
     stage === "WON"
       ? lead.closedAt ?? paidAt

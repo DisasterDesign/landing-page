@@ -72,3 +72,16 @@ test("legacy rollback phone copy is capability-gated and has a selectable fallba
     /canContact:\s*lead\.capabilities\.canContact/,
   );
 });
+
+test("legacy cold qualification hands the exact outbound lead to agreement creation", () => {
+  const coldPage = source("./LegacyColdLeadsPage.tsx");
+
+  assert.match(
+    coldPage,
+    /\/seller\/agreements\/new\?leadId=\$\{encodeURIComponent\(result\.leadId\)\}/,
+  );
+  assert.doesNotMatch(
+    coldPage,
+    /router\.push\(`\/seller\/leads\?focus=\$\{result\.leadId\}`\)/,
+  );
+});

@@ -80,6 +80,42 @@ export class CardcomError extends Error {
   }
 }
 
+export async function cardcomPostJson<T = unknown>(
+  path: string,
+  payload: object,
+  fetchImpl: typeof fetch = fetch,
+): Promise<T> {
+  if (!path.startsWith("/api/v11/") || path.includes("://")) {
+    throw new CardcomError("Invalid Cardcom v11 endpoint");
+  }
+  const response = await fetchImpl(
+    `https://secure.cardcom.solutions${path}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    },
+  );
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    throw new CardcomError(
+      `Cardcom ${path} returned non-JSON (status ${response.status})`,
+      response.status,
+    );
+  }
+  if (!response.ok) {
+    throw new CardcomError(
+      `Cardcom ${path} HTTP ${response.status}`,
+      response.status,
+      json,
+    );
+  }
+  return json as T;
+}
+
 interface LowProfileCreateResponse {
   LowProfileId?: string;
   Url?: string;
@@ -385,7 +421,7 @@ export async function verifyLowProfilePayment(
   if (!config) {
     throw new CardcomError("Cardcom credentials not configured");
   }
-  const request = dependencies.request ?? cardcomGetWithBody;
+  const request = dependencies.request ?? cardcomPostJson;
   const response = (await request(
     "/api/v11/LowProfile/GetLpResult",
     {

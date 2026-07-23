@@ -12,6 +12,7 @@ import {
   normalizeDomain,
   normalizePhone,
 } from "../prospecting/suppression";
+import { selectPublishableProspects } from "../prospecting/publisher";
 
 const baseInput = {
   leadId: "lead-1",
@@ -147,6 +148,9 @@ function fakeInteractionStore(options: {
   doNotContactAt?: Date | null;
   stage?: "NEW" | "PREPARING" | "CONTACTING";
   prospectLeadId?: string | null;
+  phone?: string | null;
+  prospect?: false;
+  sourceSnapshot?: Record<string, unknown>;
   suppressions?: Array<Record<string, unknown>>;
 } = {}): InteractionStore & {
   interactions: Array<Record<string, unknown>>;
@@ -166,9 +170,12 @@ function fakeInteractionStore(options: {
     doNotContactAt: options.doNotContactAt ?? null,
     intentLevel: "OUTBOUND",
     sourceKey: "google_maps",
-    sourceSnapshot: {
-      callAngles: [{ id: "1:1", text: "SEO", version: 1 }],
-    },
+    sourceSnapshot:
+      options.sourceSnapshot ??
+      {
+        callAngles: [{ id: "1:1", text: "SEO", version: 1 }],
+      },
+    phone: options.phone ?? null,
     stage: options.stage ?? "CONTACTING",
     status: options.stage === "NEW" ? "NEW" : "IN_PROGRESS",
     firstContactedAt: null,
@@ -188,11 +195,14 @@ function fakeInteractionStore(options: {
     externalAdId: null,
     closedAt: null,
     assignees: [{ id: "seller-1" }],
-    prospect: {
-      id: "prospect-1",
-      placeId: "place-1",
-      auditedDomain: "https://example.com",
-    },
+    prospect:
+      options.prospect === false
+        ? null
+        : {
+            id: "prospect-1",
+            placeId: "place-1",
+            auditedDomain: "https://example.com",
+          },
   };
   const transaction = {
     user: {
@@ -462,5 +472,164 @@ test("do-not-call enriches an existing phone suppression with permanent place an
   assert.equal(
     store.suppressions[0]?.domainHash,
     hashSuppressionValue(normalizeDomain("https://example.com"), secret),
+  );
+});
+
+test("do-not-call hashes the canonical phone and snapshot identities when live Prospect data is absent", async () => {
+  const secret = "suppression-secret";
+  const canonicalPhone = "050-765-4321";
+  const store = fakeInteractionStore({
+    phone: canonicalPhone,
+    prospect: false,
+    sourceSnapshot: {
+      callAngles: [{ id: "1:1", text: "SEO", version: 1 }],
+      placeId: "snapshot-place",
+      auditedDomain: "https://www.snapshot.example/path",
+    },
+  });
+
+  await recordInteraction(
+    {
+      ...baseInput,
+      outcome: "DO_NOT_CALL",
+      note: "ביקש שלא ניצור קשר",
+    },
+    { store, hashSecret: secret },
+  );
+
+  const canonicalPhoneHash = hashSuppressionValue(
+    normalizePhone(canonicalPhone),
+    secret,
+  );
+  assert.ok(
+    store.suppressions.some(
+      (suppression) => suppression.phoneHash === canonicalPhoneHash,
+    ),
+  );
+  assert.ok(
+    store.suppressions.some(
+      (suppression) => suppression.placeId === "snapshot-place",
+    ),
+  );
+  assert.ok(
+    store.suppressions.some(
+      (suppression) =>
+        suppression.domainHash ===
+        hashSuppressionValue(
+          normalizeDomain("https://www.snapshot.example/path"),
+          secret,
+        ),
+    ),
+  );
+
+  const futureWithSamePhone = selectPublishableProspects(
+    [
+      {
+        id: "future-prospect",
+        status: "READY",
+        qualityScore: 2,
+        auditConfidence: 0.9,
+        commercialFit: 7,
+        salesFitClassification: "INDEPENDENT_LIKELY",
+        salesFitConfidence: 0.95,
+        ownerReachabilityScore: 90,
+        auditedDomain: "different.example",
+        hasLivePhone: true,
+        displayName: "עסק עתידי",
+        discoveredAt: new Date("2026-07-24T08:00:00.000Z"),
+        placeId: "different-place",
+        phone: canonicalPhone,
+      },
+    ],
+    {
+      suppressedPhoneHashes: new Set(
+        store.suppressions.flatMap((suppression) =>
+          typeof suppression.phoneHash === "string"
+            ? [suppression.phoneHash]
+            : [],
+        ),
+      ),
+      hashSecret: secret,
+    },
+  );
+  assert.deepEqual(futureWithSamePhone, []);
+
+  const eventPayload = JSON.stringify(store.events);
+  assert.doesNotMatch(eventPayload, /050-765-4321|0507654321/);
+  assert.equal(
+    store.events.some((event) => {
+      const metadata = event.metadata;
+      return (
+        metadata !== null &&
+        typeof metadata === "object" &&
+        Object.keys(metadata).some((key) => key.toLowerCase() === "phone")
+      );
+    }),
+    false,
+  );
+});
+
+test("do-not-call fails closed when suppression hashing is not configured", async () => {
+  const store = fakeInteractionStore({
+    phone: "050-765-4321",
+    prospect: false,
+    sourceSnapshot: {
+      source: "meta",
+      externalLeadId: "meta-lead-1",
+    },
+  });
+
+  await assert.rejects(
+    recordInteraction(
+      {
+        ...baseInput,
+        outcome: "DO_NOT_CALL",
+        note: "ביקש שלא ניצור קשר",
+      },
+      { store, hashSecret: "" },
+    ),
+    /PROSPECTING_HASH_SECRET/,
+  );
+});
+
+test("do-not-call persists both canonical and live phone hashes when they differ", async () => {
+  const secret = "suppression-secret";
+  const canonicalPhone = "050-111-1111";
+  const livePhone = "050-222-2222";
+  const store = fakeInteractionStore({ phone: canonicalPhone });
+
+  await recordInteraction(
+    {
+      ...baseInput,
+      outcome: "DO_NOT_CALL",
+    },
+    { store, livePhone, hashSecret: secret },
+  );
+
+  const phoneHashes = new Set(
+    store.suppressions.flatMap((suppression) =>
+      typeof suppression.phoneHash === "string"
+        ? [suppression.phoneHash]
+        : [],
+    ),
+  );
+  assert.deepEqual(
+    phoneHashes,
+    new Set([
+      hashSuppressionValue(normalizePhone(canonicalPhone), secret),
+      hashSuppressionValue(normalizePhone(livePhone), secret),
+    ]),
+  );
+  assert.ok(
+    store.suppressions.some(
+      (suppression) => suppression.placeId === "place-1",
+    ),
+  );
+  assert.ok(
+    store.suppressions.some(
+      (suppression) =>
+        suppression.domainHash ===
+        hashSuppressionValue(normalizeDomain("https://example.com"), secret),
+    ),
   );
 });

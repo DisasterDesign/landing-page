@@ -22,6 +22,7 @@ import {
   legacyHashForLead,
   type LeadPostCommitEffect,
 } from "./lifecycle";
+import { verifiedFirstPaymentEvidence } from "./payment-verification";
 import { legacyStatusForStage } from "./stage-machine";
 import type {
   ApplyAgreementEventInput,
@@ -596,18 +597,168 @@ async function resolveCreditedSeller(
   return agreement.createdBy;
 }
 
+type NormalizedVerifiedPayment = {
+  providerAttemptId: string;
+  providerReturnValue: string;
+  providerTransactionId: string;
+  paidAt: Date;
+  paidAmount: number;
+  verifiedAt: Date;
+};
+
+type PaymentProofAgreement = Pick<
+  Agreement,
+  | "id"
+  | "paymentId"
+  | "cardcomLowProfileId"
+  | "paymentStatus"
+  | "paidAt"
+  | "paidAmount"
+  | "cardcomDealId"
+  | "cardcomVerifiedLowProfileId"
+  | "cardcomVerifiedReturnValue"
+  | "cardcomVerifiedTransactionId"
+  | "cardcomVerifiedAmount"
+  | "cardcomPaymentVerifiedAt"
+>;
+
+function normalizeVerifiedPaymentInput(
+  input: PaymentSuccessInput,
+): NormalizedVerifiedPayment {
+  const providerAttemptId = input.providerAttemptId.trim();
+  const providerReturnValue = input.providerReturnValue.trim();
+  const providerTransactionId = input.providerTransactionId.trim();
+  if (
+    input.actor.type !== "INTEGRATION" ||
+    !providerAttemptId ||
+    !providerReturnValue ||
+    !providerTransactionId ||
+    !Number.isFinite(input.paidAmount) ||
+    input.paidAmount <= 0 ||
+    !(input.paidAt instanceof Date) ||
+    Number.isNaN(input.paidAt.getTime()) ||
+    !(input.verifiedAt instanceof Date) ||
+    Number.isNaN(input.verifiedAt.getTime())
+  ) {
+    throw new LeadDomainError("VALIDATION", "Verified payment data is required");
+  }
+  if (providerReturnValue !== input.agreementId) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider return value does not match the agreement",
+    );
+  }
+  return {
+    providerAttemptId,
+    providerReturnValue,
+    providerTransactionId,
+    paidAt: input.paidAt,
+    paidAmount: input.paidAmount,
+    verifiedAt: input.verifiedAt,
+  };
+}
+
+function assertPaymentProofCompatible(
+  agreement: PaymentProofAgreement,
+  proof: NormalizedVerifiedPayment,
+): void {
+  if (proof.providerReturnValue !== agreement.id) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider return value does not match the agreement",
+    );
+  }
+  if (
+    (agreement.paymentId &&
+      agreement.paymentId.trim() !== proof.providerAttemptId) ||
+    (agreement.cardcomLowProfileId &&
+      agreement.cardcomLowProfileId.trim() !== proof.providerAttemptId) ||
+    (agreement.cardcomVerifiedLowProfileId &&
+      agreement.cardcomVerifiedLowProfileId.trim() !==
+        proof.providerAttemptId)
+  ) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider payment attempt conflicts with the stored LowProfile attempt",
+    );
+  }
+  // A payment page must have been persisted before its provider result can be
+  // accepted. This is the immutable attempt that GetLpResult was queried for.
+  if (!agreement.paymentId?.trim()) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Verified payment has no stored LowProfile attempt",
+    );
+  }
+  if (
+    (agreement.cardcomDealId &&
+      agreement.cardcomDealId.trim() !== proof.providerTransactionId) ||
+    (agreement.cardcomVerifiedTransactionId &&
+      agreement.cardcomVerifiedTransactionId.trim() !==
+        proof.providerTransactionId)
+  ) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider transaction conflicts with immutable payment proof",
+    );
+  }
+  if (
+    agreement.cardcomVerifiedReturnValue &&
+    agreement.cardcomVerifiedReturnValue.trim() !== proof.providerReturnValue
+  ) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider return value conflicts with immutable payment proof",
+    );
+  }
+  if (
+    (agreement.paidAmount !== null &&
+      !samePaymentAmount(agreement.paidAmount, proof.paidAmount)) ||
+    (agreement.cardcomVerifiedAmount !== null &&
+      !samePaymentAmount(
+        agreement.cardcomVerifiedAmount,
+        proof.paidAmount,
+      ))
+  ) {
+    throw new LeadDomainError(
+      "CONFLICT",
+      "Provider amount conflicts with stored payment evidence",
+    );
+  }
+}
+
+function paymentPersistenceData(
+  agreement: PaymentProofAgreement,
+  proof: NormalizedVerifiedPayment,
+): Prisma.AgreementUpdateManyMutationInput {
+  return {
+    paymentStatus: "COMPLETED",
+    paidAt: proof.paidAt,
+    paidAmount: proof.paidAmount,
+    cardcomDealId: proof.providerTransactionId,
+    cardcomVerifiedLowProfileId:
+      agreement.cardcomVerifiedLowProfileId ?? proof.providerAttemptId,
+    cardcomVerifiedReturnValue:
+      agreement.cardcomVerifiedReturnValue ?? proof.providerReturnValue,
+    cardcomVerifiedTransactionId:
+      agreement.cardcomVerifiedTransactionId ??
+      proof.providerTransactionId,
+    cardcomVerifiedAmount:
+      agreement.cardcomVerifiedAmount ?? proof.paidAmount,
+    cardcomPaymentVerifiedAt:
+      agreement.cardcomPaymentVerifiedAt ?? proof.verifiedAt,
+  };
+}
+
+function samePaymentAmount(left: number, right: number): boolean {
+  return Math.round(left * 100) === Math.round(right * 100);
+}
+
 export async function applyPaymentSuccess(
   transaction: Prisma.TransactionClient,
   input: PaymentSuccessInput,
 ): Promise<PaymentLeadResult> {
-  if (
-    input.actor.type !== "INTEGRATION" ||
-    !input.providerTransactionId.trim() ||
-    !Number.isFinite(input.paidAmount) ||
-    input.paidAmount <= 0
-  ) {
-    throw new LeadDomainError("VALIDATION", "Verified payment data is required");
-  }
+  const proof = normalizeVerifiedPaymentInput(input);
   const agreement = await transaction.agreement.findUnique({
     where: { id: input.agreementId },
     include: {
@@ -615,28 +766,29 @@ export async function applyPaymentSuccess(
     },
   });
   if (!agreement) throw new LeadDomainError("NOT_FOUND", "Agreement not found");
-  const providerTransactionId =
-    agreement.cardcomDealId ?? input.providerTransactionId.trim();
+  assertPaymentProofCompatible(agreement, proof);
+  const providerTransactionId = proof.providerTransactionId;
   const paymentWrite = await transaction.agreement.updateMany({
     where: {
       id: agreement.id,
       paymentStatus: { not: "COMPLETED" },
     },
-    data: {
-      paymentStatus: "COMPLETED",
-      paidAt: input.paidAt,
-      paidAmount: input.paidAmount,
-      cardcomDealId: providerTransactionId,
-    },
+    data: paymentPersistenceData(agreement, proof),
   });
-  if (paymentWrite.count === 0 && !agreement.paidAt) {
+  if (paymentWrite.count === 0) {
+    // updateMany may have waited behind a concurrent verified callback. Reload
+    // after the guarded write so a competing provider identity can never be
+    // overwritten from the stale pre-lock Agreement snapshot.
+    const persisted = await transaction.agreement.findUnique({
+      where: { id: agreement.id },
+    });
+    if (!persisted) {
+      throw new LeadDomainError("NOT_FOUND", "Agreement not found");
+    }
+    assertPaymentProofCompatible(persisted, proof);
     await transaction.agreement.update({
       where: { id: agreement.id },
-      data: {
-        paidAt: input.paidAt,
-        paidAmount: input.paidAmount,
-        cardcomDealId: providerTransactionId,
-      },
+      data: paymentPersistenceData(persisted, proof),
     });
   }
 
@@ -693,6 +845,8 @@ export async function applyPaymentSuccess(
       dedupeKey: `lead:${lead.id}:payment-succeeded:${providerTransactionId}`,
       metadata: {
         agreementId: agreement.id,
+        providerAttemptId: proof.providerAttemptId,
+        providerReturnValue: proof.providerReturnValue,
         providerTransactionId,
         paidAmount: input.paidAmount,
       },
@@ -1191,23 +1345,35 @@ export async function linkAgreementToLeadForMigrationInTransaction(
     },
   });
 
-  if (agreement.paymentStatus === "COMPLETED" && agreement.paidAt) {
-    const paidAmount = agreement.paidAmount ?? agreement.monthlyPrice;
-    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
-      throw new LeadDomainError(
-        "CONFLICT",
-        "Paid agreement is missing a valid payment amount",
-      );
-    }
+  const verifiedPayment = verifiedFirstPaymentEvidence(agreement);
+  if (verifiedPayment) {
     return applyPaymentSuccess(transaction, {
       agreementId: agreement.id,
-      providerTransactionId:
-        agreement.cardcomDealId ??
-        agreement.paymentId ??
-        `legacy-paid:${agreement.id}`,
-      paidAt: agreement.paidAt,
-      paidAmount,
+      providerAttemptId: verifiedPayment.lowProfileId,
+      providerReturnValue: agreement.id,
+      providerTransactionId: verifiedPayment.providerTransactionId,
+      paidAt: verifiedPayment.paidAt,
+      paidAmount: verifiedPayment.paidAmount,
+      verifiedAt: verifiedPayment.verifiedAt,
       actor: { type: "INTEGRATION" },
+    });
+  }
+
+  if (agreement.paymentStatus === "COMPLETED" || agreement.paidAt) {
+    const reviewReason = [
+      ...new Set(
+        [
+          ...(lead.migrationReviewReason?.split(",") ?? []),
+          "UNVERIFIED_FIRST_PAYMENT",
+        ].filter(Boolean),
+      ),
+    ].join(",");
+    await transaction.contactSubmission.update({
+      where: { id: lead.id },
+      data: {
+        migrationReviewRequired: true,
+        migrationReviewReason: reviewReason,
+      },
     });
   }
 
@@ -1377,7 +1543,7 @@ export async function linkHistoricalCommissionInTransaction(
   if (!agreement) {
     throw new LeadDomainError("NOT_FOUND", "Agreement not found");
   }
-  if (agreement.paymentStatus !== "COMPLETED" || !agreement.paidAt) {
+  if (!verifiedFirstPaymentEvidence(agreement)) {
     throw new LeadDomainError(
       "CONFLICT",
       "Target agreement has no verified first payment",

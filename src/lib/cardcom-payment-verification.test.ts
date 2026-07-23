@@ -2,13 +2,40 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { verifyLowProfilePayment } from "./cardcom";
+import {
+  cardcomPostJson,
+  verifyLowProfilePayment,
+} from "./cardcom";
 
 const config = {
   terminal: 1000,
   apiName: "api-user",
   apiPassword: "not-sent-to-low-profile-read",
 };
+
+test("LowProfile result transport uses Cardcom's POST JSON contract", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const response = await cardcomPostJson(
+    "/api/v11/LowProfile/GetLpResult",
+    { LowProfileId: "lp-verified" },
+    (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ResponseCode: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch,
+  );
+
+  assert.deepEqual(response, { ResponseCode: 0 });
+  assert.equal(
+    calls[0]?.url,
+    "https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult",
+  );
+  assert.equal(calls[0]?.init?.method, "POST");
+  assert.equal(calls[0]?.init?.cache, "no-store");
+  assert.equal(calls[0]?.init?.body, JSON.stringify({ LowProfileId: "lp-verified" }));
+});
 
 test("first payment truth is pulled from Cardcom and bound to the stored attempt", async () => {
   let requestPath = "";
@@ -139,5 +166,11 @@ test("public callback values cannot be used directly as first-payment truth", ()
   assert.doesNotMatch(
     route,
     /paidAmount:\s*paidAmount\s*\?\?\s*agreement\.monthlyPrice/,
+  );
+
+  const client = readFileSync(new URL("./cardcom.ts", import.meta.url), "utf8");
+  assert.match(
+    client,
+    /dependencies\.request\s*\?\?\s*cardcomPostJson/,
   );
 });

@@ -10,6 +10,7 @@ import {
   canSellerManageAgreement,
   requirePersistedLeadReadRole,
   sellerAgreementScope,
+  sellerAgreementOperationalFields,
 } from "@/lib/leads/authorization";
 import { updateLeadContactDetails } from "@/lib/leads/corrections";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
@@ -77,20 +78,28 @@ export async function GET() {
       ]),
     );
 
-    const data = agreements.map(({ lead, ...agreement }) => ({
-      ...agreement,
-      lead: lead
-        ? {
-            id: lead.id,
-            intentLevel: lead.intentLevel,
-            sourceKey: lead.sourceKey,
-            stage: lead.stage,
-          }
-        : null,
-      canManage:
-        canSellerManageAgreement(sellerId, { lead }),
-      commission: byAgreement.get(agreement.id) ?? null,
-    }));
+    const data = agreements.map(
+      ({ lead, phone, signToken, ...agreement }) => {
+        const canManage = canSellerManageAgreement(sellerId, { lead });
+        return {
+          ...agreement,
+          lead: lead
+            ? {
+                id: lead.id,
+                intentLevel: lead.intentLevel,
+                sourceKey: lead.sourceKey,
+                stage: lead.stage,
+              }
+            : null,
+          canManage,
+          ...sellerAgreementOperationalFields(canManage, {
+            phone,
+            signToken,
+          }),
+          commission: byAgreement.get(agreement.id) ?? null,
+        };
+      },
+    );
 
     return NextResponse.json({ data });
   } catch (error) {

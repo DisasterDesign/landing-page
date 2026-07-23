@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { createClientNoteSchema } from "@/lib/validations";
 
 export async function GET(
@@ -9,9 +13,10 @@ export async function GET(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const notes = await prisma.clientNote.findMany({
@@ -24,6 +29,9 @@ export async function GET(
 
     return NextResponse.json({ data: notes });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching client notes:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -41,6 +49,7 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const body = await request.json();
@@ -70,6 +79,9 @@ export async function POST(
 
     return NextResponse.json(note, { status: 201 });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error creating client note:", error);
     return NextResponse.json(
       { error: "Internal server error" },

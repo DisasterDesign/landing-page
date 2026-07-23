@@ -124,8 +124,10 @@ export default function LegacyColdLeadsPage() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error ?? "העברת הליד נכשלה");
-      toast.success("הליד הועבר למסלול המכירה הרגיל");
-      router.push(`/seller/leads?focus=${result.leadId}`);
+      toast.success("הליד מוכן להכנת חוזה");
+      router.push(
+        `/seller/agreements/new?leadId=${encodeURIComponent(result.leadId)}`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "העברת הליד נכשלה");
     } finally {

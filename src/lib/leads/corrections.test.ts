@@ -79,6 +79,7 @@ function fakeCorrectionStore(
     roles?: Record<string, "ADMIN" | "SELLER">;
     collision?: boolean;
     paidAt?: Date | null;
+    verifiedPayment?: boolean;
   } = {},
 ): LeadLifecycleStore & { lead: FakeLead; events: Array<Record<string, unknown>> } {
   const events: Array<Record<string, unknown>> = [];
@@ -108,10 +109,31 @@ function fakeCorrectionStore(
       },
     },
     agreement: {
-      async findFirst() {
-        return options.paidAt
-          ? { id: "agreement-1", paidAt: options.paidAt, paymentStatus: "COMPLETED" }
-          : null;
+      async findMany() {
+        if (!options.paidAt) return [];
+        return [
+          {
+            id: "agreement-1",
+            paymentId: options.verifiedPayment ? "low-profile-1" : null,
+            paidAt: options.paidAt,
+            paidAmount: 599,
+            paymentStatus: "COMPLETED",
+            cardcomDealId: "deal-1",
+            cardcomVerifiedLowProfileId: options.verifiedPayment
+              ? "low-profile-1"
+              : null,
+            cardcomVerifiedReturnValue: options.verifiedPayment
+              ? "agreement-1"
+              : null,
+            cardcomVerifiedTransactionId: options.verifiedPayment
+              ? "deal-1"
+              : null,
+            cardcomVerifiedAmount: options.verifiedPayment ? 599 : null,
+            cardcomPaymentVerifiedAt: options.verifiedPayment
+              ? new Date("2026-07-21T10:00:05.000Z")
+              : null,
+          },
+        ];
       },
     },
     leadEvent: {
@@ -232,6 +254,64 @@ test("source correction advances outbound preparation but never regresses later 
     { store: qualified },
   );
   assert.equal(qualified.lead.stage, "QUALIFIED");
+});
+
+test("source correction preserves the external source identity contract", async () => {
+  const metaStore = fakeCorrectionStore(canonicalLead(), {
+    roles: { "admin-1": "ADMIN" },
+  });
+  await assert.rejects(
+    correctLeadSource(
+      {
+        leadId: "lead-1",
+        intentLevel: "AD_RESPONSE",
+        sourceKey: "meta_lead_ads",
+        externalLeadId: "meta-top-level",
+        sourceSnapshot: {
+          externalLeadId: "meta-different",
+          nonContactAnswers: [],
+          receivedAt: "2026-07-23T07:00:00.000Z",
+        },
+        reason: "Trying to repair attribution",
+        actor: { userId: "admin-1", role: "ADMIN" },
+      },
+      { store: metaStore },
+    ),
+    /external ID does not match/i,
+  );
+
+  const googleStore = fakeCorrectionStore(canonicalLead(), {
+    roles: { "admin-1": "ADMIN" },
+  });
+  await assert.rejects(
+    correctLeadSource(
+      {
+        leadId: "lead-1",
+        intentLevel: "OUTBOUND",
+        sourceKey: "google_maps",
+        externalLeadId: "gplaces:place-other",
+        sourceSnapshot: {
+          territory: "רחוב הרצל, יבנה",
+          cycleId: "cycle-1",
+          batchId: "batch-1",
+          weekStart: "2026-07-20T00:00:00.000Z",
+          placeId: "place-1",
+          websiteStatus: "NO_WEBSITE",
+          auditedDomain: null,
+          internalBusinessCategory: "RETAIL",
+          internalBusinessCategoryVersion: 1,
+          qualityScore: 0,
+          scoringVersion: 3,
+          opportunitySummary: "לא נמצא אתר פעיל",
+          callAngles: [],
+        },
+        reason: "Trying to repair attribution",
+        actor: { userId: "admin-1", role: "ADMIN" },
+      },
+      { store: googleStore },
+    ),
+    /Place ID/i,
+  );
 });
 
 test("seller-confirmed contact data receives provenance without leaking values to events", async () => {
@@ -388,6 +468,7 @@ test("migration resolution is admin-only, complete, collision-safe and payment-a
   const paidStore = fakeCorrectionStore({ ...unresolved, assignees: [] }, {
     roles: { "admin-1": "ADMIN", "seller-1": "SELLER" },
     paidAt,
+    verifiedPayment: true,
   });
   await resolveLeadMigrationReview(
     {
@@ -405,6 +486,42 @@ test("migration resolution is admin-only, complete, collision-safe and payment-a
   );
   assert.equal(paidStore.lead.stage, "WON");
   assert.equal(paidStore.lead.wonAt, paidAt);
+});
+
+test("migration resolution cannot clear an unverified historical payment", async () => {
+  const paidAt = new Date("2026-07-21T10:00:00.000Z");
+  const unresolved = canonicalLead({
+    ownerId: null,
+    migrationReviewRequired: true,
+    intentLevel: null,
+    sourceKey: null,
+    stage: null,
+    assignees: [],
+  });
+  const unverifiedStore = fakeCorrectionStore(unresolved, {
+    roles: { "admin-1": "ADMIN", "seller-1": "SELLER" },
+    paidAt,
+  });
+
+  await assert.rejects(
+    resolveLeadMigrationReview(
+      {
+        leadId: "lead-1",
+        intentLevel: "INBOUND",
+        sourceKey: "website",
+        sourceSnapshot: correctedWebsiteSnapshot,
+        stage: "NEW",
+        ownerId: null,
+        eligibleSellerId: "seller-1",
+        reason: "Local paid flag is not provider proof",
+        version: 1,
+        actor: { userId: "admin-1", role: "ADMIN" },
+      },
+      { store: unverifiedStore },
+    ),
+    /unverified|payment/i,
+  );
+  assert.equal(unverifiedStore.lead.migrationReviewRequired, true);
 });
 
 test("migration resolution rejects source collisions and manufactured won stages", async () => {

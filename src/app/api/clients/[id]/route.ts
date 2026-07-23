@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
 
 export async function GET(
@@ -9,9 +13,10 @@ export async function GET(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const client = await prisma.client.findUnique({
@@ -51,6 +56,9 @@ export async function GET(
 
     return NextResponse.json(client);
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error fetching client:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -65,9 +73,10 @@ export async function PATCH(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
     const body = await request.json();
@@ -146,6 +155,9 @@ export async function PATCH(
       rolledMonthly !== null ? { ...client, monthlyAmount: rolledMonthly } : client
     );
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error updating client:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -160,9 +172,10 @@ export async function DELETE(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
 
@@ -170,6 +183,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Error deleting client:", error);
     return NextResponse.json(
       { error: "Internal server error" },

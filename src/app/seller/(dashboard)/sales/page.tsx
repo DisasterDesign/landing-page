@@ -10,19 +10,16 @@ interface Commission {
   briefTaskId: string | null;
 }
 
-interface Deal {
+interface DealBase {
   id: string;
   tier: string | null;
   monthlyPrice: number;
   customerName: string;
   businessName: string | null;
-  phone: string;
   status: string;
   paymentStatus: string;
-  signToken: string;
   paidAmount: number | null;
   createdAt: string;
-  canManage: boolean;
   commission: Commission | null;
   lead: {
     id: string;
@@ -31,6 +28,16 @@ interface Deal {
     stage: string | null;
   } | null;
 }
+
+type Deal = DealBase &
+  (
+    | { canManage: true; phone: string; signToken: string }
+    | {
+        canManage: false;
+        phone?: never;
+        signToken?: never;
+      }
+  );
 
 const fmt = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
 

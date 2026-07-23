@@ -245,3 +245,13 @@ test("migration scripts route safety decisions through the tested helpers", () =
   }
   assert.match(reconcileSource, /VERIFIED_FIRST_PAYMENT_IS_WON/);
 });
+
+test("migration derives WON only from immutable provider-bound first-payment proof", () => {
+  assert.match(backfillSource, /\bverifiedFirstPaymentEvidence\s*\(/);
+  assert.match(backfillSource, /UNVERIFIED_FIRST_PAYMENT/);
+  assert.match(reconcileSource, /\bverifiedFirstPaymentEvidence\s*\(/);
+  assert.match(
+    reconcileSource,
+    /UNVERIFIED_FIRST_PAYMENT_REQUIRES_REVIEW/,
+  );
+});

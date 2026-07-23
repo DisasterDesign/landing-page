@@ -45,6 +45,11 @@ type CanSellerReadAgreement = (
 
 type CanSellerManageAgreement = CanSellerReadAgreement;
 
+type SellerAgreementOperationalFields = (
+  canManage: boolean,
+  fields: { phone: string; signToken: string },
+) => Partial<{ phone: string; signToken: string }>;
+
 function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
@@ -171,7 +176,7 @@ test("seller agreement access follows the current linked lead owner without leak
   assert.equal(access.canSellerManageAgreement("seller-3", reassigned), false);
 
   const route = source("../../app/api/seller/agreements/route.ts");
-  assert.match(route, /canManage\s*:/);
+  assert.match(route, /canManage\s*[:,]/);
   assert.match(route, /canSellerManageAgreement/);
   assert.match(route, /migrationReviewRequired:\s*true/);
   assert.doesNotMatch(route, /persistedRole\s*===\s*"ADMIN"\s*\|\|/);
@@ -269,8 +274,41 @@ test("unlinked legacy agreement access preserves frozen-credit and creator fallb
 test("seller sales gates operational agreement actions by the explicit capability", () => {
   const sales = source("../../app/seller/(dashboard)/sales/page.tsx");
 
-  assert.match(sales, /canManage:\s*boolean/);
+  assert.match(sales, /canManage:\s*true/);
+  assert.match(sales, /canManage:\s*false/);
   assert.match(sales, /d\.canManage\s*&&\s*d\.lead/);
   assert.match(sales, /d\.canManage\s*\?\s*\(/);
   assert.match(sales, /לצפייה בלבד/);
+});
+
+test("history-only agreement DTO omits signing bearer fields and customer phone", () => {
+  const operationalFields = (
+    authorization as typeof authorization & {
+      sellerAgreementOperationalFields?: SellerAgreementOperationalFields;
+    }
+  ).sellerAgreementOperationalFields;
+  assert.equal(typeof operationalFields, "function");
+  if (!operationalFields) return;
+
+  const secrets = {
+    phone: "050-123-4567",
+    signToken: "public-signing-bearer-token",
+  };
+  assert.deepEqual(operationalFields(false, secrets), {});
+  assert.deepEqual(operationalFields(true, secrets), secrets);
+
+  const historyPayload = operationalFields(false, secrets);
+  assert.equal("phone" in historyPayload, false);
+  assert.equal("signToken" in historyPayload, false);
+  assert.doesNotMatch(
+    JSON.stringify(historyPayload),
+    /050-123-4567|public-signing-bearer-token/,
+  );
+
+  const route = source("../../app/api/seller/agreements/route.ts");
+  assert.match(route, /sellerAgreementOperationalFields/);
+  assert.match(
+    route,
+    /\{\s*lead,\s*phone,\s*signToken,\s*\.\.\.agreement\s*\}/,
+  );
 });
