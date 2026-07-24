@@ -224,6 +224,12 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
   phone: string | null;
   company: string | null;
   message: string;
+  /**
+   * The product the lead asked for — the raw answer to the form's
+   * "במה אתה מעוניין" selector (e.g. "אתר_מכירות_אונליין"). This is the
+   * STRUCTURED product-interest tag; it also stays in `message` for humans.
+   */
+  service: string | null;
 } {
   // Meta autogenerates internal field keys by replacing spaces with
   // underscores ("שם מלא" → "שם_מלא"), so we normalize both sides of
@@ -334,5 +340,12 @@ export function mapLeadFieldsToContact(lead: LeadDetail): {
       ? `התקבל מטופס: ${lead.form_name}`
       : "ליד מפייסבוק (ללא תוכן נוסף)";
 
-  return { name, email, phone, company, message };
+  return {
+    name,
+    email,
+    phone,
+    company,
+    message,
+    service: interest ? normalize(interest) : null,
+  };
 }

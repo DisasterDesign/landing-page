@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       phone: parsed.data.phone,
       message: parsed.data.message,
+      // The structured product-interest column, not just snapshot metadata —
+      // analytics and the category icons key off ContactSubmission.service.
+      service: parsed.data.service,
     });
 
     return NextResponse.json(contact, { status: 201 });

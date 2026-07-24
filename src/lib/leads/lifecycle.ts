@@ -990,6 +990,7 @@ export async function createLeadInTransaction(
     email: input.email?.trim() || null,
     phone: input.phone?.trim() || null,
     message: input.message?.trim() || null,
+    service: input.service?.trim() || null,
     intentLevel: input.intentLevel,
     sourceKey: input.sourceKey,
     sourceSnapshot: sourceSnapshot as Prisma.InputJsonValue,
