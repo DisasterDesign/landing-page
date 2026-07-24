@@ -41,8 +41,11 @@ const REVISION = 2;
 const TERRITORY = "קיורציה ידנית — דיזנגוף ת\"א + שדרות דואני יבנה (ריצות 1+2)";
 
 const ARCHIVE_PATH = `${homedir()}/Documents/fuzion-recovery-2026-07-23/prospecting-runs-1-2-recovered-from-dump.json`;
-const SELECTION_PATH = process.env.SELECTION_PATH;
-if (!SELECTION_PATH) throw new Error("SELECTION_PATH is required");
+function requiredSelectionPath(): string {
+  const path = process.env.SELECTION_PATH;
+  if (!path) throw new Error("SELECTION_PATH is required");
+  return path;
+}
 
 interface Selected {
   placeId: string;
@@ -86,7 +89,7 @@ function pgTextArray(value: unknown): string[] {
 }
 
 async function main() {
-  const selection = JSON.parse(readFileSync(SELECTION_PATH, "utf8")) as Selected[];
+  const selection = JSON.parse(readFileSync(requiredSelectionPath(), "utf8")) as Selected[];
   const archive = JSON.parse(readFileSync(ARCHIVE_PATH, "utf8")) as {
     prospects: Array<Record<string, unknown>>;
   };
