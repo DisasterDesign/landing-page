@@ -154,6 +154,7 @@ const filterKeys = [
   "source",
   "owner",
   "stage",
+  "stageGroup",
   "from",
   "to",
   "territory",
