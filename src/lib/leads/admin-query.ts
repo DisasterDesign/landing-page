@@ -415,7 +415,14 @@ export async function getAdminLeadList(
       where: {
         AND: [
           buildAdminLeadWhere(
-            { ...filters, intent: undefined, cursor: undefined, limit: filters.limit },
+            {
+              ...filters,
+              intent: undefined,
+              stage: undefined,
+              stageGroup: undefined,
+              cursor: undefined,
+              limit: filters.limit,
+            },
             now,
           ),
           { createdAt: { gte: weekAgo } },
@@ -429,7 +436,14 @@ export async function getAdminLeadList(
   // temperature tabs must show all three live counts even while one of them
   // is selected.
   const openByIntentWhere = buildAdminLeadWhere(
-    { ...filters, intent: undefined, cursor: undefined, limit: filters.limit },
+    {
+      ...filters,
+      intent: undefined,
+      stage: undefined,
+      stageGroup: undefined,
+      cursor: undefined,
+      limit: filters.limit,
+    },
     now,
   );
   const openByIntentRows = await db.contactSubmission.groupBy({
