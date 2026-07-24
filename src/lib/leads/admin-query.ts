@@ -50,6 +50,11 @@ export interface AdminLeadPage {
     newThisWeekCount: number;
     /** OPEN (non-terminal) leads per temperature — what is alive right now. */
     openByIntent: Record<"OUTBOUND" | "AD_RESPONSE" | "INBOUND", number>;
+    /** Life-state counts WITHIN the selected source tab (stage-agnostic). */
+    byStageGroup: Record<
+      "NEW" | "IN_PROGRESS" | "WON" | "LOST" | "SPAM" | "ALL" | "OPEN",
+      number
+    >;
   };
 }
 
@@ -461,6 +466,52 @@ export async function getAdminLeadList(
     }
   }
 
+  // Status-bar counts: WITHIN the selected source tab (that is the question
+  // the bar answers — "of the Facebook leads, how many are new / in
+  // progress / spam"), ignoring only the stage selection itself.
+  const byStageRows = await db.contactSubmission.groupBy({
+    by: ["stage"],
+    where: buildAdminLeadWhere(
+      {
+        ...filters,
+        stage: undefined,
+        stageGroup: undefined,
+        cursor: undefined,
+        limit: filters.limit,
+      },
+      now,
+    ),
+    _count: true,
+  });
+  const byStageGroup = {
+    NEW: 0,
+    IN_PROGRESS: 0,
+    WON: 0,
+    LOST: 0,
+    SPAM: 0,
+    ALL: 0,
+    OPEN: 0,
+  };
+  const stageToGroup: Record<string, keyof typeof byStageGroup> = {
+    NEW: "NEW",
+    PREPARING: "IN_PROGRESS",
+    CONTACTING: "IN_PROGRESS",
+    QUALIFIED: "IN_PROGRESS",
+    AGREEMENT_DRAFT: "IN_PROGRESS",
+    AGREEMENT_SENT: "IN_PROGRESS",
+    AGREEMENT_SIGNED: "IN_PROGRESS",
+    WON: "WON",
+    LOST: "LOST",
+    SPAM: "SPAM",
+  };
+  for (const row of byStageRows) {
+    const count = typeof row._count === "number" ? row._count : 0;
+    const group = stageToGroup[row.stage];
+    if (group) byStageGroup[group] += count;
+    byStageGroup.ALL += count;
+  }
+  byStageGroup.OPEN = byStageGroup.NEW + byStageGroup.IN_PROGRESS;
+
   const items = pageRows.map((row) =>
     projectLeadRecord(row, {
       audience: "ADMIN",
@@ -482,7 +533,13 @@ export async function getAdminLeadList(
             id: last.id,
           })
         : null,
-    stats: { openCount, dueThisWeekCount, newThisWeekCount, openByIntent },
+    stats: {
+      openCount,
+      dueThisWeekCount,
+      newThisWeekCount,
+      openByIntent,
+      byStageGroup,
+    },
   };
 }
 

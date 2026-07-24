@@ -66,6 +66,15 @@ export default function UnifiedAdminLeadsPage() {
     dueThisWeekCount: 0,
     newThisWeekCount: 0,
     openByIntent: { OUTBOUND: 0, AD_RESPONSE: 0, INBOUND: 0 },
+    byStageGroup: {
+      NEW: 0,
+      IN_PROGRESS: 0,
+      WON: 0,
+      LOST: 0,
+      SPAM: 0,
+      ALL: 0,
+      OPEN: 0,
+    },
   });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,12 +224,16 @@ export default function UnifiedAdminLeadsPage() {
                 type="button"
                 onClick={() => {
                   setFilters({ ...filters, intent: value });
-                  // Mutate only the intent key — the status bar (stageGroup/
-                  // all) and any advanced filters in the URL must survive.
                   const next = new URLSearchParams(query);
                   if (value) next.set("intent", value);
                   else next.delete("intent");
                   next.delete("cursor");
+                  // Entering a SOURCE tab lands on its fresh leads — that is
+                  // what a salesperson opens the tab for. "הכל" returns to
+                  // the open-leads default.
+                  next.delete("all");
+                  if (value) next.set("stageGroup", "NEW");
+                  else next.delete("stageGroup");
                   router.replace(`/admin/leads?${next.toString()}`);
                 }}
                 className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
@@ -291,6 +304,9 @@ export default function UnifiedAdminLeadsPage() {
                 }`}
               >
                 {label}
+                <span className="mr-1 text-[10px] text-gray-500">
+                  ({stats.byStageGroup[value]})
+                </span>
               </button>
             );
           })}
