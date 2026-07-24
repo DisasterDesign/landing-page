@@ -17,9 +17,9 @@ import { mergeLeadQueueItems } from "@/lib/leads/ui-state";
 
 const TEMPERATURE_TABS: Array<{ value: LeadIntentLevel | ""; label: string }> = [
   { value: "", label: "הכל" },
-  { value: "INBOUND", label: `${LEAD_TEMPERATURES.INBOUND.emoji} חמים` },
-  { value: "AD_RESPONSE", label: `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} בינוניים` },
-  { value: "OUTBOUND", label: `${LEAD_TEMPERATURES.OUTBOUND.emoji} קרים` },
+  { value: "AD_RESPONSE", label: `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} פייסבוק` },
+  { value: "OUTBOUND", label: `${LEAD_TEMPERATURES.OUTBOUND.emoji} גוגל מפות` },
+  { value: "INBOUND", label: `${LEAD_TEMPERATURES.INBOUND.emoji} אורגני` },
 ];
 
 const slaLabels = {
@@ -155,8 +155,8 @@ export default function UnifiedIncomingLeadsPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">הלידים שלי</h1>
             <p className="mt-1 text-sm text-gray-400">
-              רשימה אחת, שלוש דרגות חום: 🔥 חם — הלקוח חיפש אותנו · 🌤️ בינוני
-              — השאיר פרטים בפרסומת · 🧊 קר — איתור יזום שלנו. חמים תחילה.
+              רשימה אחת לפי מקור: 🌱 אורגני — פנו אלינו · 📘 פייסבוק — השאירו
+              פרטים בפרסומת · 📍 גוגל מפות — איתור יזום שלנו.
             </p>
           </div>
           <button

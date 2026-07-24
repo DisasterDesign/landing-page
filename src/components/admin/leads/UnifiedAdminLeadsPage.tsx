@@ -168,22 +168,19 @@ export default function UnifiedAdminLeadsPage() {
         <header>
           <h1 className="text-2xl font-bold text-white">לידים — CRM מאוחד</h1>
           <p className="mt-1 text-sm text-gray-400">
-            כל הלידים במקום אחד, בשלוש דרגות חום: 🔥 חם — הלקוח חיפש אותנו ·
-            🌤️ בינוני — השאיר פרטים בפרסומת · 🧊 קר — איתור יזום מגוגל.
+            מוצגים לידים פתוחים בלבד — מה שנכנס וטרם טופל. סגורים (שולם / לא
+            נסגר / ספאם) דרך סינון השלב.
           </p>
         </header>
 
-        {/* Temperature first — the one dimension you read before anything. */}
-        <nav aria-label="סינון לפי דרגת חום" className="flex flex-wrap gap-2">
+        {/* Source first — the salesperson's mental model. */}
+        <nav aria-label="סינון לפי מקור" className="flex flex-wrap gap-2">
           {(
             [
               ["", "הכל"],
-              ["INBOUND", `${LEAD_TEMPERATURES.INBOUND.emoji} חמים`],
-              [
-                "AD_RESPONSE",
-                `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} בינוניים`,
-              ],
-              ["OUTBOUND", `${LEAD_TEMPERATURES.OUTBOUND.emoji} קרים`],
+              ["AD_RESPONSE", `${LEAD_TEMPERATURES.AD_RESPONSE.emoji} פייסבוק`],
+              ["OUTBOUND", `${LEAD_TEMPERATURES.OUTBOUND.emoji} גוגל מפות`],
+              ["INBOUND", `${LEAD_TEMPERATURES.INBOUND.emoji} אורגני`],
             ] as const
           ).map(([value, label]) => {
             const active = filters.intent === value;

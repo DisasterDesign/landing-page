@@ -2,42 +2,41 @@ import type { LeadIntentLevel } from "@prisma/client";
 
 /**
  * The lead-temperature doctrine (Elad, 24.7.2026): every lead has one of
- * three temperatures, and temperature is the FIRST thing a human should see —
- * before name, before source.
+ * three temperatures (intentLevel) — OUTBOUND we initiated, AD_RESPONSE they
+ * answered an ad, INBOUND they came looking. That stays the DATA model.
  *
- *   🧊 קר    (OUTBOUND)    — we initiated: the Google-Maps prospecting engine
- *   🌤 בינוני (AD_RESPONSE) — they left quick details on one of our ads (Meta)
- *   🔥 חם    (INBOUND)     — they came looking for us (word of mouth today,
- *                            Google search tomorrow)
- *
- * The technical channel (sourceKey) is open-ended; every new channel maps
- * onto one of these three temperatures instead of inventing a new lead type.
+ * The UI, however, speaks in SOURCES (Elad's refinement, same day): a
+ * salesperson thinks "this came from Google Maps / Facebook / organically",
+ * not in temperature metaphors. So the visible names are the sources, and
+ * the temperature remains the underlying grouping.
  */
 export const LEAD_TEMPERATURES: Record<
   LeadIntentLevel,
   { label: string; emoji: string; chipClass: string }
 > = {
   OUTBOUND: {
-    label: "ליד קר",
-    emoji: "🧊",
+    label: "גוגל מפות",
+    emoji: "📍",
     chipClass: "bg-cyan/10 text-cyan border-cyan/40",
   },
   AD_RESPONSE: {
-    label: "ליד בינוני",
-    emoji: "🌤️",
-    chipClass: "bg-amber-400/10 text-amber-300 border-amber-400/40",
+    label: "פייסבוק",
+    emoji: "📘",
+    chipClass: "bg-blue-500/10 text-blue-300 border-blue-400/40",
   },
   INBOUND: {
-    label: "ליד חם",
-    emoji: "🔥",
-    chipClass: "bg-red-500/10 text-red-400 border-red-500/40",
+    label: "אורגני",
+    emoji: "🌱",
+    chipClass: "bg-green-500/10 text-green-300 border-green-500/40",
   },
 };
 
+// Secondary detail — shown only when it ADDS information beyond the chip
+// (the chip already says גוגל מפות/פייסבוק/אורגני).
 const sourceLabels: Record<string, string> = {
-  google_maps: "Google Maps",
-  meta_lead_ads: "Meta Lead Ads",
-  website: "אתר Fuzion",
+  google_maps: "",
+  meta_lead_ads: "",
+  website: "טופס האתר",
   google_search_ads: "Google Search",
 };
 
@@ -84,11 +83,14 @@ export default function LeadSourceBadge({
         <span aria-hidden="true">{temperature?.emoji ?? "❔"}</span>
         {temperature?.label ?? "דורש סיווג"}
       </span>
-      <span className="text-sm text-gray-300">
-        {sourceKey
+      {(() => {
+        const secondary = sourceKey
           ? sourceLabels[sourceKey] ?? sourceLabel ?? sourceKey
-          : sourceLabel ?? "מקור לא מסווג"}
-      </span>
+          : sourceLabel ?? "מקור לא מסווג";
+        return secondary ? (
+          <span className="text-sm text-gray-300">{secondary}</span>
+        ) : null;
+      })()}
       {context.length > 0 && (
         <span className="text-xs text-gray-500">{context.join(" · ")}</span>
       )}

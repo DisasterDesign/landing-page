@@ -6,6 +6,32 @@ import toast from "react-hot-toast";
 import LeadSourceBadge from "@/components/leads/LeadSourceBadge";
 import type { LeadDetail } from "@/lib/leads/projection";
 
+// Everything a salesperson reads must be Hebrew at a glance — raw enum
+// values (CONTACTING, VIEW_AGREEMENT) were the #1 "not intuitive" complaint.
+const STAGE_CHIPS: Record<string, { label: string; cls: string }> = {
+  NEW: { label: "חדש", cls: "bg-pink/15 text-pink" },
+  PREPARING: { label: "בהכנה", cls: "bg-amber-400/10 text-amber-300" },
+  CONTACTING: { label: "בטיפול", cls: "bg-amber-400/10 text-amber-300" },
+  QUALIFIED: { label: "מוכן לחוזה", cls: "bg-cyan/10 text-cyan" },
+  AGREEMENT_DRAFT: { label: "חוזה בהכנה", cls: "bg-cyan/10 text-cyan" },
+  AGREEMENT_SENT: { label: "חוזה נשלח", cls: "bg-cyan/10 text-cyan" },
+  AGREEMENT_SIGNED: { label: "חוזה נחתם", cls: "bg-green-500/10 text-green-300" },
+  WON: { label: "שולם ✓", cls: "bg-green-500/15 text-green-300" },
+  LOST: { label: "לא נסגר", cls: "bg-gray-600/20 text-gray-400" },
+  SPAM: { label: "ספאם", cls: "bg-red-500/10 text-red-400" },
+};
+
+const NEXT_ACTION_LABELS: Record<string, string> = {
+  RECOVER_FIRST_PAYMENT: "לטפל בתשלום הראשון",
+  COMPLETE_FOLLOW_UP: "לבצע את הפולואפ",
+  VIEW_AGREEMENT: "לפתוח את החוזה",
+  CREATE_AGREEMENT: "להכין חוזה",
+  CLAIM: "לקחת אחריות",
+  PREPARE: "להכין את השיחה",
+  CONTACT: "ליצור קשר",
+  NONE: "—",
+};
+
 export default function LeadTable({ leads }: { leads: LeadDetail[] }) {
   function copyPhone(phone: string) {
     if (!navigator.clipboard?.writeText) {
@@ -75,13 +101,17 @@ export default function LeadTable({ leads }: { leads: LeadDetail[] }) {
                     דורש סיווג
                   </span>
                 ) : (
-                  <span className="rounded-full bg-pink/15 px-2.5 py-1 text-xs font-bold text-pink">
-                    {lead.stage}
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                      lead.stage ? STAGE_CHIPS[lead.stage]?.cls ?? "bg-pink/15 text-pink" : "bg-pink/15 text-pink"
+                    }`}
+                  >
+                    {lead.stage ? STAGE_CHIPS[lead.stage]?.label ?? lead.stage : "—"}
                   </span>
                 )}
               </td>
               <td className="px-4 py-3 text-gray-300">
-                {lead.nextAction.kind}
+                {NEXT_ACTION_LABELS[lead.nextAction.kind] ?? lead.nextAction.kind}
                 {lead.nextFollowUpAt && (
                   <time className="mt-1 block text-xs text-gray-500">
                     {new Date(lead.nextFollowUpAt).toLocaleString("he-IL")}

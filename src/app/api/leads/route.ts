@@ -75,9 +75,13 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const filters = parseAdminLeadFilters(url.searchParams);
     const unified = getLeadLifecycleConfig().enabled;
+    // Open leads by default in BOTH modes: a new lead is something that came
+    // in and was not handled; history (won/lost/spam) shows only when asked
+    // for explicitly — ?all=true, or an explicit stage filter.
     const effectiveFilters = {
       ...filters,
-      openOnly: !unified && url.searchParams.get("all") !== "true",
+      openOnly:
+        url.searchParams.get("all") !== "true" && !filters.stage,
     };
     const page = unified
       ? await getAdminLeadList(effectiveFilters)
