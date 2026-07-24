@@ -63,7 +63,7 @@ export default function LeadMetrics({ metrics }: { metrics: LeadMetricsData | nu
   return (
     <section dir="rtl" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="לידים חדשים" value={metrics.created} accent="bg-pink-500" />
+        <SummaryCard label="סה״כ נכנסו (בטווח הנבחר)" value={metrics.created} accent="bg-pink-500" />
         <SummaryCard label="שיעור תשלום" value={percent(metrics.rates.paid)} accent="bg-green-500" />
         <SummaryCard label="הכנסה ראשונה" value={amount(metrics.revenue)} accent="bg-cyan" />
         <SummaryCard label="גודל עסקה ממוצע" value={amount(metrics.averageDealSize)} accent="bg-amber-500" />
