@@ -146,7 +146,7 @@ export default function UnifiedAdminLeadsPage() {
   const cards = useMemo(
     () => [
       ["לידים פתוחים", stats.openCount],
-      ["חדשים השבוע", stats.newThisWeekCount],
+      ["נכנסו השבוע (חם+בינוני)", stats.newThisWeekCount],
       ["פולואפים השבוע", stats.dueThisWeekCount],
       ["מוצגים", leads.length],
     ] as const,
