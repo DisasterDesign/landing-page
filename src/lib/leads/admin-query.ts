@@ -25,6 +25,7 @@ export interface AdminLeadFilters {
   source?: string;
   owner?: string | "UNASSIGNED";
   stage?: LeadStage;
+  stageGroup?: "NEW" | "IN_PROGRESS" | "WON" | "LOST" | "SPAM";
   from?: Date;
   to?: Date;
   territory?: string;
@@ -94,6 +95,10 @@ const rawFilterSchema = z
     source: sourceSchema.optional(),
     owner: z.string().trim().min(1).max(200).optional(),
     stage: stageSchema.optional(),
+    // The classic status bar: broad life-state groups, mapped onto stages.
+    stageGroup: z
+      .enum(["NEW", "IN_PROGRESS", "WON", "LOST", "SPAM"])
+      .optional(),
     from: dateSchema.optional(),
     to: dateSchema.optional(),
     territory: z.string().trim().min(1).max(300).optional(),
@@ -234,6 +239,23 @@ export function buildAdminLeadWhere(
   if (filters.owner === "UNASSIGNED") where.ownerId = null;
   else if (filters.owner) where.ownerId = filters.owner;
   if (filters.stage) where.stage = filters.stage;
+  if (!filters.stage && filters.stageGroup) {
+    const groups: Record<NonNullable<AdminLeadFilters["stageGroup"]>, LeadStage[]> = {
+      NEW: ["NEW"],
+      IN_PROGRESS: [
+        "PREPARING",
+        "CONTACTING",
+        "QUALIFIED",
+        "AGREEMENT_DRAFT",
+        "AGREEMENT_SENT",
+        "AGREEMENT_SIGNED",
+      ],
+      WON: ["WON"],
+      LOST: ["LOST"],
+      SPAM: ["SPAM"],
+    };
+    where.stage = { in: groups[filters.stageGroup] };
+  }
   if (filters.reviewRequired !== undefined) {
     where.migrationReviewRequired = filters.reviewRequired;
   }

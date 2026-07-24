@@ -81,7 +81,9 @@ export async function GET(request: NextRequest) {
     const effectiveFilters = {
       ...filters,
       openOnly:
-        url.searchParams.get("all") !== "true" && !filters.stage,
+        url.searchParams.get("all") !== "true" &&
+        !filters.stage &&
+        !filters.stageGroup,
     };
     const page = unified
       ? await getAdminLeadList(effectiveFilters)

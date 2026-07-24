@@ -166,7 +166,14 @@ export default function UnifiedAdminLeadsPage() {
   );
 
   function applyFilters() {
-    router.replace(`/admin/leads?${paramsFromFilters(filters).toString()}`);
+    const params = paramsFromFilters(filters);
+    // Keep the status-bar selection alive across filter/search applies.
+    const current = new URLSearchParams(query);
+    for (const key of ["stageGroup", "all"]) {
+      const value = current.get(key);
+      if (value) params.set(key, value);
+    }
+    router.replace(`/admin/leads?${params.toString()}`);
   }
 
   function resetFilters() {
@@ -207,11 +214,14 @@ export default function UnifiedAdminLeadsPage() {
                 key={value || "all"}
                 type="button"
                 onClick={() => {
-                  const next = { ...filters, intent: value };
-                  setFilters(next);
-                  router.replace(
-                    `/admin/leads?${paramsFromFilters(next).toString()}`,
-                  );
+                  setFilters({ ...filters, intent: value });
+                  // Mutate only the intent key — the status bar (stageGroup/
+                  // all) and any advanced filters in the URL must survive.
+                  const next = new URLSearchParams(query);
+                  if (value) next.set("intent", value);
+                  else next.delete("intent");
+                  next.delete("cursor");
+                  router.replace(`/admin/leads?${next.toString()}`);
                 }}
                 className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
                   active
@@ -242,8 +252,50 @@ export default function UnifiedAdminLeadsPage() {
           ))}
         </div>
 
-        {/* The day-to-day flow is tabs + search; the full filter engine is
-            noise and lives behind a toggle. (Elad, 24.7) */}
+        {/* The classic status bar — a lead's life-state at a click. "כל
+            הלידים" is the only view that includes closed history. */}
+        <nav aria-label="סינון לפי סטטוס" className="flex flex-wrap gap-2">
+          {(
+            [
+              ["OPEN", "פתוחים"],
+              ["NEW", "חדשים"],
+              ["IN_PROGRESS", "בטיפול"],
+              ["WON", "נסגרו ✓"],
+              ["LOST", "לא נסגרו"],
+              ["SPAM", "ספאם"],
+              ["ALL", "כל הלידים"],
+            ] as const
+          ).map(([value, label]) => {
+            const params = new URLSearchParams(query);
+            const activeGroup =
+              params.get("stageGroup") ??
+              (params.get("all") === "true" ? "ALL" : "OPEN");
+            const active = activeGroup === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  const next = new URLSearchParams(query);
+                  next.delete("stageGroup");
+                  next.delete("all");
+                  next.delete("cursor");
+                  if (value === "ALL") next.set("all", "true");
+                  else if (value !== "OPEN") next.set("stageGroup", value);
+                  router.replace(`/admin/leads?${next.toString()}`);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
+                  active
+                    ? "border-cyan bg-cyan/10 text-white"
+                    : "border-gray-700 bg-gray-900 text-gray-400 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={filters.search}
