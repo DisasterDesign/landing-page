@@ -170,3 +170,33 @@ UI בלבד — הנתונים (`intentLevel`, `sourceKey`) לא השתנו. ה-
 תחזיות MRR) נבנות על הרצף ההיסטורי. כל "ניקיון" שקוטע אותו הופך את המדידה
 לניחוש. הפחד של 24.7 ("כל המידע נעלם") נבע מתצוגות שגויות — הדאטה הייתה
 שלמה, וכך זה חייב להישאר.
+
+## 2026-07-24 — ריצת prospecting 3: יעד 20, סינון ריצות 1+2, ביטול קרון יום ראשון
+
+**Status:** Accepted.
+
+### Decision
+
+1. **ריצה 3 מופעלת ידנית** (טריגר על `/api/cron/prospecting-propose` עם
+   CRON_SECRET) עם `prospecting:weeklyTarget = 20` (ירד מ-50). זהו מבחן
+   השבוע הראשון; בסופו אלעד מחליט אם ובאיזה קצב ממשיכים.
+2. **סינון ריצות 1+2:** כל 158 ה-placeIds מדיזנגוף סנטר ומשדרות דואני יבנה
+   נזרעו ל-`ProspectSuppression` (`scripts/seed-prospect-suppression-runs12.mjs`),
+   כך שה-discovery וה-publish לא יעלו אותם שוב. placeId בלבד —
+   phone/domain hashes דורשים את `PROSPECTING_HASH_SECRET` שנשאר בפרודקשן.
+3. **קרון יום ראשון (`0 6 * * 0`) הוסר מ-vercel.json.** אין הצעת טריטוריה
+   אוטומטית שבועית עד החלטה מחודשת. ה-route נשאר קיים — הרצה עתידית היא
+   טריגר ידני או החזרת השורה. ה-worker (כל 10 דק') וה-maintenance נשארו.
+
+### Incident שנלמד
+
+סקריפט האיפוס (`reset-cold-and-cleanup.mjs`) הורץ פעמיים; הריצה השנייה
+דרסה את קובץ הארכיון עם snapshot ריק. הארכיון שוחזר מ-pg_dump של 23.7
+(`~/Documents/fuzion-recovery-2026-07-23/prospecting-runs-1-2-recovered-from-dump.json`)
+והסקריפט קיבל הגנת אי-דריסה. כלל: סקריפט archive-then-delete לעולם לא
+דורס ארכיון קיים.
+
+### Reversibility
+
+החזרת הקרון = שחזור 4 שורות ב-vercel.json. הסרת הסינון = מחיקת שורות
+ה-suppression עם ה-reason הייעודי. היעד חוזר דרך `prospecting:weeklyTarget`.

@@ -2,11 +2,20 @@
 // prospecting run (Dizengoff+Yavne) and the website test lead, for a clean
 // fresh sweep. Dry-run by default; APPLY=1 to execute.
 import { PrismaClient } from "@prisma/client";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 const p = new PrismaClient();
 const APPLY = process.env.APPLY === "1";
 const dir = process.env.HOME + "/Documents/fuzion-recovery-2026-07-23";
 mkdirSync(dir, { recursive: true });
+
+// A second run after deletion overwrites the archive with the now-empty DB
+// state — that ALREADY HAPPENED on 24.7 (archive lost, rebuilt from pg_dump).
+// Never overwrite an existing archive file.
+const archivePath = `${dir}/prospecting-run1-archive-2026-07-24.json`;
+if (existsSync(archivePath)) {
+  console.error(`archive already exists: ${archivePath} — refusing to overwrite. Move it aside first.`);
+  process.exit(1);
+}
 
 const coldLeads = await p.contactSubmission.findMany({
   where: { intentLevel: "OUTBOUND" },
@@ -28,7 +37,7 @@ const archive = {
   reason: "Elad requested a clean prospecting slate before a fresh sweep",
   coldLeads, testLeads, cycles, proposals, batches, prospects, audits,
 };
-const file = `${dir}/prospecting-run1-archive-2026-07-24.json`;
+const file = archivePath;
 writeFileSync(file, JSON.stringify(archive, null, 1), { mode: 0o600 });
 console.log(`archived: ${coldLeads.length} cold leads, ${testLeads.length} test leads, ${prospects.length} prospects, ${cycles.length} cycles → ${file}`);
 
