@@ -241,8 +241,6 @@ export default function UnifiedAdminLeadsPage() {
           ))}
         </div>
 
-        <LeadMetrics metrics={metrics} />
-
         <LeadFilters
           values={filters}
           sellers={sellers}
@@ -272,6 +270,10 @@ export default function UnifiedAdminLeadsPage() {
             {loadingMore ? "טוען..." : "טען עוד"}
           </button>
         )}
+
+        {/* Strategic, cumulative stats live at the BOTTOM — the top of this
+            page is tactical: who to call now. (Elad, 24.7) */}
+        <LeadMetrics metrics={metrics} />
       </div>
     </PullToRefresh>
   );

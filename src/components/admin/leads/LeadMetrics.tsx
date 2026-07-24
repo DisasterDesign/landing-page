@@ -17,7 +17,7 @@ const funnelRows: Array<{
   >;
   label: string;
 }> = [
-  { key: "created", label: "נוצרו" },
+  { key: "created", label: "נכנסו סה״כ (מאז אפריל)" },
   { key: "claimed", label: "נלקחו" },
   { key: "contacted", label: "נוצר קשר" },
   { key: "decisionMakerReached", label: "מקבל/ת החלטה" },
@@ -63,14 +63,14 @@ export default function LeadMetrics({ metrics }: { metrics: LeadMetricsData | nu
   return (
     <section dir="rtl" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="סה״כ נכנסו (בטווח הנבחר)" value={metrics.created} accent="bg-pink-500" />
+        <SummaryCard label="סה״כ נכנסו מאז ומעולם" value={metrics.created} accent="bg-pink-500" />
         <SummaryCard label="שיעור תשלום" value={percent(metrics.rates.paid)} accent="bg-green-500" />
         <SummaryCard label="הכנסה ראשונה" value={amount(metrics.revenue)} accent="bg-cyan" />
         <SummaryCard label="גודל עסקה ממוצע" value={amount(metrics.averageDealSize)} accent="bg-amber-500" />
       </div>
       <div className="overflow-hidden rounded-2xl border border-gray-700 bg-gray-900">
         <div className="border-b border-gray-800 px-5 py-4">
-          <h2 className="font-bold text-white">משפך המרות</h2>
+          <h2 className="font-bold text-white">משפך המרות — מצטבר, כל הזמנים</h2>
           <p className="mt-1 text-xs text-gray-500">
             חציון לקיחת ליד: {metrics.timeToClaimMedianMinutes ?? "—"} דק׳ · חציון קשר: {metrics.timeToContactMedianMinutes ?? "—"} דק׳
           </p>
