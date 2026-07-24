@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import { LEAD_TEMPERATURES } from "@/components/leads/LeadSourceBadge";
@@ -80,6 +80,7 @@ export default function UnifiedAdminLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     setFilters(filtersFromParams(new URLSearchParams(query)));
@@ -91,11 +92,15 @@ export default function UnifiedAdminLeadsPage() {
       params.set("limit", "50");
       if (cursor) params.set("cursor", cursor);
       else params.delete("cursor");
-      // Headline metrics describe the WHOLE business — the temperature tab
-      // filters only the list below. Strip `intent` from the analytics call
-      // so switching tabs never zeroes the funnel and summary cards.
+      // Headline metrics describe the WHOLE business — the source tab and
+      // status bar filter only the list below. Strip `intent` AND the stage
+      // selection from the analytics call: the funnel is attainment-based
+      // (all-time), and filtering it by CURRENT stage (stageGroup=NEW is the
+      // automatic state inside every source tab) zeroes every milestone.
       const metricsParams = new URLSearchParams(params);
       metricsParams.delete("intent");
+      metricsParams.delete("stageGroup");
+      metricsParams.delete("stage");
       try {
         const [leadsResponse, metricsResponse] = await Promise.all([
           fetch(`/api/leads?${params.toString()}`, { cache: "no-store" }),
@@ -122,6 +127,10 @@ export default function UnifiedAdminLeadsPage() {
               metrics: LeadMetricsValue;
             }).metrics,
           );
+        } else if (metricsResponse) {
+          // A silent failure here leaves the funnel as an eternal skeleton —
+          // that is how the stageGroup leak went unnoticed. Say it out loud.
+          toast.error("שגיאה בטעינת מדדי המשפך");
         }
       } catch {
         toast.error("שגיאה בטעינת ה־CRM");
@@ -137,6 +146,55 @@ export default function UnifiedAdminLeadsPage() {
     setLoading(true);
     void load();
   }, [load]);
+
+  // Ported from the legacy admin leads page: manual + on-mount silent pull
+  // of Meta Lead Ads via POST /api/integrations/facebook/sync.
+  const syncFromFacebook = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+      setSyncing(true);
+      try {
+        const response = await fetch("/api/integrations/facebook/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          created: number;
+          updated: number;
+          skipped: number;
+          total: number;
+        };
+        if (!response.ok) throw new Error(payload.error || "sync failed");
+        if (!silent) {
+          toast.success(
+            `סנכרון הושלם: ${payload.created} חדשים, ${payload.updated} עודכנו, ${payload.skipped} דולגו (מתוך ${payload.total})`,
+            { duration: 8000 },
+          );
+        } else if (payload.created > 0) {
+          toast.success(`${payload.created} לידים חדשים מפייסבוק`, {
+            duration: 4000,
+          });
+        }
+        await load();
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "שגיאה בסנכרון",
+          opts?.silent ? { duration: 3000 } : undefined,
+        );
+      } finally {
+        setSyncing(false);
+      }
+    },
+    [load],
+  );
+
+  const autoSyncedRef = useRef(false);
+  useEffect(() => {
+    if (autoSyncedRef.current) return;
+    autoSyncedRef.current = true;
+    void syncFromFacebook({ silent: true });
+  }, [syncFromFacebook]);
 
   useEffect(() => {
     void fetch("/api/users", { cache: "no-store" })
@@ -193,12 +251,22 @@ export default function UnifiedAdminLeadsPage() {
   return (
     <PullToRefresh onRefresh={() => load()}>
       <div dir="rtl" className="space-y-5">
-        <header>
-          <h1 className="text-2xl font-bold text-white">לידים — CRM מאוחד</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            מוצגים לידים פתוחים בלבד — מה שנכנס וטרם טופל. סגורים (שולם / לא
-            נסגר / ספאם) דרך סינון השלב.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-white">לידים — CRM מאוחד</h1>
+            <p className="mt-1 text-sm text-gray-400">
+              מוצגים לידים פתוחים בלבד — מה שנכנס וטרם טופל. סגורים (שולם / לא
+              נסגר / ספאם) דרך סינון השלב.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => syncFromFacebook()}
+            disabled={syncing}
+            className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-pink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {syncing ? "מסנכרן..." : "🔄 סנכרן מפייסבוק"}
+          </button>
         </header>
 
         {/* Source first — the salesperson's mental model. */}

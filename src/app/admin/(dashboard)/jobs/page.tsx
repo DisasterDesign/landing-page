@@ -160,13 +160,18 @@ export default function JobsPage() {
           notes: form.notes.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(payload?.error || "שגיאה בהוספת העבודה");
+      }
       toast.success("העבודה נוספה");
       setForm({ ...EMPTY_FORM });
       setShowAdd(false);
       await load();
-    } catch {
-      toast.error("שגיאה בהוספת העבודה");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה בהוספת העבודה");
     } finally {
       setSaving(false);
     }
@@ -258,6 +263,27 @@ export default function JobsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-1">
               <label className={labelCls}>לקוח</label>
+              {/* Explicit segmented toggle — the old 11px text link was
+                  invisible enough that the feature was reported missing. */}
+              <div className="flex gap-1 mb-2">
+                {([
+                  [false, "לקוח קיים"],
+                  [true, "+ לקוח חדש"],
+                ] as const).map(([isNew, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setForm({ ...form, newClient: isNew, clientId: "", clientName: "" })}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors ${
+                      form.newClient === isNew
+                        ? "border-cyan bg-cyan/10 text-white"
+                        : "border-gray-700 bg-gray-800 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               {form.newClient ? (
                 <input
                   value={form.clientName}
@@ -273,13 +299,6 @@ export default function JobsPage() {
                   ))}
                 </select>
               )}
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, newClient: !form.newClient, clientId: "", clientName: "" })}
-                className="text-[11px] text-cyan hover:underline mt-1"
-              >
-                {form.newClient ? "← בחר מרשימה קיימת" : "+ לקוח חדש"}
-              </button>
             </div>
             <div>
               <label className={labelCls}>תיאור העבודה</label>
