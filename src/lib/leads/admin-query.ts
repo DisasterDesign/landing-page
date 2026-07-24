@@ -476,6 +476,9 @@ export async function getAdminLeadList(
         ...filters,
         stage: undefined,
         stageGroup: undefined,
+        // The bar counts ALL life-states — the open-only default of the
+        // list view must not leak into it (it zeroed won/lost/spam).
+        openOnly: false,
         cursor: undefined,
         limit: filters.limit,
       },
