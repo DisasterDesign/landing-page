@@ -81,12 +81,17 @@ export default function UnifiedAdminLeadsPage() {
       params.set("limit", "50");
       if (cursor) params.set("cursor", cursor);
       else params.delete("cursor");
+      // Headline metrics describe the WHOLE business — the temperature tab
+      // filters only the list below. Strip `intent` from the analytics call
+      // so switching tabs never zeroes the funnel and summary cards.
+      const metricsParams = new URLSearchParams(params);
+      metricsParams.delete("intent");
       try {
         const [leadsResponse, metricsResponse] = await Promise.all([
           fetch(`/api/leads?${params.toString()}`, { cache: "no-store" }),
           cursor
             ? Promise.resolve(null)
-            : fetch(`/api/leads/analytics?${params.toString()}`, {
+            : fetch(`/api/leads/analytics?${metricsParams.toString()}`, {
                 cache: "no-store",
               }),
         ]);
@@ -143,14 +148,20 @@ export default function UnifiedAdminLeadsPage() {
       .catch(() => undefined);
   }, []);
 
+  const totalOpen = useMemo(
+    () =>
+      Object.values(stats.openByIntent).reduce((sum, count) => sum + count, 0),
+    [stats.openByIntent],
+  );
+
   const cards = useMemo(
     () => [
-      ["לידים פתוחים", stats.openCount],
-      ["נכנסו השבוע (חם+בינוני)", stats.newThisWeekCount],
+      ["לידים פתוחים", totalOpen],
+      ["נכנסו השבוע (פייסבוק+אורגני)", stats.newThisWeekCount],
       ["פולואפים השבוע", stats.dueThisWeekCount],
       ["מוצגים", leads.length],
     ] as const,
-    [leads.length, stats],
+    [leads.length, stats, totalOpen],
   );
 
   function applyFilters() {
@@ -184,12 +195,12 @@ export default function UnifiedAdminLeadsPage() {
             ] as const
           ).map(([value, label]) => {
             const active = filters.intent === value;
-            // OPEN leads only — "how many are alive in each temperature",
-            // not all-time history (which read as "70 new leads waiting").
+            // OPEN leads only, and ALWAYS global — the counts never change
+            // when a tab is selected (openByIntent is computed server-side
+            // without the intent filter; "הכל" is their sum, not the
+            // filtered openCount, which would zero out inside a tab).
             const count =
-              value === ""
-                ? stats.openCount
-                : stats.openByIntent[value] ?? 0;
+              value === "" ? totalOpen : stats.openByIntent[value] ?? 0;
             return (
               <button
                 key={value || "all"}
