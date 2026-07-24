@@ -101,5 +101,6 @@ export async function ingestMetaLead(
     email: mapped.email || undefined,
     phone: mapped.phone ?? undefined,
     message: mapped.message || undefined,
+    service: mapped.service ?? undefined,
   });
 }

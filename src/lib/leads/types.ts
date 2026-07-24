@@ -45,6 +45,8 @@ export interface CreateLeadFromSourceInput {
   email?: string;
   phone?: string;
   message?: string;
+  /** Structured product-interest tag (e.g. the Meta form selector answer). */
+  service?: string;
 }
 
 export interface RecordLeadInteractionInput {
