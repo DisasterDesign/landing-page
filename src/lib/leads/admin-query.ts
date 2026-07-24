@@ -382,8 +382,18 @@ export async function getAdminLeadList(
         ],
       },
     }),
+    // WARM inflow only. A weekly cold sweep dumps dozens of OUTBOUND rows at
+    // once, and counting them here made the card scream "70 new leads" the
+    // morning after a sweep — a number that matches no external reality.
+    // Warm-only keeps this card aligned with Meta Business Suite.
     db.contactSubmission.count({
-      where: { AND: [baseWhere, { createdAt: { gte: weekAgo } }] },
+      where: {
+        AND: [
+          baseWhere,
+          { createdAt: { gte: weekAgo } },
+          { intentLevel: { not: "OUTBOUND" } },
+        ],
+      },
     }),
   ]);
 
