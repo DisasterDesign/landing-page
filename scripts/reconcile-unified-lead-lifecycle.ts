@@ -67,6 +67,7 @@ async function main(): Promise<void> {
       prisma.contactSubmission.findMany({
         include: {
           assignees: { select: { id: true } },
+          owner: { select: { role: true } },
           notes: {
             select: { id: true, authorId: true, createdAt: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -260,12 +261,16 @@ async function main(): Promise<void> {
       closedAt: lead.closedAt,
     });
     if (lead.legacyStateHash !== expectedHash) hashMismatches += 1;
+    // An ADMIN owner keeps the lead's original eligibleSellerId (so a later
+    // release returns it to the seller queue) — that divergence is legal.
+    const eligibleMatchesOwner =
+      lead.eligibleSellerId === lead.ownerId || lead.owner?.role === "ADMIN";
     if (
       assigneeIds.length > 1 ||
       (lead.ownerId !== null &&
         (assigneeIds.length !== 1 ||
           assigneeIds[0] !== lead.ownerId ||
-          lead.eligibleSellerId !== lead.ownerId)) ||
+          !eligibleMatchesOwner)) ||
       (lead.ownerId === null && assigneeIds.length !== 0)
     ) {
       ownershipMismatches += 1;

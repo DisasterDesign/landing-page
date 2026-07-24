@@ -443,3 +443,56 @@ test("legacy CLOSED qualifies only the authenticated current owner", async () =>
     legacyRequestedClosed: true,
   });
 });
+
+test("admin can take ownership: NEW lead advances like a claim and keeps its eligible seller", async () => {
+  const store = fakeLifecycleStore(
+    makeLead({
+      stage: "NEW",
+      eligibleSellerId: "seller-1",
+      intentLevel: "AD_RESPONSE",
+      sourceKey: "meta_lead_ads",
+    }),
+    { actorRoles: { "admin-1": "ADMIN" } },
+  );
+  await releaseOrReassignLead(
+    {
+      action: "REASSIGN",
+      leadId: "lead-1",
+      sellerId: "admin-1",
+      reason: "אני לוקח את הליד",
+      actor: { userId: "admin-1", role: "ADMIN" },
+    },
+    { store },
+  );
+  assert.equal(store.lead.ownerId, "admin-1");
+  // The seller queue fallback survives: eligibleSellerId is NOT overwritten
+  // by an admin owner, so a later release returns the lead to the seller.
+  assert.equal(store.lead.eligibleSellerId, "seller-1");
+  // Taking a NEW warm lead advances the stage exactly like a seller claim.
+  assert.equal(store.lead.stage, "CONTACTING");
+  assert.equal(store.lead.firstClaimedAt instanceof Date, true);
+  assert.equal(
+    store.events.some((event) => event.type === "CLAIMED"),
+    true,
+  );
+});
+
+test("reassigning to a MEMBER is rejected", async () => {
+  const store = fakeLifecycleStore(
+    makeLead({ stage: "NEW" }),
+    { actorRoles: { "admin-1": "ADMIN", "member-1": "MEMBER" } },
+  );
+  await assert.rejects(
+    releaseOrReassignLead(
+      {
+        action: "REASSIGN",
+        leadId: "lead-1",
+        sellerId: "member-1",
+        reason: "שיוך שגוי",
+        actor: { userId: "admin-1", role: "ADMIN" },
+      },
+      { store },
+    ),
+    /invalid/i,
+  );
+});

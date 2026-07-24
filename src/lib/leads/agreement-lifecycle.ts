@@ -214,6 +214,16 @@ export async function createAgreementForLead(
         );
       }
 
+      // Commission is seller-only: a lead OWNED by an admin (אלעד/רועי took
+      // it themselves) produces a plain house deal — no creditedSellerId, no
+      // isSellerDeal, no first-month commission.
+      const owner = lead.ownerId
+        ? await transaction.user.findUnique({
+            where: { id: lead.ownerId },
+            select: { role: true },
+          })
+        : null;
+      const sellerOwned = owner?.role === "SELLER";
       const agreement = await transaction.agreement.create({
         data: {
           ...input.agreement,
@@ -221,9 +231,9 @@ export async function createAgreementForLead(
           idNumber: input.agreement.idNumber || null,
           clientId: input.agreement.clientId || null,
           leadId: lead.id,
-          creditedSellerId: lead.ownerId,
+          creditedSellerId: sellerOwned ? lead.ownerId : null,
           createdBy: input.actor.userId,
-          isSellerDeal: true,
+          isSellerDeal: sellerOwned,
           status: "DRAFT",
         },
       });

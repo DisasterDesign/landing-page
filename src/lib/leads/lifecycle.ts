@@ -416,16 +416,22 @@ export async function releaseOrReassignLead(
 
     let newOwnerId: string | null;
     let eligibleSellerId: string | null;
+    let reassignTargetRole: "SELLER" | "ADMIN" | null = null;
     if (input.action === "REASSIGN") {
-      const seller = await transaction.user.findUnique({
+      const owner = await transaction.user.findUnique({
         where: { id: input.sellerId },
         select: { role: true },
       });
-      if (!seller || seller.role !== "SELLER") {
-        throw new LeadDomainError("VALIDATION", "Target seller is invalid");
+      // An ADMIN (אלעד/רועי) may own a lead too — "מי לקח" is any team
+      // member, not only the salesperson. Commission stays seller-only
+      // downstream (creditedSellerId requires a current SELLER), so an
+      // admin-owned deal simply earns no commission.
+      if (!owner || (owner.role !== "SELLER" && owner.role !== "ADMIN")) {
+        throw new LeadDomainError("VALIDATION", "Target owner is invalid");
       }
+      reassignTargetRole = owner.role;
       newOwnerId = input.sellerId;
-      eligibleSellerId = input.sellerId;
+      eligibleSellerId = owner.role === "SELLER" ? input.sellerId : existing.eligibleSellerId;
     } else {
       newOwnerId = null;
       eligibleSellerId =
@@ -473,6 +479,16 @@ export async function releaseOrReassignLead(
       });
     }
 
+    // Taking a fresh lead advances it exactly like a seller claim would:
+    // NEW → PREPARING for cold, NEW → CONTACTING for warm, with
+    // firstClaimedAt stamped. Without this an admin-owned lead was stuck at
+    // NEW forever — no interaction path, no agreement eligibility.
+    const claimStage =
+      input.action === "REASSIGN" && existing.stage === "NEW"
+        ? existing.intentLevel === "OUTBOUND"
+          ? ("PREPARING" as const)
+          : ("CONTACTING" as const)
+        : null;
     const assigneeIds = newOwnerId ? [newOwnerId] : [];
     const legacyStateHash = legacyHashForLead(existing, assigneeIds);
     const updated = await transaction.contactSubmission.update({
@@ -483,6 +499,12 @@ export async function releaseOrReassignLead(
         ownerAssignedAt: newOwnerId ? now : null,
         assignees: { set: assigneeIds.map((id) => ({ id })) },
         legacyStateHash,
+        ...(claimStage
+          ? {
+              stage: claimStage,
+              firstClaimedAt: existing.firstClaimedAt ?? now,
+            }
+          : {}),
       },
     });
     await appendLeadEvent(transaction, {
@@ -490,7 +512,7 @@ export async function releaseOrReassignLead(
       type: input.action === "REASSIGN" ? "REASSIGNED" : "RELEASED",
       actor: userActor(input.actor),
       fromStage: existing.stage,
-      toStage: existing.stage,
+      toStage: claimStage ?? existing.stage,
       occurredAt: now,
       metadata: {
         reason: input.reason,
@@ -499,6 +521,17 @@ export async function releaseOrReassignLead(
         eligibleSellerId,
       },
     });
+    if (claimStage) {
+      await appendLeadEvent(transaction, {
+        leadId: input.leadId,
+        type: claimStage === "PREPARING" ? "PREPARATION_STARTED" : "CLAIMED",
+        actor: userActor(input.actor),
+        fromStage: existing.stage,
+        toStage: claimStage,
+        occurredAt: now,
+        metadata: { via: "OWNERSHIP_REASSIGN" },
+      });
+    }
 
     return {
       lead: updated,
@@ -510,7 +543,12 @@ export async function releaseOrReassignLead(
               title: "ליד הועבר אליך",
               body: "הליד ממתין לטיפול שלך",
               leadId: input.leadId,
-              url: sellerLeadActionUrl(existing),
+              // An admin owner works the lead in the admin workspace, not
+              // the seller area (which their role cannot even open).
+              url:
+                reassignTargetRole === "ADMIN"
+                  ? leadActionUrlFor({ audience: "ADMIN", lead: existing })
+                  : sellerLeadActionUrl(existing),
               dedupeKey: `${input.sellerId}:lead-reassigned:${input.leadId}:${now.toISOString()}`,
             } satisfies CreateNotificationInput)
           : null,

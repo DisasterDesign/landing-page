@@ -26,6 +26,18 @@ import LeadContactActions from "./LeadContactActions";
 import LeadPrimaryAction from "./LeadPrimaryAction";
 import LeadSourceBadge from "./LeadSourceBadge";
 
+const LOSS_REASON_OPTIONS: Array<[string, string]> = [
+  ["NO_INTEREST", "לא מעוניין"],
+  ["NO_BUDGET", "אין תקציב"],
+  ["BAD_TIMING", "תזמון לא מתאים"],
+  ["EXISTING_PROVIDER", "יש ספק קיים"],
+  ["DECISION_MAKER_UNREACHABLE", "מקבל ההחלטות לא זמין"],
+  ["NOT_FIT", "לא מתאים לשירות"],
+  ["BAD_CONTACT", "פרטי קשר שגויים"],
+  ["DUPLICATE", "כפילות"],
+  ["OTHER", "אחר"],
+];
+
 const stageLabels: Record<string, string> = {
   NEW: "חדש",
   PREPARING: "בהכנה",
@@ -53,8 +65,11 @@ const nextActionLabels: Record<string, string> = {
 async function responseError(response: Response) {
   const payload = (await response.json().catch(() => null)) as {
     error?: string;
+    message?: string;
   } | null;
-  return payload?.error || "הפעולה נכשלה";
+  // `message` carries the human sentence; `error` is the machine code
+  // ("CONFLICT") — prefer the one written for people.
+  return payload?.message || payload?.error || "הפעולה נכשלה";
 }
 
 export default function LeadWorkspace({
@@ -89,6 +104,10 @@ export default function LeadWorkspace({
     email: "",
     phone: "",
   });
+  const [team, setTeam] = useState<
+    Array<{ id: string; name: string; role: string }>
+  >([]);
+  const [viewerId, setViewerId] = useState<string | null>(null);
 
   const detailEndpoint =
     audience === "seller"
@@ -130,6 +149,27 @@ export default function LeadWorkspace({
       active = false;
     };
   }, [loadLead]);
+
+  // Admin ownership controls need the team roster and the viewer's own id.
+  useEffect(() => {
+    if (audience !== "admin") return;
+    void fetch("/api/users", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((users: Array<{ id: string; name: string; role: string }>) =>
+        setTeam(
+          users
+            .filter((user) => user.role === "ADMIN" || user.role === "SELLER")
+            .map(({ id, name, role }) => ({ id, name, role })),
+        ),
+      )
+      .catch(() => undefined);
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((session: { user?: { id?: string } } | null) =>
+        setViewerId(session?.user?.id ?? null),
+      )
+      .catch(() => undefined);
+  }, [audience]);
 
   useEffect(() => {
     const handleLeadChanged = (event: Event) => {
@@ -226,6 +266,86 @@ export default function LeadWorkspace({
     if (action === "RECORD_OUTCOME") {
       setOutcomeOpen(true);
     }
+  }
+
+  async function assignOwner(userId: string) {
+    await mutate(
+      `/api/leads/${leadId}/ownership`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "reassign",
+          sellerId: userId,
+          reason: "שיוך ידני ממסך הליד",
+        }),
+      },
+      "הבעלות עודכנה",
+    );
+  }
+
+  async function releaseOwner() {
+    if (
+      activeFollowUp &&
+      !window.confirm("יש פולואפ מתוזמן על הליד — שחרור יבטל אותו. להמשיך?")
+    ) {
+      return;
+    }
+    await mutate(
+      `/api/leads/${leadId}/ownership`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "release",
+          reason: "שחרור ידני ממסך הליד",
+          cancelFollowUps: true,
+        }),
+      },
+      "הבעלות שוחררה",
+    );
+  }
+
+  async function markLost(lossReason: string) {
+    // The server requires free-text details when the reason is "other".
+    let lossReasonDetails: string | undefined;
+    if (lossReason === "OTHER") {
+      const details = window.prompt("מה הסיבה?");
+      if (!details?.trim()) return;
+      lossReasonDetails = details.trim();
+    }
+    await mutate(
+      `/api/leads/${leadId}/stage`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "mark-lost",
+          lossReason,
+          ...(lossReasonDetails ? { lossReasonDetails } : {}),
+        }),
+      },
+      "סומן כלא נסגר",
+    );
+  }
+
+  async function markSpam() {
+    await mutate(
+      `/api/leads/${leadId}/stage`,
+      { method: "POST", body: JSON.stringify({ action: "mark-spam" }) },
+      "סומן כספאם",
+    );
+  }
+
+  async function reopenLost() {
+    await mutate(
+      `/api/leads/${leadId}/stage`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "reopen-lost",
+          reason: "נפתח מחדש ממסך הליד",
+        }),
+      },
+      "הליד נפתח מחדש",
+    );
   }
 
   async function submitOutcome(input: LeadOutcomeInput) {
@@ -437,6 +557,103 @@ export default function LeadWorkspace({
           </div>
         </div>
       </header>
+
+      {audience === "admin" && (
+        <section
+          aria-label="בעלות ותוצאה"
+          className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-700 bg-gray-900 p-3"
+        >
+          <span className="text-xs text-gray-500">בעלות:</span>
+          {lead.stage === "WON" || lead.stage === "LOST" || lead.stage === "SPAM" ? (
+            <span className="text-sm text-gray-400">
+              {lead.owner?.name ?? "ללא בעלים"} · ליד סגור
+            </span>
+          ) : null}
+          {lead.stage !== "WON" && lead.stage !== "LOST" && lead.stage !== "SPAM" && (
+            <>
+              {!lead.owner && viewerId && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => assignOwner(viewerId)}
+                  className="rounded-xl bg-pink px-4 py-2 text-sm font-bold text-white transition hover:bg-pink-dark disabled:opacity-50"
+                >
+                  אני לוקח
+                </button>
+              )}
+              <select
+                value={lead.owner?.id ?? ""}
+                disabled={busy}
+                onChange={(event) => {
+                  if (event.target.value) void assignOwner(event.target.value);
+                }}
+                className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:border-pink"
+              >
+                <option value="">
+                  {lead.owner ? "העבר בעלות ל..." : "שייך ל..."}
+                </option>
+                {team.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                    {member.role === "SELLER" ? " (מוכר)" : ""}
+                  </option>
+                ))}
+              </select>
+              {lead.owner && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={releaseOwner}
+                  className="rounded-xl border border-gray-700 px-3 py-2 text-sm text-gray-400 transition hover:text-white disabled:opacity-50"
+                >
+                  שחרר בעלות
+                </button>
+              )}
+            </>
+          )}
+
+          <span className="mr-3 border-r border-gray-700 pr-3 text-xs text-gray-500">
+            תוצאה:
+          </span>
+          {lead.stage !== "SPAM" && lead.stage !== "LOST" && lead.stage !== "WON" && (
+            <>
+              <select
+                value=""
+                disabled={busy}
+                onChange={(event) => {
+                  if (event.target.value) void markLost(event.target.value);
+                }}
+                className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300 outline-none focus:border-red-400"
+              >
+                <option value="">לא נסגרה עסקה...</option>
+                {LOSS_REASON_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={markSpam}
+                className="rounded-xl border border-gray-600 px-3 py-2 text-sm text-gray-400 transition hover:border-red-400 hover:text-red-300 disabled:opacity-50"
+              >
+                סמן ספאם
+              </button>
+            </>
+          )}
+          {lead.stage === "LOST" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={reopenLost}
+              className="rounded-xl bg-cyan/20 px-3 py-2 text-sm font-bold text-cyan transition hover:bg-cyan/30 disabled:opacity-50"
+            >
+              פתח מחדש
+            </button>
+          )}
+        </section>
+      )}
 
       {lead.migrationReviewRequired && (
         <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-200">
