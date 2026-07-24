@@ -13,25 +13,25 @@ test("renders the temperature separately from the canonical acquisition channel"
     }),
   );
 
-  // Temperature is the loud, first-glance dimension; source is secondary.
-  assert.match(markup, /ליד קר/);
-  assert.match(markup, /🧊/);
-  assert.match(markup, /Google Maps/);
+  // The source name is the loud, first-glance dimension.
+  assert.match(markup, /גוגל מפות/);
+  assert.match(markup, /📍/);
 });
 
-test("each temperature tier renders its own label", () => {
-  const hot = renderToStaticMarkup(
+test("each source tier renders its own label", () => {
+  const organic = renderToStaticMarkup(
     createElement(LeadSourceBadge, {
       intentLevel: "INBOUND",
       sourceKey: "website",
     }),
   );
-  const medium = renderToStaticMarkup(
+  const facebook = renderToStaticMarkup(
     createElement(LeadSourceBadge, {
       intentLevel: "AD_RESPONSE",
       sourceKey: "meta_lead_ads",
     }),
   );
-  assert.match(hot, /ליד חם/);
-  assert.match(medium, /ליד בינוני/);
+  assert.match(organic, /אורגני/);
+  assert.match(organic, /טופס האתר/);
+  assert.match(facebook, /פייסבוק/);
 });
