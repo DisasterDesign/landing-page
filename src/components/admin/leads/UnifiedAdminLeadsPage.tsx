@@ -70,6 +70,7 @@ export default function UnifiedAdminLeadsPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   useEffect(() => {
     setFilters(filtersFromParams(new URLSearchParams(query)));
@@ -241,13 +242,38 @@ export default function UnifiedAdminLeadsPage() {
           ))}
         </div>
 
-        <LeadFilters
-          values={filters}
-          sellers={sellers}
-          onChange={setFilters}
-          onApply={applyFilters}
-          onReset={resetFilters}
-        />
+        {/* The day-to-day flow is tabs + search; the full filter engine is
+            noise and lives behind a toggle. (Elad, 24.7) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={filters.search}
+            onChange={(event) =>
+              setFilters({ ...filters, search: event.target.value })
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyFilters();
+            }}
+            placeholder="חיפוש שם, עסק, אימייל או טלפון"
+            className="min-w-64 flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-2.5 text-sm text-white outline-none focus:border-pink"
+          />
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((value) => !value)}
+            className="rounded-xl border border-gray-700 px-4 py-2.5 text-sm text-gray-400 transition hover:text-white"
+          >
+            {showAdvancedFilters ? "הסתר סינון מתקדם ▴" : "סינון מתקדם ▾"}
+          </button>
+        </div>
+
+        {showAdvancedFilters && (
+          <LeadFilters
+            values={filters}
+            sellers={sellers}
+            onChange={setFilters}
+            onApply={applyFilters}
+            onReset={resetFilters}
+          />
+        )}
 
         {loading ? (
           <div className="rounded-2xl border border-gray-700 bg-gray-900 p-12 text-center text-gray-500">
