@@ -44,8 +44,15 @@ export default function LeadTable({ leads }: { leads: LeadDetail[] }) {
           {leads.map((lead) => (
             <tr key={lead.id} className="hover:bg-gray-800/40">
               <td className="px-4 py-3">
-                <div className="font-bold text-white">
-                  {lead.displayName}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-white">
+                    {lead.displayName}
+                  </span>
+                  {lead.service && (
+                    <span className="rounded-full border border-pink/40 bg-pink/10 px-2 py-0.5 text-xs font-bold text-pink">
+                      {lead.service}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2">
                   <LeadSourceBadge
