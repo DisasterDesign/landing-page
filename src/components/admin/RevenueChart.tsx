@@ -38,10 +38,24 @@ interface MonthData {
   expenses: number;
   profit: number;
   isCurrent: boolean;
+  /** receipts view only — split of what arrived */
+  subscriptions?: number;
+  jobs?: number;
 }
 
+/** One month of money that actually arrived — from /api/revenue/monthly. */
+interface MonthlyReceipt {
+  month: string;
+  subscriptions: number;
+  jobs: number;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+// The receipts view gets VAT and the Cardcom fee applied server-side
+// (/api/revenue/monthly); only the new-MRR projection still nets VAT here.
 const VAT_RATE = 18;
-const CARDCOM_FEE_RATE = 0.02;
 
 const HEBREW_MONTHS_SHORT = [
   "ינו",
@@ -60,6 +74,12 @@ const HEBREW_MONTHS_SHORT = [
 
 function formatCurrency(n: number): string {
   return n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+}
+
+/** "2026-04" → "אפר 26" */
+function monthLabel(key: string): string {
+  const [year, month] = key.split("-");
+  return `${HEBREW_MONTHS_SHORT[parseInt(month, 10) - 1]} ${year.slice(2)}`;
 }
 
 function formatCurrencyShort(n: number): string {
@@ -90,6 +110,14 @@ function CustomTooltip({
       <p className="text-sm text-white font-mono">
         הכנסות: {formatCurrency(data.revenue)} ₪
       </p>
+      {/* Receipts view only — knowing WHICH kind of money arrived is the
+          point of the split (recurring MRR vs a one-off project). */}
+      {data.subscriptions !== undefined && data.revenue > 0 && (
+        <p className="text-[11px] text-gray-500 font-mono">
+          מנויים {formatCurrency(data.subscriptions)} ₪
+          {(data.jobs ?? 0) > 0 && ` · עבודות ${formatCurrency(data.jobs ?? 0)} ₪`}
+        </p>
+      )}
       <p className="text-xs text-gray-400 font-mono">
         הוצאות: {formatCurrency(data.expenses)} ₪
       </p>
@@ -102,11 +130,14 @@ function CustomTooltip({
 
 export default function RevenueChart() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [receipts, setReceipts] = useState<MonthlyReceipt[]>([]);
+  const [trackedFrom, setTrackedFrom] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [windowMonths, setWindowMonths] = useState<6 | 12 | 24>(12);
-  // "received" = the original cumulative-by-cohort view. "newMrr" answers
-  // "which month did each product enter" — the monthly amounts of products
-  // whose startDate lands in that month (billing products only).
+  // "received" = money that actually arrived, by the month it arrived
+  // (/api/revenue/monthly). "newMrr" answers "which month did each product
+  // enter" — the monthly amounts of products whose startDate lands in that
+  // month (billing products only), which is a client-side derivation.
   const [viewMode, setViewMode] = useState<"received" | "newMrr">("received");
 
   useEffect(() => {
@@ -124,7 +155,53 @@ export default function RevenueChart() {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/revenue/monthly?months=${windowMonths}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error();
+        const payload = (await res.json()) as {
+          data: MonthlyReceipt[];
+          trackedFrom: string | null;
+        };
+        setReceipts(payload.data ?? []);
+        setTrackedFrom(payload.trackedFrom ?? null);
+      } catch (err) {
+        console.error("Failed to fetch monthly receipts:", err);
+        setReceipts([]);
+      }
+    })();
+  }, [windowMonths]);
+
   const monthlyData: MonthData[] = useMemo(() => {
+    const today0 = new Date();
+    today0.setUTCDate(1);
+    today0.setUTCHours(0, 0, 0, 0);
+    const currentMonthKey = `${today0.getUTCFullYear()}-${String(
+      today0.getUTCMonth() + 1,
+    ).padStart(2, "0")}`;
+
+    // Receipts come straight from the server, already bucketed by the month
+    // the money landed. No client-side derivation — that is what produced the
+    // cohort bug (a month with no NEW clients showed ₪0 despite being billed).
+    if (viewMode === "received") {
+      return receipts.map((month) => {
+        const [year, monthStr] = month.month.split("-");
+        return {
+          key: month.month,
+          label: `${HEBREW_MONTHS_SHORT[parseInt(monthStr, 10) - 1]} ${year.slice(2)}`,
+          revenue: month.revenue,
+          expenses: month.expenses,
+          profit: month.profit,
+          subscriptions: month.subscriptions,
+          jobs: month.jobs,
+          isCurrent: month.month === currentMonthKey,
+        };
+      });
+    }
+
     const monthMap = new Map<string, { revenue: number; expenses: number }>();
     const today = new Date();
     today.setUTCDate(1);
@@ -141,35 +218,18 @@ export default function RevenueChart() {
       monthMap.set(key, { revenue: 0, expenses: 0 });
     }
 
-    if (viewMode === "newMrr") {
-      // Each billing product is attributed to the month it entered. Product
-      // startDate wins; a product without one inherits the client's date so
-      // pre-migration data still lands somewhere sensible.
-      for (const c of clients) {
-        for (const p of c.products ?? []) {
-          if (p.status !== "בוצע") continue; // not billing → not new MRR
-          const dateStr = p.startDate ?? c.startDate ?? p.createdAt ?? c.createdAt;
-          const d = new Date(dateStr);
-          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-          if (!monthMap.has(key)) continue;
-          const entry = monthMap.get(key)!;
-          entry.revenue += p.monthlyAmount ?? 0;
-          monthMap.set(key, entry);
-        }
-      }
-    } else {
-      // Aggregate clients by their start date (fallback createdAt).
-      for (const c of clients) {
-        const dateStr = c.startDate ?? c.createdAt;
+    // Each billing product is attributed to the month it entered. Product
+    // startDate wins; a product without one inherits the client's date so
+    // pre-migration data still lands somewhere sensible.
+    for (const c of clients) {
+      for (const p of c.products ?? []) {
+        if (p.status !== "בוצע") continue; // not billing → not new MRR
+        const dateStr = p.startDate ?? c.startDate ?? p.createdAt ?? c.createdAt;
         const d = new Date(dateStr);
         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-        if (!monthMap.has(key)) continue; // outside window
+        if (!monthMap.has(key)) continue;
         const entry = monthMap.get(key)!;
-        const amount = c.amount ?? 0;
-        const cardcom = amount * CARDCOM_FEE_RATE;
-        const expense = c.expense ?? 0;
-        entry.revenue += amount;
-        entry.expenses += expense + cardcom;
+        entry.revenue += p.monthlyAmount ?? 0;
         monthMap.set(key, entry);
       }
     }
@@ -188,7 +248,7 @@ export default function RevenueChart() {
         isCurrent: key === currentKey,
       };
     });
-  }, [clients, windowMonths, viewMode]);
+  }, [clients, receipts, windowMonths, viewMode]);
 
   // Summary stats from the visible window
   const stats = useMemo(() => {
@@ -238,7 +298,9 @@ export default function RevenueChart() {
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {viewMode === "received"
-              ? "הכנסה ברוטו לפי חודש (מס הכנסה לא כלול)"
+              ? `כסף שהתקבל בפועל — חיובי מנוי + עבודות ששולמו, לפי חודש התשלום${
+                  trackedFrom ? ` (מתועד מ-${monthLabel(trackedFrom)})` : ""
+                }`
               : "סכום חודשי של מוצרים שנכנסו לתשלום באותו חודש"}
           </p>
         </div>
