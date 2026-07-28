@@ -32,6 +32,39 @@ export async function POST(
   }
   try {
     const { id } = await params;
+    const actor = { userId: session.user.id, role: "ADMIN" as const };
+
+    // "qualify" is the admin's manual route to the one stage that unlocks an
+    // agreement. Without it the ONLY way to reach QUALIFIED was logging a
+    // call outcome of INTERESTED, so a deal closed off-system (a client who
+    // said yes on WhatsApp, a lead Elad handled himself) had no path to a
+    // contract at all — the agreement tab just said "האפשרות תיפתח לאחר
+    // שהליד יוכשר" with nothing to click.
+    if (parsed.data.action === "qualify") {
+      const current = await prisma.contactSubmission.findUnique({
+        where: { id },
+        select: { stage: true },
+      });
+      // The state machine has no PREPARING → QUALIFIED edge; a cold lead
+      // still in preparation goes through CONTACTING, which is also the
+      // truthful record (someone did reach out).
+      if (current?.stage === "PREPARING") {
+        await transitionLeadStage({
+          leadId: id,
+          toStage: "CONTACTING",
+          reason: parsed.data.reason,
+          actor,
+        });
+      }
+      const lead = await transitionLeadStage({
+        leadId: id,
+        toStage: "QUALIFIED",
+        reason: parsed.data.reason,
+        actor,
+      });
+      return NextResponse.json({ lead });
+    }
+
     const lead = await transitionLeadStage({
       leadId: id,
       toStage:
@@ -43,7 +76,7 @@ export async function POST(
       reason: parsed.data.reason,
       lossReason: parsed.data.lossReason,
       lossReasonDetails: parsed.data.lossReasonDetails,
-      actor: { userId: session.user.id, role: "ADMIN" },
+      actor,
     });
     return NextResponse.json({ lead });
   } catch (error) {

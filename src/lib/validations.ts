@@ -315,7 +315,7 @@ export const leadSourceCorrectionSchema = z
 
 export const leadStageCorrectionSchema = z
   .object({
-    action: z.enum(["mark-lost", "mark-spam", "reopen-lost"]),
+    action: z.enum(["mark-lost", "mark-spam", "reopen-lost", "qualify"]),
     reason: z.string().trim().min(3).max(500).optional(),
     lossReason: leadLossReasonSchema.optional(),
     lossReasonDetails: z.string().trim().max(500).optional(),

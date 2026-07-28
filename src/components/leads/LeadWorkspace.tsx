@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -334,6 +335,20 @@ export default function LeadWorkspace({
     );
   }
 
+  async function qualifyLead() {
+    await mutate(
+      `/api/leads/${leadId}/stage`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "qualify",
+          reason: "סומן ידנית כמוכן לחוזה ממסך הליד",
+        }),
+      },
+      "הליד מוכן לחוזה",
+    );
+  }
+
   async function reopenLost() {
     await mutate(
       `/api/leads/${leadId}/stage`,
@@ -480,6 +495,20 @@ export default function LeadWorkspace({
 
   const displayName = lead.displayName;
   const nextActionLabel = nextActionLabels[lead.nextAction.kind];
+
+  // Manual qualification is an admin escape hatch for deals closed off-system.
+  // The stage machine only reaches QUALIFIED from CONTACTING, and a cold lead
+  // in PREPARING is hopped through it server-side; an unowned lead cannot
+  // produce an agreement at all, so it gets told to assign an owner first.
+  const canQualify =
+    audience === "admin" &&
+    Boolean(lead.owner) &&
+    (lead.stage === "CONTACTING" || lead.stage === "PREPARING");
+  const needsOwnerBeforeQualify =
+    audience === "admin" &&
+    !lead.owner &&
+    lead.stage !== null &&
+    !["WON", "LOST", "SPAM"].includes(lead.stage);
 
   return (
     <div dir="rtl" className="space-y-4">
@@ -819,9 +848,35 @@ export default function LeadWorkspace({
             <section className="rounded-xl border border-gray-700 bg-gray-800 p-4">
               <h2 className="font-bold text-white">חוזה ומכירה</h2>
               {lead.agreements.length === 0 ? (
-                <p className="mt-3 text-sm text-gray-400">
-                  עדיין לא נוצר חוזה לליד. האפשרות תיפתח לאחר שהליד יוכשר.
-                </p>
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-gray-400">
+                    {lead.capabilities.canCreateAgreement
+                      ? "הליד מוכשר — אפשר להוציא חוזה."
+                      : canQualify
+                        ? "כדי להוציא חוזה הליד צריך להיות מסומן כמוכן. אפשר לרשום תוצאת שיחה ״יש עניין״, או לסמן ידנית כאן."
+                        : needsOwnerBeforeQualify
+                          ? "כדי להוציא חוזה צריך קודם לשייך בעלים לליד (למעלה), ואז לסמן אותו כמוכן."
+                          : "עדיין לא נוצר חוזה לליד. האפשרות תיפתח לאחר שהליד יוכשר."}
+                  </p>
+                  {lead.capabilities.canCreateAgreement && (
+                    <Link
+                      href={`/admin/agreements?new=1&leadId=${encodeURIComponent(lead.id)}`}
+                      className="inline-block rounded-xl bg-pink px-4 py-2.5 text-sm font-bold text-white transition hover:bg-pink-dark"
+                    >
+                      צור חוזה מהליד
+                    </Link>
+                  )}
+                  {canQualify && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={qualifyLead}
+                      className="w-full rounded-xl bg-cyan/20 py-2.5 text-sm font-bold text-cyan transition hover:bg-cyan/30 disabled:opacity-50"
+                    >
+                      סמן כמוכן לחוזה
+                    </button>
+                  )}
+                </div>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {lead.agreements.map((agreement) => (
