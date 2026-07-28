@@ -81,6 +81,7 @@ export default function UnifiedAdminLeadsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [facebookConnected, setFacebookConnected] = useState(false);
 
   useEffect(() => {
     setFilters(filtersFromParams(new URLSearchParams(query)));
@@ -189,12 +190,25 @@ export default function UnifiedAdminLeadsPage() {
     [load],
   );
 
+  // Only offer (and auto-run) the Meta pull when a Page is actually
+  // connected. Elad's page token was invalidated by Facebook on 27.7 and the
+  // integration was removed; without this gate every page load fired a
+  // failing sync and the button promised something that could not work.
+  useEffect(() => {
+    void fetch("/api/integrations/facebook/status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { integrations?: unknown[] } | null) =>
+        setFacebookConnected((payload?.integrations?.length ?? 0) > 0),
+      )
+      .catch(() => setFacebookConnected(false));
+  }, []);
+
   const autoSyncedRef = useRef(false);
   useEffect(() => {
-    if (autoSyncedRef.current) return;
+    if (!facebookConnected || autoSyncedRef.current) return;
     autoSyncedRef.current = true;
     void syncFromFacebook({ silent: true });
-  }, [syncFromFacebook]);
+  }, [facebookConnected, syncFromFacebook]);
 
   useEffect(() => {
     void fetch("/api/users", { cache: "no-store" })
@@ -259,14 +273,16 @@ export default function UnifiedAdminLeadsPage() {
               נסגר / ספאם) דרך סינון השלב.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => syncFromFacebook()}
-            disabled={syncing}
-            className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-pink disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {syncing ? "מסנכרן..." : "🔄 סנכרן מפייסבוק"}
-          </button>
+          {facebookConnected && (
+            <button
+              type="button"
+              onClick={() => syncFromFacebook()}
+              disabled={syncing}
+              className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-pink disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {syncing ? "מסנכרן..." : "🔄 סנכרן מפייסבוק"}
+            </button>
+          )}
         </header>
 
         {/* Source first — the salesperson's mental model. */}
