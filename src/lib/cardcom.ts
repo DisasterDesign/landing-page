@@ -587,7 +587,7 @@ export async function createRecurringOrder(
             <Operation>NewAndUpdate</Operation>
             <TimeIntervalId>1</TimeIntervalId>
             <FinalDebitCoinId>1</FinalDebitCoinId>
-            <DocTypeToCreate>3</DocTypeToCreate>
+            <DocTypeToCreate>1</DocTypeToCreate>
             <NextDateToBill>${nextBillStr}</NextDateToBill>
             <TotalNumOfBills>0</TotalNumOfBills>
             <NumOfPaymentsAlreadyCharged>1</NumOfPaymentsAlreadyCharged>
@@ -723,7 +723,15 @@ export async function createRecurringOrderNTV(
   params.set("RecurringPayments.NextDateToBill", nextBillStr);
   params.set("RecurringPayments.TotalNumOfBills", "999999");
   params.set("RecurringPayments.FinalDebitCoinId", "1"); // ILS
-  params.set("RecurringPayments.DocTypeToCreate", "3");
+  // Document type 1 = חשבונית מס/קבלה. Type 3 (what this sent until 28.7)
+  // issues a bare קבלה: Cardcom returns VAT:0, IsIncludesVAT:false and numbers
+  // it in a separate series starting from 1 — so the customer gets no tax
+  // invoice, cannot deduct input VAT, and our books show no VAT output.
+  // Verified against production payloads: the one standing order created by
+  // hand in the Cardcom dashboard bills as DocumentType 1 with VAT 0.18 and
+  // continues the real invoice series (5146, 5176, 5200), while every order
+  // this code created billed as DocumentType 3 with VAT 0.
+  params.set("RecurringPayments.DocTypeToCreate", "1");
   params.set("RecurringPayments.ReturnValue", input.agreementId);
   params.set("RecurringPayments.FlexItem.Price", input.monthlyAmount.toFixed(2));
   if (input.vatFree) {
