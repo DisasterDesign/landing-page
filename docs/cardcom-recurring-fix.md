@@ -40,7 +40,7 @@ Response format: `Name=Value&Name2=Value2&...`
 | Account.Email | אימייל לקוח |
 | Account.PhMobile | טלפון נייד |
 | RecurringPayments.FlexItem.IsPriceIncludeVat | true = מחיר כולל מע"מ |
-| RecurringPayments.DocTypeToCreate | 3 = קבלה |
+| RecurringPayments.DocTypeToCreate | **1 = חשבונית מס/קבלה** · 3 = קבלה מלכ״ר (מאפס מע״מ!) |
 | RecurringPayments.FlexItem.InvoiceDescription | תיאור לחשבונית |
 
 ### הערות:
@@ -68,3 +68,21 @@ Recurring0.IsNewRecurring=true
 ResponseCode=<קוד שגיאה>
 Description=<תיאור השגיאה>
 ```
+
+## תקלת סוג מסמך — 28.7.2026
+
+`DocTypeToCreate` היה מקובע ל-**3** מאז האינטגרציה הראשונה (23.4). סוג 3 הוא
+**קבלה מלכ״ר**: קארדקום מחזיר `VAT: 0`, `IsIncludesVAT: false`,
+`SumToBillNoVat == SumToBill`, וממספר בסדרה נפרדת שמתחילה מ-1. כלומר הלקוח
+אינו מקבל חשבונית מס, אינו יכול לקזז מס תשומות, ובספרים אין מע״מ עסקאות.
+
+**היקף:** 18 חיובים, ₪4,276 ברוטו, ₪652 מע״מ לא מתועד, 19-26.7, עשרה לקוחות.
+החיוב הראשון (LowProfile) לא הושפע — הוא שולח `DocumentTypeToCreate: "Auto"`
+וקארדקום מפיק לפי ברירת המחדל של המסוף, בסדרה האמיתית.
+
+**התיקון:** הקוד שולח 1. **חל רק על הוראות חדשות** — הוראות קיימות נושאות את
+הסוג ברשומה של קארדקום ויש לתקן אותן בדשבורד.
+
+**כלי בדיקה:** `scripts/audit-recurring-document-type.ts` — קורא-בלבד, שואל את
+קארדקום מה סוג המסמך של כל הוראה חיה ומדפיס את מי שדורש תיקון. להריץ אחרי כל
+שינוי בדשבורד ולפני שסוגרים את הנושא.

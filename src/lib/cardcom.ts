@@ -879,6 +879,11 @@ export interface RecurringState {
   NumOfPaymentsAlreadyCharged?: number;
   ReturnValue?: string; // our agreementId
   FlexItem?: { Price?: number };
+  /** Which document each charge issues. 1 = חשבונית מס/קבלה,
+   *  3 = קבלה מלכ״ר (zero-VAT). Dropped from this interface until 28.7,
+   *  which is why an order billing zero-VAT receipts looked healthy. */
+  DocTypeToCreate?: number;
+  IsDocumentCreate?: boolean;
 }
 
 export async function getRecurringPaymentState(accountId: number): Promise<RecurringState[]> {
