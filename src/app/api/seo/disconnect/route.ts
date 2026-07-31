@@ -1,21 +1,20 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 export async function POST() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     await prisma.googleIntegration.deleteMany({
-      where: { userId: session.user.id },
+      where: { userId },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error disconnecting Google:", error);
     return NextResponse.json(
       { error: "Internal server error" },

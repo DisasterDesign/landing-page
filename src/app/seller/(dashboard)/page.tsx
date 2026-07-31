@@ -12,6 +12,15 @@ interface CommissionSummary {
   total: number;
 }
 
+/** Present only for a recurring-share partner (percentage of monthly profit
+ *  on their clients) — first-month partners get null. */
+interface RecurringShare {
+  sharePct: number;
+  clientCount: number;
+  monthlyGross: number;
+  monthlyShare: number;
+}
+
 interface AgreementLite {
   id: string;
   customerName: string;
@@ -32,6 +41,7 @@ const fmt = (n: number) => n.toLocaleString("he-IL", { maximumFractionDigits: 0 
 
 export default function SellerDashboard() {
   const [summary, setSummary] = useState<CommissionSummary | null>(null);
+  const [recurringShare, setRecurringShare] = useState<RecurringShare | null>(null);
   const [openDeals, setOpenDeals] = useState(0);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [pendingReports, setPendingReports] = useState<AgreementLite[]>([]);
@@ -47,7 +57,11 @@ export default function SellerDashboard() {
           fetch("/api/seller/me", { cache: "no-store" }),
           fetch("/api/seller/follow-ups", { cache: "no-store" }),
         ]);
-        if (cRes.ok) setSummary((await cRes.json()).summary);
+        if (cRes.ok) {
+          const commissions = await cRes.json();
+          setSummary(commissions.summary);
+          setRecurringShare(commissions.recurringShare ?? null);
+        }
         if (aRes.ok) {
           const { data } = (await aRes.json()) as { data: AgreementLite[] };
           // "Open" = still actionable (awaiting payment), not failed/cancelled/paid.
@@ -132,12 +146,26 @@ export default function SellerDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card label="עמלות שנסגרו" value={summary ? fmt(summary.total) + " ₪" : "—"} loading={loading} />
-        <Card label="ממתין לתשלום" value={summary ? fmt(summary.totalPending) + " ₪" : "—"} accent loading={loading} />
-        <Card label="כבר שולם לי" value={summary ? fmt(summary.totalPaid) + " ₪" : "—"} loading={loading} />
-        <Card label="עסקאות פתוחות" value={loading ? "—" : String(openDeals)} loading={loading} />
-      </div>
+      {recurringShare ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card
+            label={`החלק החודשי שלי (${recurringShare.sharePct}%)`}
+            value={fmt(recurringShare.monthlyShare) + " ₪"}
+            accent
+            loading={loading}
+          />
+          <Card label="הלקוחות שלי" value={String(recurringShare.clientCount)} loading={loading} />
+          <Card label="מנויים חודשיים (ברוטו)" value={fmt(recurringShare.monthlyGross) + " ₪"} loading={loading} />
+          <Card label="עסקאות פתוחות" value={loading ? "—" : String(openDeals)} loading={loading} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card label="עמלות שנסגרו" value={summary ? fmt(summary.total) + " ₪" : "—"} loading={loading} />
+          <Card label="ממתין לתשלום" value={summary ? fmt(summary.totalPending) + " ₪" : "—"} accent loading={loading} />
+          <Card label="כבר שולם לי" value={summary ? fmt(summary.totalPaid) + " ₪" : "—"} loading={loading} />
+          <Card label="עסקאות פתוחות" value={loading ? "—" : String(openDeals)} loading={loading} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link

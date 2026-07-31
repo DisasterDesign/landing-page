@@ -141,6 +141,14 @@ export async function POST(
         idNumber,
         phone,
         email,
+        // Partner exposure: the client belongs to whoever generated the
+        // deal. Credited seller wins; else the agreement's creator; else
+        // the owner. An auto-provisioned client must never be ownerless —
+        // an unowned row is invisible to its partner and unattributable
+        // in the split report.
+        ownerId:
+          existing.creditedSellerId ??
+          (await resolveOwnerUserId(transaction, existing.createdBy)),
       });
 
       const updated = await transaction.agreement.update({
@@ -233,6 +241,25 @@ export async function POST(
   }
 }
 
+/** The user who business-owns a deal created by `createdBy`: the creator
+ *  itself when it is a real user, else the single isOwner user. Free-string
+ *  createdBy values from legacy rows fall through to the owner. */
+async function resolveOwnerUserId(
+  transaction: Prisma.TransactionClient,
+  createdBy: string,
+): Promise<string | null> {
+  const creator = await transaction.user.findUnique({
+    where: { id: createdBy },
+    select: { id: true },
+  });
+  if (creator) return creator.id;
+  const owner = await transaction.user.findFirst({
+    where: { isOwner: true },
+    select: { id: true },
+  });
+  return owner?.id ?? null;
+}
+
 async function ensureClientForAgreement(transaction: Prisma.TransactionClient, input: {
   currentClientId: string | null;
   customerName: string;
@@ -240,6 +267,7 @@ async function ensureClientForAgreement(transaction: Prisma.TransactionClient, i
   idNumber?: string;
   phone: string;
   email: string;
+  ownerId: string | null;
 }): Promise<string | null> {
   if (input.currentClientId) {
     return input.currentClientId;
@@ -268,6 +296,9 @@ async function ensureClientForAgreement(transaction: Prisma.TransactionClient, i
         phone: existing.phone || normalizedPhone || input.phone,
         businessName: existing.businessName || input.businessName || null,
         idNumber: existing.idNumber || input.idNumber || null,
+        // Fill missing ownership only — an already-owned client is never
+        // re-attributed by a later signature.
+        ...(existing.ownerId ? {} : { ownerId: input.ownerId }),
       },
     });
     return existing.id;
@@ -282,6 +313,7 @@ async function ensureClientForAgreement(transaction: Prisma.TransactionClient, i
       idNumber: input.idNumber || null,
       source: "agreement_signed",
       status: "פעיל",
+      ownerId: input.ownerId,
     },
   });
   return created.id;

@@ -1,15 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { buildConsentUrl, getGoogleConfig } from "@/lib/google-oauth";
 import { randomBytes } from "crypto";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     if (!getGoogleConfig()) {
       return NextResponse.json(
@@ -23,7 +20,7 @@ export async function GET() {
 
     // Bind state to the user id so the callback can verify ownership.
     const nonce = randomBytes(16).toString("hex");
-    const state = `${session.user.id}.${nonce}`;
+    const state = `${userId}.${nonce}`;
     const url = buildConsentUrl(state);
 
     const res = NextResponse.redirect(url);
@@ -36,6 +33,8 @@ export async function GET() {
     });
     return res;
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error starting OAuth:", error);
     return NextResponse.json(
       { error: "Internal server error" },

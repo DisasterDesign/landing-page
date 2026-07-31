@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { updateBlogPostSchema } from "@/lib/validations";
 
 // PATCH - protected: update blog post
@@ -9,10 +9,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const { id } = await params;
     const body = await request.json();
@@ -31,7 +28,7 @@ export async function PATCH(
     }
 
     // Verify ownership: only the author can edit their post
-    if (existing.authorId !== session.user.id) {
+    if (existing.authorId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -63,6 +60,8 @@ export async function PATCH(
 
     return NextResponse.json(post);
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error updating blog post:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -77,10 +76,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const { id } = await params;
 
@@ -90,7 +86,7 @@ export async function DELETE(
     }
 
     // Verify ownership: only the author can delete their post
-    if (existing.authorId !== session.user.id) {
+    if (existing.authorId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -98,6 +94,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error deleting blog post:", error);
     return NextResponse.json(
       { error: "Internal server error" },

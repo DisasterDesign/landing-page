@@ -33,7 +33,6 @@ export async function GET(
             customerName: true,
             signedAt: true,
             createdAt: true,
-            signToken: true,
           },
         },
         clientNotes: {

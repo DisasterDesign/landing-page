@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 /**
  * DELETE /api/tasks/completed
@@ -10,15 +10,7 @@ import { auth } from "@/lib/auth";
  */
 export async function DELETE() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const role = (session.user as unknown as { role?: string }).role;
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await requireOwner();
 
     const { count } = await prisma.task.deleteMany({
       where: { status: "DONE" },
@@ -26,6 +18,8 @@ export async function DELETE() {
 
     return NextResponse.json({ success: true, deleted: count });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error clearing completed tasks:", error);
     return NextResponse.json(
       { error: "Internal server error" },

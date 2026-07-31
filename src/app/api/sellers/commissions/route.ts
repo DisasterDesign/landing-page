@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireProspectingAdmin } from "@/lib/prospecting/admin-auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 export const dynamic = "force-dynamic";
 
-// GET - Admin: all seller commissions + per-seller payout totals.
+// GET - Owner: all seller commissions + per-seller payout totals.
 export async function GET() {
   try {
-    if (!(await requireProspectingAdmin())) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await requireOwner();
 
     const commissions = await prisma.sellerCommission.findMany({
       include: { seller: { select: { id: true, name: true } } },
@@ -59,6 +57,8 @@ export async function GET() {
       totalPending,
     });
   } catch (error) {
+    const auth = viewerErrorResponse(error);
+    if (auth) return auth;
     console.error("Error listing commissions:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

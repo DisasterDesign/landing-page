@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { forceRefreshGoogleReviews } from "@/lib/google-reviews";
 
 /**
@@ -10,12 +10,9 @@ import { forceRefreshGoogleReviews } from "@/lib/google-reviews";
  * default read path.
  */
 export async function POST() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    await requireOwner();
+
     const data = await forceRefreshGoogleReviews();
     if (!data) {
       return NextResponse.json(
@@ -28,6 +25,8 @@ export async function POST() {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (e) {
+    const authResponse = viewerErrorResponse(e);
+    if (authResponse) return authResponse;
     console.error("[reviews] force refresh failed:", e);
     return NextResponse.json({ error: "Refresh failed" }, { status: 500 });
   }

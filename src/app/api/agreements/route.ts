@@ -37,7 +37,14 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ data: agreements });
+    // The signing token is a bearer credential for /agreement/[token] —
+    // it must never ride along in the listing.
+    const data = agreements.map(({ signToken: _signToken, ...rest }) => {
+      void _signToken;
+      return rest;
+    });
+
+    return NextResponse.json({ data });
   } catch (error) {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

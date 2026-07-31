@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import { subscribePageToLeadgen } from "@/lib/facebook";
 
@@ -13,10 +13,7 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) {
@@ -53,13 +50,13 @@ export async function POST(req: NextRequest) {
     await prisma.facebookIntegration.upsert({
       where: { pageId: target.id },
       update: {
-        userId: session.user.id,
+        userId,
         pageName: target.name,
         pageAccessToken: target.access_token, // already encrypted
         subscribedAt: new Date(),
       },
       create: {
-        userId: session.user.id,
+        userId,
         pageId: target.id,
         pageName: target.name,
         pageAccessToken: target.access_token,
@@ -71,6 +68,8 @@ export async function POST(req: NextRequest) {
     res.cookies.delete("fb_pages");
     return res;
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Page subscribe error:", error);
     const msg = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json({ error: msg }, { status: 500 });

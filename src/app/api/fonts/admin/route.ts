@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { createFontFamilySchema } from "@/lib/validations";
 
 // GET - Admin: list all font families (including unpublished) with order counts
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -33,6 +30,8 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error fetching fonts:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -44,10 +43,7 @@ export async function GET(request: NextRequest) {
 // POST - Admin: create font family
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const body = await request.json();
     const parsed = createFontFamilySchema.safeParse(body);
@@ -78,6 +74,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(font, { status: 201 });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error creating font:", error);
     return NextResponse.json(
       { error: "Internal server error" },

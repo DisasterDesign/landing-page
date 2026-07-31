@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { changeAgreementCredit } from "@/lib/leads/agreement-lifecycle";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 
@@ -16,27 +16,26 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
   try {
+    const { userId } = await requireOwner();
+    const parsed = schema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
     const { id } = await params;
     const agreement = await changeAgreementCredit({
       agreementId: id,
       creditedSellerId: parsed.data.creditedSellerId,
       reason: parsed.data.reason,
-      actor: { userId: session.user.id, role: "ADMIN" },
+      actor: { userId, role: "ADMIN" },
     });
     return NextResponse.json({ agreement });
   } catch (error) {
+    const auth = viewerErrorResponse(error);
+    if (auth) return auth;
     return leadDomainErrorResponse(error);
   }
 }

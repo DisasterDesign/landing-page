@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { updateExpenseSchema } from "@/lib/validations";
 
@@ -9,9 +9,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    await requireOwner();
+  } catch (error) {
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
+    throw error;
   }
 
   const { id } = await params;
@@ -48,9 +51,12 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    await requireOwner();
+  } catch (error) {
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
+    throw error;
   }
 
   const { id } = await params;

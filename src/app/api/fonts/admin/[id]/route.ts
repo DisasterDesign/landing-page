@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { updateFontFamilySchema } from "@/lib/validations";
 
 // GET - Admin: single font family with styles and orders
@@ -9,10 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { id } = await params;
 
@@ -30,6 +27,8 @@ export async function GET(
 
     return NextResponse.json(font);
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error fetching font:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -44,10 +43,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { id } = await params;
     const body = await request.json();
@@ -67,6 +63,8 @@ export async function PATCH(
 
     return NextResponse.json(font);
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error updating font:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -81,10 +79,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { id } = await params;
 
@@ -92,6 +87,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error deleting font:", error);
     return NextResponse.json(
       { error: "Internal server error" },

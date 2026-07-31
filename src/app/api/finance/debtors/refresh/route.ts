@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { sweepTerminalFailures, bucketDebtors } from "@/lib/cardcom-debtors";
 
 export const maxDuration = 60;
@@ -16,11 +12,7 @@ export const maxDuration = 60;
  */
 export async function POST() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
 
     const summary = { debtors: 0, newDebtorAlerts: 0, settled: 0 };
     const snapshot = await sweepTerminalFailures(new Date(), summary);
@@ -32,9 +24,8 @@ export async function POST() {
       snapshotUpdatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
     console.error("Error refreshing debtors:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

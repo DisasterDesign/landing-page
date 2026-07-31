@@ -1,25 +1,16 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { createExpenseSchema } from "@/lib/validations";
 
 // GET /api/expenses — all expense lines, newest first
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
     throw error;
   }
 
@@ -33,16 +24,11 @@ export async function GET() {
 
 // POST /api/expenses — create an expense line
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
     throw error;
   }
 

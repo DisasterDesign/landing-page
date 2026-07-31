@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, ViewerAuthorizationError } from "@/lib/auth/viewer";
 import {
   exchangeCodeForUserToken,
   exchangeForLongLivedUserToken,
@@ -17,9 +17,16 @@ function redirectWithError(req: NextRequest, message: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return redirectWithError(req, "unauthorized");
+    // OAuth callback must always answer with a redirect, never JSON — so the
+    // auth gate translates to the error-redirect instead of viewerErrorResponse.
+    let userId: string;
+    try {
+      ({ userId } = await requireOwner());
+    } catch (error) {
+      if (error instanceof ViewerAuthorizationError) {
+        return redirectWithError(req, "unauthorized");
+      }
+      throw error;
     }
 
     const url = new URL(req.url);
@@ -35,7 +42,7 @@ export async function GET(req: NextRequest) {
       return redirectWithError(req, "state_mismatch");
     }
     const [stateUserId] = state.split(".");
-    if (stateUserId !== session.user.id) {
+    if (stateUserId !== userId) {
       return redirectWithError(req, "state_user_mismatch");
     }
 

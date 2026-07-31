@@ -1,20 +1,17 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getMetaConfig } from "@/lib/facebook";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const oauthConfigured = getMetaConfig() !== null;
 
     const integrations = await prisma.facebookIntegration.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       select: {
         id: true,
         pageId: true,
@@ -38,6 +35,8 @@ export async function GET() {
       recentLeadCount,
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Facebook status error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

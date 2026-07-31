@@ -1,7 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import {
+  requireOwner,
+  ViewerAuthorizationError,
+} from "@/lib/auth/viewer";
 import {
   exchangeCodeForTokens,
   fetchUserEmail,
@@ -17,10 +20,7 @@ function redirectWithError(req: NextRequest, message: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return redirectWithError(req, "unauthorized");
-    }
+    const { userId } = await requireOwner();
 
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       return redirectWithError(req, "state_mismatch");
     }
     const [stateUserId] = state.split(".");
-    if (stateUserId !== session.user.id) {
+    if (stateUserId !== userId) {
       return redirectWithError(req, "state_user_mismatch");
     }
 
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
     await prisma.googleIntegration.upsert({
-      where: { userId: session.user.id },
+      where: { userId },
       update: {
         accessToken: encrypt(tokens.access_token),
         refreshToken: encrypt(tokens.refresh_token),
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
         email,
       },
       create: {
-        userId: session.user.id,
+        userId,
         accessToken: encrypt(tokens.access_token),
         refreshToken: encrypt(tokens.refresh_token),
         expiresAt,
@@ -91,6 +91,14 @@ export async function GET(req: NextRequest) {
     res.cookies.delete("seo_oauth_state");
     return res;
   } catch (error) {
+    // Browser-redirect flow: translate auth errors into the existing
+    // redirect-with-error UX instead of a bare JSON response.
+    if (error instanceof ViewerAuthorizationError) {
+      return redirectWithError(
+        req,
+        error.status === 401 ? "unauthorized" : "forbidden"
+      );
+    }
     console.error("OAuth callback error:", error);
     return redirectWithError(req, "callback_failed");
   }

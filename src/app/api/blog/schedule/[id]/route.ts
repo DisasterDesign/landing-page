@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { scheduleBlogPostSchema } from "@/lib/validations";
 
 export async function PATCH(
@@ -8,10 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { id } = await params;
     const body = await request.json();
@@ -57,6 +54,8 @@ export async function PATCH(
 
     return NextResponse.json(post);
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error scheduling blog post:", error);
     return NextResponse.json(
       { error: "Internal server error" },

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 const schema = z.object({
   gscSiteUrl: z.string().min(1, "יש לבחור אתר"),
@@ -11,10 +11,7 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
@@ -26,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.googleIntegration.update({
-      where: { userId: session.user.id },
+      where: { userId },
       data: {
         gscSiteUrl: parsed.data.gscSiteUrl,
         ga4PropertyId: parsed.data.ga4PropertyId,
@@ -35,6 +32,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error configuring sites:", error);
     return NextResponse.json(
       { error: "Internal server error" },

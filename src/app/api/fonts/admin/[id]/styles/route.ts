@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { createFontStyleSchema } from "@/lib/validations";
 
 // POST - Admin: add a new style to font family
@@ -9,10 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const { id } = await params;
     const body = await request.json();
@@ -40,6 +37,8 @@ export async function POST(
 
     return NextResponse.json(style, { status: 201 });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error creating font style:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -54,10 +53,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     await params; // consume params
     const body = await request.json();
@@ -71,6 +67,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error deleting font style:", error);
     return NextResponse.json(
       { error: "Internal server error" },

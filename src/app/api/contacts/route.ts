@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { createContactSchema } from "@/lib/validations";
 import { resolveEligibleSellerId } from "@/lib/leads/assignment";
 import { createLeadFromSource } from "@/lib/leads/lifecycle";
@@ -55,7 +51,16 @@ export async function POST(request: NextRequest) {
       service: parsed.data.service,
     });
 
-    return NextResponse.json(contact, { status: 201 });
+    // Public response: never leak internal assignment/ownership columns.
+    const {
+      ownerId: _ownerId,
+      eligibleSellerId: _eligibleSellerId,
+      ...publicContact
+    } = contact;
+    void _ownerId;
+    void _eligibleSellerId;
+
+    return NextResponse.json(publicContact, { status: 201 });
   } catch (error) {
     console.error("Error creating contact:", error);
     return NextResponse.json(
@@ -68,11 +73,7 @@ export async function POST(request: NextRequest) {
 // GET - Auth required: list all contacts
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -93,9 +94,8 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error fetching contacts:", error);
     return NextResponse.json(
       { error: "Internal server error" },

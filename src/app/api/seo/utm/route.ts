@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 const createSchema = z.object({
   baseUrl: z.string().url("כתובת לא תקינה"),
@@ -26,18 +26,17 @@ function buildUtmUrl(input: z.infer<typeof createSchema>): string {
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const links = await prisma.utmLink.findMany({
-      where: { createdBy: session.user.id },
+      where: { createdBy: userId },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ links });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("UTM list error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -48,10 +47,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
@@ -74,12 +70,14 @@ export async function POST(req: NextRequest) {
         term: parsed.data.term,
         content: parsed.data.content,
         label: parsed.data.label,
-        createdBy: session.user.id,
+        createdBy: userId,
       },
     });
 
     return NextResponse.json({ link }, { status: 201 });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("UTM create error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

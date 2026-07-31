@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { bulkScheduleBlogPostSchema } from "@/lib/validations";
 import { addDays, nextSunday, setHours, setMinutes, setSeconds, setMilliseconds, startOfDay } from "date-fns";
 
@@ -15,10 +15,7 @@ function nextSundayAt7UTC(from: Date): Date {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const body = await request.json().catch(() => ({}));
     const parsed = bulkScheduleBlogPostSchema.safeParse(body);
@@ -64,6 +61,8 @@ export async function POST(request: NextRequest) {
       posts: updates,
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Bulk schedule error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

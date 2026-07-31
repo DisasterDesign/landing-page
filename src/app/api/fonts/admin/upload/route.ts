@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -8,10 +8,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -63,6 +60,8 @@ export async function POST(request: NextRequest) {
     const url = `/fonts/${safeSlug}/${filename}`;
     return NextResponse.json({ url });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Font upload error:", error);
     return NextResponse.json(
       { error: "Upload failed" },

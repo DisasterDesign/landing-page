@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { bulkCreateBlogPostSchema } from "@/lib/validations";
 import { generateBlogSlug } from "@/lib/blog-slug";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const body = await request.json();
     const parsed = bulkCreateBlogPostSchema.safeParse(body);
@@ -69,6 +66,8 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Bulk create blog posts error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

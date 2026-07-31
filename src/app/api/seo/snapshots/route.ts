@@ -1,14 +1,11 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const url = new URL(req.url);
     const days = Math.min(365, Math.max(1, parseInt(url.searchParams.get("days") || "90", 10)));
@@ -24,6 +21,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ snapshots });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Snapshots fetch error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

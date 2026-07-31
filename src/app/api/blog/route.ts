@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { createBlogPostSchema } from "@/lib/validations";
 
 function generateSlug(title: string): string {
@@ -15,7 +15,7 @@ function generateSlug(title: string): string {
   );
 }
 
-// GET - public: list published posts (or all posts for authenticated admin)
+// GET - public: list published posts (or all posts for the owner via ?all=true)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -27,10 +27,8 @@ export async function GET(request: NextRequest) {
 
     let showAll = false;
     if (all) {
-      const session = await auth();
-      if (session?.user) {
-        showAll = true;
-      }
+      await requireOwner();
+      showAll = true;
     }
 
     const where: Record<string, unknown> = {};
@@ -70,6 +68,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error fetching blog posts:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -81,10 +81,7 @@ export async function GET(request: NextRequest) {
 // POST - protected: create new blog post
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const body = await request.json();
     const parsed = createBlogPostSchema.safeParse(body);
@@ -108,7 +105,7 @@ export async function POST(request: NextRequest) {
         published: published ?? false,
         publishedAt: published ? new Date() : null,
         status: finalStatus,
-        authorId: session.user.id!,
+        authorId: userId,
       },
       include: {
         author: { select: { id: true, name: true } },
@@ -117,6 +114,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(post, { status: 201 });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error creating blog post:", error);
     return NextResponse.json(
       { error: "Internal server error" },

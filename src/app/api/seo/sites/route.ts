@@ -1,18 +1,15 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getFreshAccessToken, fetchUserEmail } from "@/lib/google-oauth";
 import { listSites } from "@/lib/search-console";
 import { listGA4Properties } from "@/lib/analytics";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
-    const accessToken = await getFreshAccessToken(session.user.id);
+    const accessToken = await getFreshAccessToken(userId);
     if (!accessToken) {
       return NextResponse.json({ error: "לא מחובר ל-Google" }, { status: 400 });
     }
@@ -39,6 +36,8 @@ export async function GET() {
       ...(errors.length > 0 && { errors }),
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error listing sites:", error);
     return NextResponse.json(
       { error: "Internal server error" },

@@ -1,10 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 
 const VAT_RATE = 18;
@@ -32,22 +28,19 @@ interface PartnerRow {
  *
  * Per row:
  *   profit       = amount - VAT(18% inclusive) - cardcomFee(2%)
- *   partnerShare = profit / 2
+ *   partnerShare = profit × the OWNING partner's revenueSharePct
  *
- * Both partners (Elad and Roy) get the same partnerShare value;
- * the UI renders it in two columns for clarity.
+ * The hard 50/50 died with the partner model (28.7.2026): each client's
+ * share follows Client.ownerId → User.revenueSharePct. A client owned by
+ * the owner himself, or by a first-month-commission partner (they were
+ * already paid at closing), contributes zero here.
  */
 export async function GET(_req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
     throw error;
   }
 
@@ -64,6 +57,7 @@ export async function GET(_req: NextRequest) {
       monthlyAmount: true,
       paymentDate: true,
       vatExempt: true,
+      owner: { select: { revenueSharePct: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -76,7 +70,8 @@ export async function GET(_req: NextRequest) {
     const vat = c.vatExempt ? 0 : (amount * VAT_RATE) / (100 + VAT_RATE);
     const cardcomFee = amount * CARDCOM_FEE_RATE;
     const profit = amount - vat - cardcomFee;
-    const partnerShare = profit / 2;
+    const sharePct = c.owner?.revenueSharePct ?? 0;
+    const partnerShare = profit * (sharePct / 100);
     return {
       id: c.id,
       number: c.number,

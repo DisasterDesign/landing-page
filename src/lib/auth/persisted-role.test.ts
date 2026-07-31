@@ -128,7 +128,7 @@ test("admin PII list and detail routes guard persisted ADMIN before querying", (
   for (const [relativePath, firstPiiQuery] of routes) {
     const handler = getHandlerSource(source(relativePath));
     const guard = handler.match(
-      /await\s+requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)/,
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
     );
     assert.ok(guard, `${relativePath} must require persisted ADMIN`);
     assert.ok(
@@ -142,7 +142,7 @@ test("admin agreement PATCH authorizes before its no-op PII response", () => {
   const route = source("../../app/api/agreements/[id]/route.ts");
   const handler = getNamedHandlerSource(route, "PATCH");
   const guard = handler.match(
-    /await\s+requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)/,
+    /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
   );
   assert.ok(guard, "PATCH must require persisted ADMIN");
   assert.ok(
@@ -224,7 +224,7 @@ test("client admin routes guard persisted ADMIN before reads and mutations", () 
   for (const [relativePath, method, firstQuery] of routes) {
     const handler = getNamedHandlerSource(source(relativePath), method);
     const guard = handler.match(
-      /await\s+requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)/,
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
     );
     assert.ok(
       guard,
@@ -279,7 +279,7 @@ test("finance and billing repair routes guard persisted ADMIN before sensitive w
   for (const [relativePath, method, firstSensitiveAction] of routes) {
     const handler = getNamedHandlerSource(source(relativePath), method);
     const guard = handler.match(
-      /await\s+requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)/,
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
     );
     assert.ok(
       guard,

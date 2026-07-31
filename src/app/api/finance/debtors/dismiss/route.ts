@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { DEBTORS_DISMISSED_KEY, getDismissedDebtors } from "@/lib/cardcom-debtors";
 
 /**
@@ -14,11 +10,7 @@ import { DEBTORS_DISMISSED_KEY, getDismissedDebtors } from "@/lib/cardcom-debtor
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    await requireOwner();
 
     const body = (await req.json()) as { key?: string; name?: string; dismissed?: boolean };
     const key = typeof body.key === "string" ? body.key.trim() : "";
@@ -41,9 +33,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, dismissedCount: Object.keys(dismissed).length });
   } catch (error) {
-    if (error instanceof PersistedRoleAuthorizationError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authError = viewerErrorResponse(error);
+    if (authError) return authError;
     console.error("Error dismissing debtor:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

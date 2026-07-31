@@ -1,23 +1,18 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import { unsubscribePage } from "@/lib/facebook";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const body = await req.json().catch(() => ({}));
     const pageId: string | undefined = body.pageId;
 
-    const where = pageId
-      ? { pageId, userId: session.user.id }
-      : { userId: session.user.id };
+    const where = pageId ? { pageId, userId } : { userId };
 
     const integrations = await prisma.facebookIntegration.findMany({ where });
     for (const integ of integrations) {
@@ -32,6 +27,8 @@ export async function POST(req: NextRequest) {
     await prisma.facebookIntegration.deleteMany({ where });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Facebook disconnect error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,15 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { buildAuthUrl, getMetaConfig } from "@/lib/facebook";
 import { randomBytes } from "crypto";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     if (!getMetaConfig()) {
       return NextResponse.json(
@@ -22,7 +19,7 @@ export async function GET() {
     }
 
     const nonce = randomBytes(16).toString("hex");
-    const state = `${session.user.id}.${nonce}`;
+    const state = `${userId}.${nonce}`;
     const url = buildAuthUrl(state);
 
     const res = NextResponse.redirect(url);
@@ -35,6 +32,8 @@ export async function GET() {
     });
     return res;
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error starting Meta OAuth:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import {
   getFormLeads,
@@ -21,10 +21,7 @@ import { ingestMetaLead } from "@/lib/leads/meta-ingestion";
  */
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     // Determine which form to pull from
     let formId: string | undefined;
@@ -38,7 +35,7 @@ export async function POST(req: Request) {
 
     // Find active integration (we need the page access token)
     const integration = await prisma.facebookIntegration.findFirst({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { createdAt: "desc" },
     });
 
@@ -91,6 +88,8 @@ export async function POST(req: Request) {
       skipped,
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Facebook sync error:", error);
     const message =
       error instanceof Error ? error.message : "Unknown error";

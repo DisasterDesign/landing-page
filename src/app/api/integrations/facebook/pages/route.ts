@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 /**
  * Returns the list of Pages from the OAuth-set fb_pages cookie.
@@ -9,10 +9,7 @@ import { auth } from "@/lib/auth";
  */
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const cookieStore = await cookies();
     const raw = cookieStore.get("fb_pages")?.value;
@@ -30,6 +27,8 @@ export async function GET() {
       return NextResponse.json({ pages: [] });
     }
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Pages list error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,16 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 const ALLOWED_SORT = new Set(["clicks", "impressions", "ctr", "position"]);
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const url = new URL(req.url);
     const sort = url.searchParams.get("sort") || "clicks";
@@ -63,6 +60,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ pages: pages.slice(0, limit) });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Pages fetch error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

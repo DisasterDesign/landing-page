@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 const ALL_STATUSES = [
   "DRAFT",
@@ -12,10 +12,7 @@ const ALL_STATUSES = [
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await requireOwner();
 
     const [grouped, nextScheduled, keywords] = await Promise.all([
       prisma.blogPost.groupBy({
@@ -53,6 +50,8 @@ export async function GET() {
       totalKeywords: keywords.length,
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Pipeline stats error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

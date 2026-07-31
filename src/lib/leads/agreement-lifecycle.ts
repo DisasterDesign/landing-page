@@ -803,11 +803,23 @@ export async function applyPaymentSuccess(
   }
 
   const creditedSellerId = await resolveCreditedSeller(transaction, agreement);
+  // Partner split model: a first-month SellerCommission is only for partners
+  // WITHOUT a recurring share. A recurring-share partner (Roy, 50%) is paid
+  // monthly through the partner report — crediting him a first-month row too
+  // would pay the first month twice.
+  const creditedPartner = creditedSellerId
+    ? await transaction.user.findUnique({
+        where: { id: creditedSellerId },
+        select: { revenueSharePct: true },
+      })
+    : null;
+  const firstMonthEligible =
+    creditedSellerId !== null && creditedPartner?.revenueSharePct == null;
   let commissionCreated = false;
   const existingCommission = await transaction.sellerCommission.findUnique({
     where: { agreementId: agreement.id },
   });
-  if (creditedSellerId && !existingCommission) {
+  if (creditedSellerId && firstMonthEligible && !existingCommission) {
     try {
       await transaction.sellerCommission.create({
         data: {
@@ -825,6 +837,7 @@ export async function applyPaymentSuccess(
     }
   } else if (
     creditedSellerId &&
+    firstMonthEligible &&
     existingCommission &&
     (existingCommission.agreementRefId !== agreement.id ||
       existingCommission.agreementLinkStatus !== "LINKED" ||

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getFreshAccessToken } from "@/lib/google-oauth";
 import { fetchReferralSources } from "@/lib/analytics";
 
@@ -11,13 +11,10 @@ function ymd(date: Date): string {
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const integration = await prisma.googleIntegration.findUnique({
-      where: { userId: session.user.id },
+      where: { userId },
       select: { ga4PropertyId: true },
     });
 
@@ -28,7 +25,7 @@ export async function GET() {
       );
     }
 
-    const accessToken = await getFreshAccessToken(session.user.id);
+    const accessToken = await getFreshAccessToken(userId);
     if (!accessToken) {
       return NextResponse.json({ error: "לא מחובר ל-Google" }, { status: 400 });
     }
@@ -48,6 +45,8 @@ export async function GET() {
 
     return NextResponse.json({ referrals });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Referrals fetch error:", error);
     return NextResponse.json(
       { error: "Internal server error", referrals: [] },

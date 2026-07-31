@@ -1,20 +1,17 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getGoogleConfig } from "@/lib/google-oauth";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId } = await requireOwner();
 
     const oauthConfigured = getGoogleConfig() !== null;
 
     const integration = await prisma.googleIntegration.findUnique({
-      where: { userId: session.user.id },
+      where: { userId },
       select: {
         email: true,
         gscSiteUrl: true,
@@ -30,6 +27,8 @@ export async function GET() {
       integration,
     });
   } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Error fetching seo status:", error);
     return NextResponse.json(
       { error: "Internal server error" },

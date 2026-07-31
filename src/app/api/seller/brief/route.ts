@@ -21,14 +21,11 @@ const briefSchema = z.object({
   extraNotes: z.string().max(2000).optional(),
 });
 
-/** The developer report lands as a task for Elad specifically. */
-const ELAD_EMAIL = "davidalelad@gmail.com";
-
 /**
  * POST /api/seller/brief
  * A seller submits the developer report ("דוח למפתח") for a CLOSED+PAID deal.
- * Creates a Task assigned to Elad (fallback: all admins) and links it to the
- * seller's commission row. Returns { taskId } for the image uploads.
+ * Creates a Task assigned to the owner and links it to the seller's
+ * commission row. Returns { taskId } for the image uploads.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -66,14 +63,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Target: Elad's account; fall back to all admins if not found.
-    const elad = await prisma.user.findFirst({
-      where: { email: { equals: ELAD_EMAIL, mode: "insensitive" } },
+    // Target: the owner's account.
+    const owner = await prisma.user.findFirst({
+      where: { isOwner: true },
       select: { id: true },
     });
-    const assignees = elad
-      ? [elad]
-      : await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+    const assignees = owner ? [owner] : [];
 
     const lines: string[] = [];
     const add = (label: string, v?: string) => {

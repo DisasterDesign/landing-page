@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
         notes: body.notes || null,
         amount: body.amount != null ? parseFloat(body.amount) : null,
         expense: body.expense != null ? parseFloat(body.expense) : null,
+        // A hand-created client is the admin's own deal — partner deals
+        // arrive through agreements, which attribute ownership at signing.
+        ownerId: session.user.id,
       },
     });
 

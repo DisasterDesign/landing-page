@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { z } from "zod";
 import { getFeaturedReviews, setFeaturedReviews } from "@/lib/google-reviews";
 
 // Admin: manage the curated featured reviews shown on the homepage.
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    await requireOwner();
+    return NextResponse.json({ reviews: await getFeaturedReviews() });
+  } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
+    throw error;
   }
-  return NextResponse.json({ reviews: await getFeaturedReviews() });
 }
 
 const schema = z.object({
@@ -27,17 +30,20 @@ const schema = z.object({
 });
 
 export async function PUT(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    await requireOwner();
+    const parsed = schema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    await setFeaturedReviews(parsed.data.reviews);
+    return NextResponse.json({ ok: true, count: parsed.data.reviews.length });
+  } catch (error) {
+    const authResponse = viewerErrorResponse(error);
+    if (authResponse) return authResponse;
+    throw error;
   }
-  const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
-    );
-  }
-  await setFeaturedReviews(parsed.data.reviews);
-  return NextResponse.json({ ok: true, count: parsed.data.reviews.length });
 }
