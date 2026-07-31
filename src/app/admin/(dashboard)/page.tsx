@@ -210,10 +210,10 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiCard label="MRR (חודשי)" value={`₪${fmt(kpis.mrr)}`} accent />
           <KpiCard label="רווח חודשי" value={`₪${fmt(kpis.monthlyProfit)}`} />
-          <KpiCard label="חלק כל שותף" value={`₪${fmt(kpis.partnerShare)}`} />
+          <KpiCard label="יוצא לשותפים" value={`₪${fmt(kpis.partnerShare)}`} href="/admin/partners" />
           <KpiCard label="לקוחות פעילים" value={fmt(kpis.activeClients)} />
           <KpiCard label="לידים פתוחים" value={fmt(kpis.openLeads)} href="/admin/leads" />
-          <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/sellers" />
+          <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/partners" />
         </div>
       )}
 

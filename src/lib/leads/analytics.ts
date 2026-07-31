@@ -3,6 +3,7 @@ import type { LeadEventType, LeadIntentLevel, LeadStage, Prisma } from "@prisma/
 import { prisma } from "@/lib/prisma";
 
 import { buildAdminLeadWhere, type AdminLeadFilters } from "./admin-query";
+import { resolveAgreementPartnerId } from "./agreement-lifecycle";
 import { getLeadSlaMinutes, type LeadSlaMinutes } from "./lead-sla";
 
 export interface LeadAnalyticsCohort {
@@ -341,9 +342,12 @@ export function calculateLeadMetrics(
       const amount =
         firstPaidAgreement.paidAmount ?? firstPaidAgreement.monthlyPrice;
       metrics.revenue += amount;
+      // Same attribution source as every money surface. Reading
+      // creditedSellerId alone would drop every backfilled deal (partnerId
+      // set, mirror null) out of its partner's row.
       const sellerMetrics = sellerFor(
         metrics.bySeller,
-        firstPaidAgreement.creditedSellerId,
+        resolveAgreementPartnerId(firstPaidAgreement),
       );
       if (sellerMetrics) {
         sellerMetrics.paid += 1;
@@ -382,6 +386,7 @@ const analyticsInclude = {
       paidAt: true,
       paidAmount: true,
       monthlyPrice: true,
+      partnerId: true,
       creditedSellerId: true,
     },
   },

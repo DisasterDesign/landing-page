@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { CARDCOM_FEE_RATE, VAT_RATE } from "@/lib/finance";
+import { resolveAgreementPartnerId } from "@/lib/leads/agreement-lifecycle";
 
 /**
  * GET /api/partners/overview?month=YYYY-MM — owner-only.
@@ -94,8 +95,8 @@ export async function GET(request: NextRequest) {
           businessName: true,
           monthlyPrice: true,
           signedAt: true,
+          partnerId: true,
           creditedSellerId: true,
-          createdBy: true,
         },
       }),
     ]);
@@ -148,10 +149,11 @@ export async function GET(request: NextRequest) {
           .filter((row) => row.status === "PENDING")
           .reduce((sum, row) => sum + row.amount, 0),
       ),
+      // Attribution comes from partnerId (creditedSellerId only for rows
+      // written before it existed). `createdBy` is audit-only — crediting the
+      // typist is what made 8 of 14 signed deals land on the wrong partner.
       dealsSignedThisMonth: signedThisMonth.filter(
-        (agreement) =>
-          agreement.creditedSellerId === id ||
-          (agreement.creditedSellerId === null && agreement.createdBy === id),
+        (agreement) => resolveAgreementPartnerId(agreement) === id,
       ).length,
     };
   };
@@ -194,7 +196,7 @@ export async function GET(request: NextRequest) {
         name: agreement.businessName || agreement.customerName,
         monthlyPrice: agreement.monthlyPrice,
         signedAt: agreement.signedAt,
-        partnerId: agreement.creditedSellerId ?? agreement.createdBy,
+        partnerId: resolveAgreementPartnerId(agreement),
       }))
       .sort(
         (a, b) =>

@@ -214,9 +214,10 @@ export async function createAgreementForLead(
         );
       }
 
-      // Commission is seller-only: a lead OWNED by an admin (אלעד/רועי took
-      // it themselves) produces a plain house deal — no creditedSellerId, no
-      // isSellerDeal, no first-month commission.
+      // Attribution is the LEAD OWNER, never the creator: Elad routinely
+      // types in agreements for a partner's lead, and the deal is still the
+      // partner's. A lead owned by the owner himself produces a plain house
+      // deal — partnerId null, no isSellerDeal, no first-month commission.
       const owner = lead.ownerId
         ? await transaction.user.findUnique({
             where: { id: lead.ownerId },
@@ -224,6 +225,7 @@ export async function createAgreementForLead(
           })
         : null;
       const sellerOwned = owner?.role === "SELLER";
+      const partnerId = sellerOwned ? lead.ownerId : null;
       const agreement = await transaction.agreement.create({
         data: {
           ...input.agreement,
@@ -231,7 +233,10 @@ export async function createAgreementForLead(
           idNumber: input.agreement.idNumber || null,
           clientId: input.agreement.clientId || null,
           leadId: lead.id,
-          creditedSellerId: sellerOwned ? lead.ownerId : null,
+          partnerId,
+          // Legacy mirror of partnerId for SellerCommission bookkeeping.
+          creditedSellerId: partnerId,
+          // Audit only — who typed this in. Never attribution.
           createdBy: input.actor.userId,
           isSellerDeal: sellerOwned,
           status: "DRAFT",
@@ -285,12 +290,40 @@ export async function createStandaloneAgreement(
     if (actor?.role !== "ADMIN") {
       throw new LeadDomainError("FORBIDDEN", "Admin role is required");
     }
+    // A lead-less agreement has no lead owner to attribute it to, and the
+    // creator is audit data, never attribution. But an agreement written
+    // against an EXISTING client is more of that client's business, so it
+    // inherits their partner — otherwise the client would sit under one
+    // partner while a deal on that same client sits under nobody, which is
+    // exactly the split-truth this model exists to end. No client → a
+    // genuine house deal, left unattributed.
+    const clientId = input.agreement.clientId || null;
+    const linkedClient = clientId
+      ? await transaction.client.findUnique({
+          where: { id: clientId },
+          select: { ownerId: true },
+        })
+      : null;
+    const inheritedPartnerId = linkedClient?.ownerId ?? null;
+    const partnerIsSeller = inheritedPartnerId
+      ? (
+          await transaction.user.findUnique({
+            where: { id: inheritedPartnerId },
+            select: { role: true },
+          })
+        )?.role === "SELLER"
+      : false;
+
     return transaction.agreement.create({
       data: {
         ...input.agreement,
         businessName: input.agreement.businessName || null,
         idNumber: input.agreement.idNumber || null,
-        clientId: input.agreement.clientId || null,
+        clientId,
+        partnerId: partnerIsSeller ? inheritedPartnerId : null,
+        // The legacy mirror stays null: it is derived at payment time from
+        // partnerId, and only for partners on the first-month model.
+        creditedSellerId: null,
         createdBy: input.actor.userId,
         isSellerDeal: false,
         status: "DRAFT",
@@ -584,27 +617,52 @@ export async function applyAgreementEvent(
   return result;
 }
 
+/**
+ * THE attribution precedence for a deal — the only one allowed in this
+ * codebase:
+ *   1. `partnerId`        — the explicit "which partner generated this deal".
+ *   2. `creditedSellerId` — legacy mirror, for rows written before partnerId.
+ *
+ * `createdBy` is deliberately absent. It records who TYPED the agreement in,
+ * not who brought the business; Elad creates agreements on a partner's behalf,
+ * so promoting the creator is what made 8 of 14 signed agreements contradict
+ * their own client's ownerId. Never add it back.
+ */
+export function resolveAgreementPartnerId(agreement: {
+  partnerId?: string | null;
+  creditedSellerId?: string | null;
+}): string | null {
+  return agreement.partnerId ?? agreement.creditedSellerId ?? null;
+}
+
+/**
+ * The seller whose commission bookkeeping this agreement feeds. Derived from
+ * the attribution above and mirrored into `creditedSellerId`, which
+ * SellerCommission still keys on. Returns null for a house deal — a partnerId
+ * pointing at the owner (or at any non-SELLER) must never earn a first-month
+ * seller commission.
+ */
 async function resolveCreditedSeller(
   transaction: Prisma.TransactionClient,
   agreement: {
     id: string;
+    partnerId: string | null;
     creditedSellerId: string | null;
-    createdBy: string;
-    isSellerDeal: boolean;
   },
 ): Promise<string | null> {
-  if (agreement.creditedSellerId) return agreement.creditedSellerId;
-  if (!agreement.isSellerDeal || !agreement.createdBy) return null;
-  const creator = await transaction.user.findUnique({
-    where: { id: agreement.createdBy },
+  const partnerId = resolveAgreementPartnerId(agreement);
+  if (!partnerId) return null;
+  if (agreement.creditedSellerId === partnerId) return partnerId;
+  const partner = await transaction.user.findUnique({
+    where: { id: partnerId },
     select: { role: true },
   });
-  if (creator?.role !== "SELLER") return null;
+  if (partner?.role !== "SELLER") return null;
   await transaction.agreement.update({
     where: { id: agreement.id },
-    data: { creditedSellerId: agreement.createdBy },
+    data: { creditedSellerId: partnerId },
   });
-  return agreement.createdBy;
+  return partnerId;
 }
 
 type NormalizedVerifiedPayment = {
@@ -1097,12 +1155,26 @@ export async function changeAgreementCredit(
     if (!agreement) {
       throw new LeadDomainError("NOT_FOUND", "Agreement not found");
     }
-    const before = agreement.creditedSellerId;
+    const before = resolveAgreementPartnerId(agreement);
     if (before === input.creditedSellerId) return agreement;
+    // partnerId is the attribution field, so the correction MUST write it —
+    // writing creditedSellerId alone would be silently overridden by the
+    // stale partnerId on the next read. creditedSellerId follows as the
+    // legacy mirror.
     const updated = await transaction.agreement.update({
       where: { id: agreement.id },
-      data: { creditedSellerId: input.creditedSellerId },
+      data: {
+        partnerId: input.creditedSellerId,
+        creditedSellerId: input.creditedSellerId,
+      },
     });
+    // Client.ownerId is derived from the client's FIRST agreement's partnerId.
+    // Re-derive it here, or the admin's correction would leave the client
+    // contradicting its own agreement — the exact bug this field replaced.
+    const clientOwnerChange = await syncClientOwnerFromFirstAgreement(
+      transaction,
+      agreement.clientId,
+    );
     const commission = await transaction.sellerCommission.findUnique({
       where: { agreementId: agreement.id },
     });
@@ -1123,12 +1195,47 @@ export async function changeAgreementCredit(
           agreementId: agreement.id,
           beforeSellerId: before,
           afterSellerId: input.creditedSellerId,
+          beforeClientOwnerId: clientOwnerChange?.before ?? null,
+          afterClientOwnerId: clientOwnerChange?.after ?? null,
           reason: input.reason.trim(),
         },
       });
     }
     return updated;
   });
+}
+
+/**
+ * Client.ownerId is DERIVED, never guessed: it is the partnerId of the
+ * client's first agreement (a house deal keeps the owner as the fallback,
+ * resolved at signing). Returns the change that was applied, or null when
+ * there is nothing to sync.
+ */
+async function syncClientOwnerFromFirstAgreement(
+  transaction: Prisma.TransactionClient,
+  clientId: string | null,
+): Promise<{ before: string | null; after: string | null } | null> {
+  if (!clientId) return null;
+  const client = await transaction.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, ownerId: true },
+  });
+  if (!client) return null;
+  const first = await transaction.agreement.findFirst({
+    where: { clientId },
+    orderBy: { createdAt: "asc" },
+    select: { partnerId: true, creditedSellerId: true },
+  });
+  if (!first) return null;
+  const derived = resolveAgreementPartnerId(first);
+  // A house deal (no partner) leaves the existing owner in place — dropping
+  // it to null would hide the client from every scoped query.
+  if (!derived || derived === client.ownerId) return null;
+  await transaction.client.update({
+    where: { id: clientId },
+    data: { ownerId: derived },
+  });
+  return { before: client.ownerId, after: derived };
 }
 
 export async function recordAgreementPaymentPage(
@@ -1572,11 +1679,10 @@ export async function linkHistoricalCommissionInTransaction(
       "Target agreement has no verified first payment",
     );
   }
+  // Attribution only — the creator of the row is not evidence of who earned
+  // the commission, so createdBy is no longer accepted as a match here.
   const sellerMatches =
-    agreement.creditedSellerId === commission.sellerId ||
-    (!agreement.creditedSellerId &&
-      agreement.isSellerDeal &&
-      agreement.createdBy === commission.sellerId);
+    resolveAgreementPartnerId(agreement) === commission.sellerId;
   const amountMatches =
     Number.isFinite(commission.amount) &&
     Number.isFinite(agreement.monthlyPrice) &&

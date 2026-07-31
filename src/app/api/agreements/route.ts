@@ -8,14 +8,45 @@ import {
 import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { withVat } from "@/lib/vat";
-import type { AgreementStatus, AgreementTier } from "@prisma/client";
+import type { AgreementStatus, AgreementTier, Prisma } from "@prisma/client";
 import {
   createAgreementForLead,
   createStandaloneAgreement,
 } from "@/lib/leads/agreement-lifecycle";
 import { updateLeadContactDetails } from "@/lib/leads/corrections";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
+/**
+ * Which agreements a given partner generated.
+ *
+ * `partnerId` is the single explicit answer to "who brought this deal".
+ * `creditedSellerId` is the pre-migration fallback, and is read ONLY for rows
+ * that predate the column.
+ *
+ * `createdBy` is deliberately absent. It records who typed the agreement in,
+ * not who generated it — Elad routinely creates agreements on a partner's
+ * behalf, which is exactly why 8 of 14 signed agreements had the client
+ * saying one partner and the agreement saying another. It stays an audit
+ * field and must never drive attribution or money again.
+ */
+// The explicit return type is load-bearing: spreading an un-annotated object
+// into the `where` literal skips TypeScript's excess-property check, so a
+// wrong or not-yet-migrated field name would compile clean and only surface
+// as a runtime PrismaClientValidationError on the first filtered request.
+function partnerAttributionScope(partnerId: string): Prisma.AgreementWhereInput {
+  return {
+    OR: [
+      { partnerId },
+      { partnerId: null, creditedSellerId: partnerId },
+    ],
+  };
+}
+
+// Optional `?partnerId=` narrows the list to the deals that partner generated.
+// Owner-only lens for the partners board; partners never reach this route (the
+// ADMIN guard stops them) and are scoped query-side via agreementScope instead.
+// Without the param the query is untouched.
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -27,11 +58,18 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const status = url.searchParams.get("status") as AgreementStatus | null;
     const tier = url.searchParams.get("tier") as AgreementTier | null;
+    const partnerId = url.searchParams.get("partnerId");
+
+    // Only the owner may look at the business through another person's eyes.
+    // Checked only when the param is present, so the unfiltered path keeps
+    // its original single role check and its original cost.
+    if (partnerId) await requireOwner();
 
     const agreements = await prisma.agreement.findMany({
       where: {
         ...(status ? { status } : {}),
         ...(tier ? { tier } : {}),
+        ...(partnerId ? partnerAttributionScope(partnerId) : {}),
       },
       include: { client: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
@@ -49,6 +87,10 @@ export async function GET(request: NextRequest) {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // Only reachable from the `?partnerId=` branch above — a non-owner asking
+    // for someone else's deals gets 403, not a 500.
+    const viewerError = viewerErrorResponse(error);
+    if (viewerError) return viewerError;
     console.error("Error fetching agreements:", error);
     return NextResponse.json(
       { error: "Internal server error" },

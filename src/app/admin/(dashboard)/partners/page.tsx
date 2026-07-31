@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 interface PartnerRow {
@@ -180,7 +181,14 @@ export default function PartnersOverviewPage() {
             <tbody>
               {data?.partners.map((partner) => (
                 <tr key={partner.id} className="border-t border-gray-800">
-                  <td className="p-3 font-bold text-white">{partner.name}</td>
+                  <td className="p-3">
+                    <Link
+                      href={`/admin/partners/${partner.id}`}
+                      className="font-bold text-white hover:text-pink"
+                    >
+                      {partner.name}
+                    </Link>
+                  </td>
                   <td className="p-3">
                     <span
                       className={`rounded-lg px-2 py-1 text-[11px] font-bold ${

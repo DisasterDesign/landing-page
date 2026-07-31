@@ -325,6 +325,7 @@ model User {
   leadInteractions        LeadInteraction[]
   ownedLeadFollowUps      LeadFollowUp[]        @relation("LeadFollowUpOwner")
   createdLeadFollowUps    LeadFollowUp[]        @relation("LeadFollowUpCreator")
+  partnerAgreements       Agreement[]           @relation("AgreementPartner")
   creditedAgreements      Agreement[]           @relation("AgreementCreditedSeller")
   commissions             SellerCommission[]    @relation("SellerCommissions")
   reviewedCommissionLinks SellerCommission[]    @relation("CommissionLinkReviewer")
@@ -1078,6 +1079,19 @@ model Agreement {
   leadId String?
   lead   ContactSubmission? @relation(fields: [leadId], references: [id], onDelete: Restrict)
 
+  /// THE single attribution source: which partner GENERATED this deal.
+  /// null = a house deal (the owner's own). Client.ownerId is derived from
+  /// this on signing — never independently guessed.
+  ///
+  /// `createdBy` above records who TYPED the agreement in and is AUDIT-ONLY.
+  /// It must never again drive attribution or money: Elad routinely creates
+  /// agreements on a partner's behalf, and promoting the creator to the
+  /// credited seller is exactly what made 8 of 14 signed agreements
+  /// contradict their own client's ownerId.
+  partnerId        String?
+  partner          User?             @relation("AgreementPartner", fields: [partnerId], references: [id])
+  /// Legacy mirror of partnerId, kept only because SellerCommission.sellerId
+  /// bookkeeping still reads it. Derived from partnerId — never the reverse.
   creditedSellerId String?
   creditedSeller   User?             @relation("AgreementCreditedSeller", fields: [creditedSellerId], references: [id])
   commission       SellerCommission? @relation("SellerCommissionAgreement")
@@ -1117,6 +1131,7 @@ model Agreement {
   @@index([paymentStatus])
   // Partner scoping filters agreements by who generated them; without these
   // every partner query walks the table.
+  @@index([partnerId])
   @@index([creditedSellerId])
   @@index([createdBy])
 }

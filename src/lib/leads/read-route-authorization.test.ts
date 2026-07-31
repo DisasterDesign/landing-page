@@ -37,6 +37,7 @@ type CanSellerReadAgreement = (
   sellerId: string,
   agreement: {
     leadId: string | null;
+    partnerId?: string | null;
     creditedSellerId: string | null;
     createdBy: string;
     lead: SellerAgreementLead | null;
@@ -148,10 +149,26 @@ test("seller agreement access follows the current linked lead owner without leak
           },
         },
       },
+      { partnerId: "seller-2" },
       { creditedSellerId: "seller-2" },
-      { creditedSellerId: null, createdBy: "seller-2" },
+      { partnerId: null, creditedSellerId: null, createdBy: "seller-2" },
     ],
   });
+
+  // A backfilled deal — explicitly attributed to the partner, credited
+  // mirror still empty, typed by the owner — must stay visible to its
+  // partner and invisible to everyone else.
+  const backfilled = {
+    leadId: null,
+    partnerId: "seller-2",
+    creditedSellerId: null,
+    createdBy: "owner-1",
+    lead: null,
+  };
+  assert.equal(access.canSellerReadAgreement("seller-2", backfilled), true);
+  assert.equal(access.canSellerReadAgreement("seller-1", backfilled), false);
+  // ...and the typist gets nothing from having typed it.
+  assert.equal(access.canSellerReadAgreement("owner-1", backfilled), false);
 
   const reassigned = {
     leadId: "lead-1",

@@ -31,6 +31,7 @@ interface SellerAgreementLead extends CommercialLead {
 }
 
 interface SellerReadableAgreement {
+  partnerId?: string | null;
   creditedSellerId: string | null;
   createdBy: string;
   lead: SellerAgreementLead | null;
@@ -81,6 +82,20 @@ export function sellerLeadScope(
   };
 }
 
+/**
+ * What a partner may see. Four disjoint reasons, in the order they matter:
+ *  1. they are the current owner of the linked lead (operational);
+ *  2. `partnerId` — the explicit "this partner generated the deal";
+ *  3. `creditedSellerId` — the legacy mirror, for rows written before
+ *     partnerId existed and for the commission history they still key on;
+ *  4. they typed a row that nobody is attributed to at all.
+ *
+ * Branch 4 is the ONLY surviving use of `createdBy`, it is visibility-only,
+ * and it is gated on the row having no attribution whatsoever — a deal that
+ * belongs to a partner must never be visible to whoever merely typed it in.
+ * Elad creates agreements on partners' behalf, which is exactly why crediting
+ * the typist misattributed 8 of 14 signed deals.
+ */
 export function sellerAgreementScope(
   sellerId: string,
 ): Prisma.AgreementWhereInput {
@@ -94,8 +109,9 @@ export function sellerAgreementScope(
           },
         },
       },
+      { partnerId: sellerId },
       { creditedSellerId: sellerId },
-      { creditedSellerId: null, createdBy: sellerId },
+      { partnerId: null, creditedSellerId: null, createdBy: sellerId },
     ],
   };
 }
@@ -104,10 +120,14 @@ export function canSellerReadAgreement(
   sellerId: string,
   agreement: SellerReadableAgreement,
 ): boolean {
+  const partnerId = agreement.partnerId ?? null;
   return (
     canSellerManageAgreement(sellerId, agreement) ||
+    partnerId === sellerId ||
     agreement.creditedSellerId === sellerId ||
-    (agreement.creditedSellerId === null && agreement.createdBy === sellerId)
+    (partnerId === null &&
+      agreement.creditedSellerId === null &&
+      agreement.createdBy === sellerId)
   );
 }
 

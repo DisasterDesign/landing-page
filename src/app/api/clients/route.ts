@@ -6,9 +6,18 @@ import {
   requirePersistedUserRole,
 } from "@/lib/auth/persisted-role";
 import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 
 // GET - Auth required: list all clients
-export async function GET() {
+//
+// Optional `?partnerId=` narrows the list to the clients that partner
+// generated. It is an owner-only lens — the partners board uses it to drill
+// from a payout row into the deals behind it — NOT a partner's own scoping.
+// Partners never reach this route (the ADMIN guard below already stops them);
+// their scoping is enforced query-side in the /seller surface via clientScope.
+// Without the param the query is untouched, so every existing caller behaves
+// exactly as before.
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -16,10 +25,21 @@ export async function GET() {
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
+    const partnerId = new URL(request.url).searchParams.get("partnerId");
+    // Only the owner may look at the business through another person's eyes.
+    // Checked only when the param is present, so the unfiltered path keeps
+    // its original single role check and its original cost.
+    if (partnerId) await requireOwner();
+
     const clients = await prisma.client.findMany({
       // A merged-away client is archived, not deleted — its history still
       // matters. It must not keep occupying a row in the table though.
-      where: { archivedAt: null },
+      // `ownerId` is the derived mirror of the client's first agreement's
+      // partnerId — attribution is decided on the agreement, never here.
+      where: {
+        archivedAt: null,
+        ...(partnerId ? { ownerId: partnerId } : {}),
+      },
       orderBy: { number: "asc" },
       include: {
         products: {
@@ -35,6 +55,10 @@ export async function GET() {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // Only reachable from the `?partnerId=` branch above — a non-owner asking
+    // for someone else's clients gets 403, not a 500.
+    const viewerError = viewerErrorResponse(error);
+    if (viewerError) return viewerError;
     console.error("Error fetching clients:", error);
     return NextResponse.json(
       { error: "Internal server error" },

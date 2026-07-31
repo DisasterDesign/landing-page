@@ -5,7 +5,10 @@ import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
-import { applyAgreementEventInTransaction } from "@/lib/leads/agreement-lifecycle";
+import {
+  applyAgreementEventInTransaction,
+  resolveAgreementPartnerId,
+} from "@/lib/leads/agreement-lifecycle";
 
 export const maxDuration = 30;
 
@@ -141,14 +144,17 @@ export async function POST(
         idNumber,
         phone,
         email,
-        // Partner exposure: the client belongs to whoever generated the
-        // deal. Credited seller wins; else the agreement's creator; else
-        // the owner. An auto-provisioned client must never be ownerless —
-        // an unowned row is invisible to its partner and unattributable
-        // in the split report.
+        // Partner exposure: the client belongs to the partner who GENERATED
+        // the deal — Agreement.partnerId, the single attribution source.
+        // `createdBy` is audit-only and is deliberately NOT consulted: Elad
+        // types in agreements on a partner's behalf, and trusting the creator
+        // is what made the client and its agreement disagree. A house deal
+        // (no partner) falls back to the owner, so an auto-provisioned client
+        // is never ownerless — an unowned row is invisible to its partner and
+        // unattributable in the split report.
         ownerId:
-          existing.creditedSellerId ??
-          (await resolveOwnerUserId(transaction, existing.createdBy)),
+          resolveAgreementPartnerId(existing) ??
+          (await resolveHouseOwnerUserId(transaction)),
       });
 
       const updated = await transaction.agreement.update({
@@ -241,18 +247,12 @@ export async function POST(
   }
 }
 
-/** The user who business-owns a deal created by `createdBy`: the creator
- *  itself when it is a real user, else the single isOwner user. Free-string
- *  createdBy values from legacy rows fall through to the owner. */
-async function resolveOwnerUserId(
+/** Fallback owner for a house deal (an agreement with no partnerId): the
+ *  single isOwner user. Deliberately independent of `createdBy` — who typed
+ *  the agreement in says nothing about who generated the business. */
+async function resolveHouseOwnerUserId(
   transaction: Prisma.TransactionClient,
-  createdBy: string,
 ): Promise<string | null> {
-  const creator = await transaction.user.findUnique({
-    where: { id: createdBy },
-    select: { id: true },
-  });
-  if (creator) return creator.id;
   const owner = await transaction.user.findFirst({
     where: { isOwner: true },
     select: { id: true },
