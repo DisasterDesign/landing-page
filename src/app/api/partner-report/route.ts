@@ -1,6 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { prisma } from "@/lib/prisma";
 
 const VAT_RATE = 18;
@@ -35,8 +39,16 @@ interface PartnerRow {
  */
 export async function GET(_req: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+  } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
   }
 
   const clients = await prisma.client.findMany({

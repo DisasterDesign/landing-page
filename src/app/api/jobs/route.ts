@@ -1,6 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  PersistedRoleAuthorizationError,
+  requirePersistedUserRole,
+} from "@/lib/auth/persisted-role";
 import { prisma } from "@/lib/prisma";
 import { createJobSchema } from "@/lib/validations";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
@@ -10,8 +14,16 @@ const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 // GET /api/jobs — every one-off job + per-client and per-month rollups.
 export async function GET() {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+  } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
   }
 
   const jobs = await prisma.clientJob.findMany({
@@ -109,8 +121,16 @@ export async function GET() {
 // POST /api/jobs — create a job; optionally create the client on the fly.
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+  } catch (error) {
+    if (error instanceof PersistedRoleAuthorizationError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
   }
 
   const body = await request.json().catch(() => null);
