@@ -176,6 +176,10 @@ async function syncHistoryRow(
   }
   if (result.disposition === "created") summary.chargesCreated++;
   if (result.disposition === "updated") summary.chargesUpdated++;
+  // Notifications below are best-effort. They run inside the caller's
+  // per-agreement try, so an unguarded throw here would swallow the rest of
+  // that agreement's history rows — silently degrading the very sweep this
+  // job exists to guarantee.
   if (result.reviewRequired) {
     summary.failuresNotified++;
     await notifyAllAdmins({
@@ -183,7 +187,7 @@ async function syncHistoryRow(
       title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
       body: `עסקה ${dealId} אומתה מול Cardcom, אך מקור רישום ההכנסה ההיסטורי אינו חד-משמעי.`,
       url: "/admin/finance/debtors",
-    });
+    }).catch((e) => console.error("[cardcom-reconcile] review notify failed:", e));
     return;
   }
   if (
@@ -197,20 +201,20 @@ async function syncHistoryRow(
       title: `🚨 חיוב שלא הצליח התגלה בקארדקום — ${customerName}`,
       body: `סטטוס: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ₪${result.amount} (התגלה ב-reconciliation, לא הגיע webhook)`,
       url: "/admin/finance/debtors",
-    });
+    }).catch((e) => console.error("[cardcom-reconcile] failure notify failed:", e));
   } else if (result.revenueApplied) {
     await notifyAllAdmins({
       type: "AGREEMENT_SIGNED",
       title: `💰 חיוב חודשי התגלה בסנכרון — ${result.customerName}`,
       body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
       url: "/admin/finance",
-    });
+    }).catch((e) => console.error("[cardcom-reconcile] success notify failed:", e));
     await sendPaymentReceivedEmail({
       customerName: result.customerName,
       amount: result.amount,
       invoiceNumber: result.invoiceNumber ?? undefined,
       agreementTier: result.tier,
       isRecurring: true,
-    });
+    }).catch((e) => console.error("[cardcom-reconcile] success email failed:", e));
   }
 }

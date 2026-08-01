@@ -95,13 +95,17 @@ export async function POST(req: NextRequest) {
         rawPayload: safeRecurringAuditPayload(payload),
       });
 
+      // The charge is already recorded above. Everything below is
+      // best-effort notification, so it must never throw into the catch —
+      // that would answer Cardcom with 503 + retry for a charge that
+      // actually succeeded. Same `.catch()` discipline as payments/webhook.
       if (result.reviewRequired) {
         await notifyAllAdmins({
           type: "AGREEMENT_SIGNED",
           title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
           body: `עסקה ${dealId} נקלטה, אך לא ניתן להוכיח אם ההכנסה ההיסטורית כבר נרשמה.`,
           url: "/admin/finance/debtors",
-        });
+        }).catch((e) => console.error("[recurring-webhook] review notify failed:", e));
       } else if (
         !result.success &&
         (result.disposition === "created" ||
@@ -112,20 +116,20 @@ export async function POST(req: NextRequest) {
           title: `🚨 חיוב חודשי נכשל — ${result.customerName}`,
           body: `סטטוס: ${status ?? "?"} · קוד דחייה ${num(payload.ResposeCode) ?? num(payload.ResponseCode) ?? "?"} · ניסיון ${num(payload.BillingAttempts) ?? "?"} · ₪${result.amount}`,
           url: "/admin/finance/debtors",
-        });
+        }).catch((e) => console.error("[recurring-webhook] failure notify failed:", e));
       } else if (result.revenueApplied) {
         await notifyAllAdmins({
           type: "AGREEMENT_SIGNED",
           title: `💰 חיוב חודשי התקבל — ${result.customerName}`,
           body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
-        });
+        }).catch((e) => console.error("[recurring-webhook] success notify failed:", e));
         await sendPaymentReceivedEmail({
           customerName: result.customerName,
           amount: result.amount,
           invoiceNumber: result.invoiceNumber ?? undefined,
           agreementTier: result.tier,
           isRecurring: true,
-        });
+        }).catch((e) => console.error("[recurring-webhook] success email failed:", e));
       }
       return NextResponse.json({ ok: true });
     } catch (error) {
