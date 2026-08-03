@@ -92,10 +92,10 @@ export default function AccessibilityPage() {
                   <li>
                     <strong className="text-black">דוא&quot;ל:</strong>{" "}
                     <a
-                      href="mailto:accessibility@fuzionwebz.com"
+                      href="mailto:info@fuzionwebz.com"
                       className="text-pink hover:text-cyan transition-colors"
                     >
-                      accessibility@fuzionwebz.com
+                      info@fuzionwebz.com
                     </a>
                   </li>
                   <li>

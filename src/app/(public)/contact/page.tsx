@@ -23,8 +23,8 @@ const CONTACT_INFO = [
   {
     title: "אימייל",
     method: "email",
-    value: "hello@fuzionwebz.com",
-    href: "mailto:hello@fuzionwebz.com",
+    value: "info@fuzionwebz.com",
+    href: "mailto:info@fuzionwebz.com",
     icon: (
       <svg viewBox="0 0 24 24" className="w-8 h-8 fill-none stroke-current stroke-2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="4" width="20" height="16" rx="2" />

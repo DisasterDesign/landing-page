@@ -140,10 +140,10 @@ export default function PrivacyPage() {
                   לכל שאלה או בקשה בנוגע למדיניות הפרטיות, ניתן לפנות אלינו
                   בכתובת:{" "}
                   <a
-                    href="mailto:hello@fuzionwebz.com"
+                    href="mailto:info@fuzionwebz.com"
                     className="text-pink hover:text-cyan transition-colors"
                   >
-                    hello@fuzionwebz.com
+                    info@fuzionwebz.com
                   </a>
                 </p>
               </div>

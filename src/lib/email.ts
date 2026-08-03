@@ -40,7 +40,7 @@ export async function sendPaymentReceivedEmail(params: PaymentEmailParams): Prom
 
   const resend = new Resend(apiKey);
   await resend.emails.send({
-    from: "Fuzion Webz <notifications@fuzionwebz.com>",
+    from: "Fuzion Webz <info@fuzionwebz.com>",
     to: ADMIN_EMAILS,
     subject: `💰 ${subjectPrefix} התקבל — ${params.customerName}`,
     html: `

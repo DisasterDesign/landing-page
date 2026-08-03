@@ -130,10 +130,10 @@ export default function TermsPage() {
                   לכל שאלה או בירור בנוגע לתנאי שימוש אלה, ניתן ליצור איתנו
                   קשר בכתובת:{" "}
                   <a
-                    href="mailto:hello@fuzionwebz.com"
+                    href="mailto:info@fuzionwebz.com"
                     className="text-pink hover:text-cyan transition-colors"
                   >
-                    hello@fuzionwebz.com
+                    info@fuzionwebz.com
                   </a>
                 </p>
               </div>
