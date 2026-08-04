@@ -33,6 +33,9 @@ export async function GET(
             customerName: true,
             signedAt: true,
             createdAt: true,
+            // The card links to /agreement/[token] and its PDF. Without the
+            // token both hrefs render /agreement/undefined.
+            signToken: true,
           },
         },
         clientNotes: {

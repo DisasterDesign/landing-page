@@ -75,14 +75,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    // The signing token is a bearer credential for /agreement/[token] —
-    // it must never ride along in the listing.
-    const data = agreements.map(({ signToken: _signToken, ...rest }) => {
-      void _signToken;
-      return rest;
-    });
-
-    return NextResponse.json({ data });
+    // signToken is a bearer credential for /agreement/[token], and it ships
+    // here on purpose: this route is ADMIN-only and the admin is precisely
+    // the person who sends signing links. Stripping it (fde5baf) left the
+    // "copy link" button building /agreement/undefined, which failed silently
+    // for days. The rule that actually holds: the token may ride on
+    // admin/owner-scoped responses, never on public or unscoped ones.
+    return NextResponse.json({ data: agreements });
   } catch (error) {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
