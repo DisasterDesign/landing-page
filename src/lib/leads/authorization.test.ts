@@ -8,9 +8,9 @@ import {
   sellerLeadScope,
 } from "./authorization";
 
-test("seller scope includes only owned or explicitly eligible canonical leads", () => {
+test("seller scope covers owned leads plus the whole unclaimed pool", () => {
   assert.deepEqual(sellerLeadScope("seller-1"), {
-    OR: [{ ownerId: "seller-1" }, { ownerId: null, eligibleSellerId: "seller-1" }],
+    OR: [{ ownerId: "seller-1" }, { ownerId: null }],
     migrationReviewRequired: false,
   });
 });

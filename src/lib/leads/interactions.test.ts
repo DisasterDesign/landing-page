@@ -221,11 +221,11 @@ function fakeInteractionStore(options: {
         where: Record<string, unknown>;
         data: Record<string, unknown>;
       }) {
+        // Mirrors the real guard: unclaimed and in the expected stage.
+        // Eligibility is not part of it — the unclaimed pool is open.
         if (
           where.ownerId === null &&
-          (lead.ownerId !== null ||
-            lead.eligibleSellerId !== where.eligibleSellerId ||
-            lead.stage !== where.stage)
+          (lead.ownerId !== null || lead.stage !== where.stage)
         ) {
           return { count: 0 };
         }

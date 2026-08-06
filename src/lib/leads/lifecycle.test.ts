@@ -125,11 +125,12 @@ function fakeLifecycleStore(
         where: Record<string, unknown>;
         data: Record<string, unknown>;
       }) {
+        // Mirrors the real guard: an unclaimed lead in the expected stage.
+        // Eligibility is deliberately absent — the pool is open to every
+        // partner, and only `ownerId` decides who wins the race.
         if (
           where.ownerId === null &&
-          (lead.ownerId !== null ||
-            lead.eligibleSellerId !== where.eligibleSellerId ||
-            lead.stage !== where.stage)
+          (lead.ownerId !== null || lead.stage !== where.stage)
         ) {
           return { count: 0 };
         }
@@ -289,11 +290,28 @@ test("claim succeeds once and is idempotent for the same owner", async () => {
   assert.equal(store.lead.stage, "PREPARING");
 });
 
-test("ineligible or second seller loses the claim race", async () => {
+test("a partner the lead was not routed to may still claim it", async () => {
+  // The pool is open: routing suggests an owner, it does not reserve one.
+  // Before this, every unclaimed lead pointed at a single seller and a new
+  // partner joining the team saw nothing at all.
+  const store = fakeLifecycleStore(makeLead({ eligibleSellerId: "seller-1" }));
+  const claimed = await claimLead(
+    { leadId: "lead-1", sellerId: "seller-2" },
+    { store },
+  );
+  assert.equal(claimed.ownerId, "seller-2");
+});
+
+test("the second partner to claim an owned lead loses the race", async () => {
   const store = fakeLifecycleStore(makeLead());
+  assert.equal(
+    (await claimLead({ leadId: "lead-1", sellerId: "seller-1" }, { store }))
+      .ownerId,
+    "seller-1",
+  );
   await assert.rejects(
     claimLead({ leadId: "lead-1", sellerId: "seller-2" }, { store }),
-    /not eligible|already claimed/i,
+    /already claimed/i,
   );
 });
 

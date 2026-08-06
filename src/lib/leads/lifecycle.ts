@@ -252,11 +252,11 @@ export async function claimLeadInTransaction(
     throw new LeadDomainError("CONFLICT", "Terminal lead cannot be claimed");
   }
   if (existing.ownerId === input.sellerId) return existing;
-  if (existing.ownerId || existing.eligibleSellerId !== input.sellerId) {
-    throw new LeadDomainError(
-      "CONFLICT",
-      "Lead is not eligible or was already claimed",
-    );
+  // Open pool: any partner may claim any unclaimed lead. Only an existing
+  // owner blocks the claim — routing (eligibleSellerId) is a suggestion, not
+  // a lock. See sellerLeadScope.
+  if (existing.ownerId) {
+    throw new LeadDomainError("CONFLICT", "Lead was already claimed");
   }
 
   const fromStage = existing.stage;
@@ -272,9 +272,11 @@ export async function claimLeadInTransaction(
   const legacyStateHash = legacyHashForLead(existing, [input.sellerId], { status });
   const guarded = await transaction.contactSubmission.updateMany({
     where: {
+      // `ownerId: null` is what makes two partners tapping "take" at the same
+      // moment safe: the second update matches nothing and falls into the
+      // raced-recheck below.
       id: input.leadId,
       ownerId: null,
-      eligibleSellerId: input.sellerId,
       migrationReviewRequired: false,
       doNotContactAt: null,
       stage: fromStage,

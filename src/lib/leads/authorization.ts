@@ -73,11 +73,23 @@ export async function requirePersistedLeadReadRole(
   return persisted.role;
 }
 
+/**
+ * What a partner may SEE: their own leads, plus the open pool.
+ *
+ * An unclaimed lead is visible to every partner so anyone can pick it up.
+ * `eligibleSellerId` used to gate this, which made the pool private to one
+ * routed seller — every unclaimed lead pointed at Degaron, so Elbaz joined
+ * and saw an empty screen. Routing is still recorded (it is the "suggested
+ * partner" signal in the timeline), it just no longer decides visibility.
+ *
+ * Seeing is not touching: `assertSellerOwnsLead` still requires ownership for
+ * every mutation, and claiming is the only way to acquire it.
+ */
 export function sellerLeadScope(
   sellerId: string,
 ): Prisma.ContactSubmissionWhereInput {
   return {
-    OR: [{ ownerId: sellerId }, { ownerId: null, eligibleSellerId: sellerId }],
+    OR: [{ ownerId: sellerId }, { ownerId: null }],
     migrationReviewRequired: false,
   };
 }
@@ -167,10 +179,9 @@ export function canSellerReadLead(
   ) {
     return false;
   }
-  return (
-    lead.ownerId === sellerId ||
-    (lead.ownerId === null && lead.eligibleSellerId === sellerId)
-  );
+  // Must mirror sellerLeadScope exactly. If the two drift, a partner sees a
+  // lead in the list and gets a 403 opening it, or the reverse.
+  return lead.ownerId === sellerId || lead.ownerId === null;
 }
 
 export function assertSellerOwnsLead(
