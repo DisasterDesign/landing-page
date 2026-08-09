@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { matchLegacySlug } from "@/lib/blog/legacy-slug";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import BlogPostClient from "./BlogPostClient";
 
@@ -23,13 +24,28 @@ async function getPost(slug: string) {
  * When that hits, we 308-permanent-redirect to the canonical slug — preserves
  * the rankings Google built up against the URL-encoded Hebrew slugs that the
  * old generateSlug produced.
+ *
+ * `oldSlug` only remembers one generation, and there were three: the second
+ * migration overwrote the generation-1 slugs that Google actually indexed.
+ * So when the column misses, fall through to matchLegacySlug, which derives
+ * the current slug from the shape of the legacy URL instead of from stored
+ * history. Both queries run only on the miss path, never on a live URL.
  */
 async function findRedirectTarget(slug: string): Promise<string | null> {
   const stale = await prisma.blogPost.findFirst({
     where: { oldSlug: slug, published: true },
     select: { slug: true },
   });
-  return stale?.slug ?? null;
+  if (stale) return stale.slug;
+
+  const published = await prisma.blogPost.findMany({
+    where: { published: true },
+    select: { slug: true },
+  });
+  return matchLegacySlug(
+    slug,
+    published.map((p) => p.slug),
+  );
 }
 
 async function getAdjacentPosts(publishedAt: Date) {
