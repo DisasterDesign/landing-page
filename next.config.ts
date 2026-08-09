@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildCsp } from "./src/lib/security/csp";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -36,22 +37,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-DNS-Prefetch-Control", value: "on" },
           { key: "X-Robots-Tag", value: "index, follow" },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com",
-              // Google Maps embed on /contact needs its frame origin allowed.
-              "frame-src 'self' https://www.google.com",
-              "media-src 'self' https://auxio.b-cdn.net",
-              "object-src 'none'",
-              "base-uri 'self'",
-            ].join("; "),
-          },
+          { key: "Content-Security-Policy", value: buildCsp() },
         ],
       },
       {
