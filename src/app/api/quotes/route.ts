@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOneTimeQuoteSchema } from "@/lib/validations";
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
-import { quoteJobInput, scopeToHtml } from "@/lib/agreements/one-time";
+import { quoteJobInput, quoteBodyHtml } from "@/lib/agreements/one-time";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
 import { createStandaloneAgreement } from "@/lib/leads/agreement-lifecycle";
-import { AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
+import {
+  renderAgreement,
+  AGREEMENT_DOCUMENT_VERSION,
+} from "@/lib/agreement-templates";
 
 /**
  * One-time project quotes — Agreements with `kind = ONE_TIME`.
@@ -93,6 +96,32 @@ export async function POST(request: NextRequest) {
     }
     const q = parsed.data;
 
+    // The sign page renders `agreement.content`, and renderAgreement only runs
+    // again at signing — so a draft created with an empty content field shows
+    // the customer a blank white document. Render it here, exactly as the
+    // subscription route does at creation time.
+    const scopeHtml = quoteBodyHtml({
+      scope: q.scopeOfWork,
+      oneTimeFee: q.oneTimeFee,
+      vatExempt: q.vatExempt,
+      locale: q.locale,
+    });
+    const content = renderAgreement(null, {
+      customerName: q.customerName,
+      businessName: q.businessName,
+      idNumber: q.idNumber,
+      phone: q.phone,
+      email: q.email,
+      monthlyPrice: q.monthlyPrice,
+      oneTimeFee: q.oneTimeFee,
+      tier: null,
+      additionalServices: [],
+      date: new Date().toLocaleDateString(q.locale === "en" ? "en-GB" : "he-IL"),
+      locale: q.locale,
+      vatExempt: q.vatExempt,
+      customBodyHtml: scopeHtml,
+    });
+
     // Delegated rather than written here on purpose: agreement creation lives
     // in agreement-lifecycle.ts so every agreement gets its lifecycle event,
     // and writer-boundary.test.ts enforces it. No clientId is passed, so the
@@ -117,8 +146,8 @@ export async function POST(request: NextRequest) {
         vatExempt: q.vatExempt,
         // The scope of work IS the legal body — same mechanism the Ormat
         // proposal used. renderAgreement slots it in instead of a tier template.
-        customBodyHtml: scopeToHtml(q.scopeOfWork),
-        content: "",
+        customBodyHtml: scopeHtml,
+        content,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
       },
     });

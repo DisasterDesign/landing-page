@@ -120,3 +120,50 @@ export function scopeToHtml(scope: string): string {
     .map((para) => `<p>${para.replace(/\n/g, "<br/>")}</p>`)
     .join("\n");
 }
+
+/**
+ * The legal body of a quote: the scope of work followed by a price box.
+ *
+ * The price box is not decoration. renderCustomAgreement renders the parties,
+ * the supplied body and the signature block — it never renders an amount. The
+ * Ormat proposal got away with that because its price was hand-written into
+ * its body; a quote's body is free text the owner types, so without this the
+ * customer could sign a document that never states what they are paying.
+ *
+ * Shows the gross total too: the studio quotes ex-VAT, but the signer needs to
+ * see what actually leaves their card.
+ */
+export function quoteBodyHtml(input: {
+  scope: string;
+  oneTimeFee: number;
+  vatExempt: boolean;
+  locale: "he" | "en";
+}): string {
+  const he = input.locale !== "en";
+  const money = (n: number) =>
+    `₪${n.toLocaleString(he ? "he-IL" : "en-GB", { maximumFractionDigits: 2 })}`;
+  const vat = input.vatExempt ? 0 : input.oneTimeFee * 0.18;
+  const gross = input.oneTimeFee + vat;
+
+  const rows = [
+    `<tr><th>${he ? "סכום העבודה" : "Project fee"}</th><td>${money(input.oneTimeFee)}</td></tr>`,
+    input.vatExempt
+      ? ""
+      : `<tr><th>${he ? 'מע"מ 18%' : "VAT 18%"}</th><td>${money(vat)}</td></tr>`,
+    `<tr><th>${he ? "סה״כ לתשלום" : "Total due"}</th><td><strong>${money(gross)}</strong></td></tr>`,
+  ]
+    .filter(Boolean)
+    .join("\n  ");
+
+  const terms = he
+    ? "התשלום הוא חד-פעמי. אין מנוי חודשי ואין חיוב חוזר."
+    : "This is a one-off payment. No subscription and no recurring charge.";
+
+  return `${scopeToHtml(input.scope)}
+
+<h2>${he ? "התמורה" : "Payment"}</h2>
+<table class="parties">
+  ${rows}
+</table>
+<p>${terms}</p>`;
+}
