@@ -180,6 +180,16 @@ export interface ValidatedAgreementDraft {
   vatExempt: boolean;
   documentVersion: number;
   clientId?: string | null;
+  /**
+   * ONE_TIME marks a quote for a one-off project: it never provisions a
+   * Client, never registers a recurring order, and never reaches MRR.
+   * Omitted means SUBSCRIPTION, so every existing caller is unaffected.
+   */
+  kind?: "SUBSCRIPTION" | "ONE_TIME";
+  /** Row label in /admin/jobs. Required by validation when kind is ONE_TIME. */
+  projectTitle?: string | null;
+  /** The scope of work, already escaped — becomes the signed legal body. */
+  customBodyHtml?: string | null;
 }
 
 export interface CreateAgreementForLeadInput {

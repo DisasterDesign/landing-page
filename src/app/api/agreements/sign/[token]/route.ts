@@ -5,6 +5,7 @@ import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
+import { shouldProvisionClient } from "@/lib/agreements/one-time";
 import {
   applyAgreementEventInTransaction,
   resolveAgreementPartnerId,
@@ -137,7 +138,13 @@ export async function POST(
         customBodyHtml: existing.customBodyHtml ?? undefined,
       });
 
-      const linkedClientId = await ensureClientForAgreement(transaction, {
+      // A ONE_TIME quote never provisions a Client. The buyer paid once for a
+      // one-off project and must not land in the client list, the client
+      // count, or MRR — the whole point of the kind discriminator. Spec:
+      // docs/superpowers/specs/2026-08-10-one-time-project-quotes-design.md
+      const linkedClientId = !shouldProvisionClient(existing)
+        ? null
+        : await ensureClientForAgreement(transaction, {
         currentClientId: existing.clientId,
         customerName,
         businessName,
@@ -155,7 +162,7 @@ export async function POST(
         ownerId:
           resolveAgreementPartnerId(existing) ??
           (await resolveHouseOwnerUserId(transaction)),
-      });
+          });
 
       const updated = await transaction.agreement.update({
         where: { id: existing.id },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import QuotesSection from "@/components/admin/QuotesSection";
 
 interface JobRow {
   id: string;
@@ -256,6 +257,9 @@ export default function JobsPage() {
         <Card label="רווח נטו החודש (עבודות)" value={t?.receivedThisMonthNet} highlight />
         <Card label="עבודות פתוחות" value={t?.openCount} int sub={t?.overdueCount ? `${t.overdueCount} באיחור` : undefined} />
       </div>
+
+      {/* One-time project quotes — owner-only; renders nothing for partners. */}
+      <QuotesSection />
 
       {/* Add form */}
       {showAdd && (

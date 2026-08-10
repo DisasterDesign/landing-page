@@ -92,6 +92,37 @@ export const createAgreementSchema = z.object({
   vatExempt: z.boolean().optional().default(false),
 });
 
+/**
+ * A quote for a one-off project. Deliberately a separate schema rather than
+ * loosening createAgreementSchema: that one guarantees `monthlyPrice > 0` for
+ * every subscription, and a quote needs exactly the opposite. Keeping them
+ * apart means neither can drift into the other.
+ *
+ * kind/monthlyPrice/tier are outputs, not inputs — the caller cannot set them,
+ * so no request body can turn a quote into a recurring contract.
+ */
+export const createOneTimeQuoteSchema = z
+  .object({
+    projectTitle: z.string().trim().min(1, "כותרת הפרויקט חובה").max(160),
+    scopeOfWork: z.string().trim().min(1, "תיאור העבודה חובה").max(20000),
+    oneTimeFee: z.number().positive("הסכום חייב להיות חיובי"),
+    customerName: z.string().min(1, "שם חובה"),
+    businessName: z.string().optional(),
+    idNumber: z.string().optional(),
+    phone: z.string().min(9, "טלפון לא תקין"),
+    email: z.string().email("אימייל לא תקין"),
+    locale: agreementLocaleEnum.optional().default("he"),
+    vatExempt: z.boolean().optional().default(false),
+  })
+  .transform((v) => ({
+    ...v,
+    kind: "ONE_TIME" as const,
+    // No recurring component — this is what keeps BillGold out of the picture
+    // and makes the Cardcom charge equal the project fee exactly.
+    monthlyPrice: 0,
+    tier: null,
+  }));
+
 // ==================
 // COLD PROSPECTING
 // ==================

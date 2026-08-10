@@ -67,6 +67,10 @@ export async function GET(request: NextRequest) {
 
     const agreements = await prisma.agreement.findMany({
       where: {
+        // Subscriptions only. One-off quotes are agreements too, but they
+        // belong to /admin/jobs — mixing them in here would put a ₪3,500 logo
+        // job next to the monthly contracts and break every count on the page.
+        kind: "SUBSCRIPTION",
         ...(status ? { status } : {}),
         ...(tier ? { tier } : {}),
         ...(partnerId ? partnerAttributionScope(partnerId) : {}),

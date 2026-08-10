@@ -58,6 +58,14 @@ enum AgreementTier {
   PREMIUM
 }
 
+/// SUBSCRIPTION is the monthly contract. ONE_TIME is a quote for a one-off
+/// project — it never provisions a Client, never creates a BillGold recurring
+/// order, and never touches MRR. See docs/superpowers/specs/2026-08-10-one-time-project-quotes-design.md
+enum AgreementKind {
+  SUBSCRIPTION
+  ONE_TIME
+}
+
 enum AgreementStatus {
   DRAFT
   SENT
@@ -1040,6 +1048,11 @@ model ClientNote {
 model Agreement {
   id                 String          @id @default(cuid())
   tier               AgreementTier? // base tier (required for new agreements; nullable for legacy rows)
+  kind               AgreementKind  @default(SUBSCRIPTION)
+  /// What the one-off job is called in /admin/jobs. Nullable in the schema
+  /// only because 21 historical rows predate it; required by validation
+  /// whenever kind = ONE_TIME.
+  projectTitle       String?
   additionalServices String[]        @default([]) // extra service clauses appended to the tier base list
   monthlyPrice       Float // editable by creator; defaults to tier price when tier is picked
   oneTimeFee         Float? // optional setup fee

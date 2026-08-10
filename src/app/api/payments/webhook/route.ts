@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { shouldCreateRecurringOrder } from "@/lib/agreements/one-time";
 import {
   isWebhookSuccess,
   extractWebhookAmount,
@@ -141,6 +142,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     select: {
       id: true,
       tier: true,
+      kind: true,
       paymentStatus: true,
       customerName: true,
       monthlyPrice: true,
@@ -284,10 +286,17 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   // Register the monthly recurring schedule with Cardcom via the
   // Name-to-Value API (RecurringPayment.aspx) using the LowProfile GUID.
   // after() runs the call after the 200 response is sent back to Cardcom.
+  // The three pre-existing conditions plus an explicit ONE_TIME check. A quote
+  // already carries monthlyPrice = 0 and so was safe, but this is the one
+  // failure that costs a customer real money — being billed every month for a
+  // project they bought once — so it is stated rather than implied.
   if (
-    lowProfileId &&
-    agreement.monthlyPrice > 0 &&
-    !agreement.cardcomRecurringId
+    shouldCreateRecurringOrder({
+      kind: agreement.kind,
+      monthlyPrice: agreement.monthlyPrice,
+      cardcomRecurringId: agreement.cardcomRecurringId,
+      lowProfileId: lowProfileId ?? null,
+    })
   ) {
     after(async () => {
       try {
