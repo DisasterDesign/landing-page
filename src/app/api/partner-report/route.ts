@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { bookOf, splitByBook } from "@/lib/clients/books";
 import { prisma } from "@/lib/prisma";
 
 const VAT_RATE = 18;
@@ -57,6 +58,7 @@ export async function GET(_req: NextRequest) {
       monthlyAmount: true,
       paymentDate: true,
       vatExempt: true,
+      partner: true,
       owner: { select: { revenueSharePct: true } },
     },
     orderBy: { name: "asc" },
@@ -82,6 +84,7 @@ export async function GET(_req: NextRequest) {
       profit,
       partnerShare,
       paymentDate: c.paymentDate ? c.paymentDate.toISOString() : null,
+      book: bookOf(c),
     };
   });
 
@@ -107,11 +110,25 @@ export async function GET(_req: NextRequest) {
     partnerShare: n > 0 ? totals.partnerShare / n : 0,
   };
 
+  // Two books in one report: `totals` stays the combined figure every existing
+  // caller already reads, and `books` lets the dashboard show the partnership
+  // separately — the 100-client goal is a Fuzion goal and must not be inflated
+  // by Elad's private retainers.
+  const books = splitByBook(
+    clients.map((c, i) => ({
+      partner: c.partner,
+      amount: rows[i].amount,
+      profit: rows[i].profit,
+      partnerShare: rows[i].partnerShare,
+    })),
+  );
+
   return NextResponse.json({
     snapshotAt: new Date().toISOString(),
     rows,
     totals,
     averages,
     count: rows.length,
+    books,
   });
 }

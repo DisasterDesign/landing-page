@@ -20,8 +20,12 @@ interface MyTask {
 }
 
 interface BusinessKpis {
-  activeClients: number;
-  mrr: number; // monthly recurring (gross), from partner-report totals.amount
+  /** Fuzion only. The 100-client goal is a partnership goal — counting Elad's
+   *  private retainers here would make the progress bar describe nothing. */
+  fuzionClients: number;
+  personalClients: number;
+  mrr: number; // combined gross, both books
+  personalMrr: number;
   monthlyProfit: number;
   partnerShare: number;
   openLeads: number;
@@ -106,8 +110,10 @@ export default function AdminDashboardPage() {
         const sellers = sellersRes.ok ? await sellersRes.json() : null;
         if (report) {
           setKpis({
-            activeClients: report.count ?? 0,
+            fuzionClients: report.books?.fuzion?.count ?? report.count ?? 0,
+            personalClients: report.books?.personal?.count ?? 0,
             mrr: report.totals?.amount ?? 0,
+            personalMrr: report.books?.personal?.amount ?? 0,
             monthlyProfit: report.totals?.profit ?? 0,
             partnerShare: report.totals?.partnerShare ?? 0,
             openLeads: leads?.stats?.openCount ?? 0,
@@ -188,18 +194,18 @@ export default function AdminDashboardPage() {
             <div>
               <div className="text-xs text-gray-400 mb-1">לקוחות פעילים מול היעד</div>
               <div className="text-3xl font-extrabold">
-                {fmt(kpis.activeClients)}
+                {fmt(kpis.fuzionClients)}
                 <span className="text-lg text-gray-500"> / {CLIENT_GOAL}</span>
               </div>
             </div>
             <div className="text-sm text-gray-400">
-              {Math.round((kpis.activeClients / CLIENT_GOAL) * 100)}% ליעד אוגוסט 2026
+              {Math.round((kpis.fuzionClients / CLIENT_GOAL) * 100)}% ליעד אוגוסט 2026
             </div>
           </div>
           <div className="h-2.5 rounded-full bg-gray-800 overflow-hidden">
             <div
               className="h-full bg-gradient-to-l from-pink to-cyan rounded-full transition-all"
-              style={{ width: `${Math.min(100, (kpis.activeClients / CLIENT_GOAL) * 100)}%` }}
+              style={{ width: `${Math.min(100, (kpis.fuzionClients / CLIENT_GOAL) * 100)}%` }}
             />
           </div>
         </div>
@@ -208,10 +214,19 @@ export default function AdminDashboardPage() {
       {/* Business KPI row */}
       {kpis && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiCard label="MRR (חודשי)" value={`₪${fmt(kpis.mrr)}`} accent />
+          <KpiCard
+            label="MRR (חודשי)"
+            value={`₪${fmt(kpis.mrr)}`}
+            accent
+            sub={
+              kpis.personalMrr > 0
+                ? `₪${fmt(kpis.mrr - kpis.personalMrr)} פיוז'ן · ₪${fmt(kpis.personalMrr)} אישי`
+                : undefined
+            }
+          />
           <KpiCard label="רווח חודשי" value={`₪${fmt(kpis.monthlyProfit)}`} />
           <KpiCard label="יוצא לשותפים" value={`₪${fmt(kpis.partnerShare)}`} href="/admin/partners" />
-          <KpiCard label="לקוחות פעילים" value={fmt(kpis.activeClients)} />
+          <KpiCard label="לקוחות פעילים" value={fmt(kpis.fuzionClients)} />
           <KpiCard label="לידים פתוחים" value={fmt(kpis.openLeads)} href="/admin/leads" />
           <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/partners" />
         </div>
@@ -322,11 +337,14 @@ function KpiCard({
   value,
   accent,
   href,
+  sub,
 }: {
   label: string;
   value: string;
   accent?: boolean;
   href?: string;
+  /** Second line — used to show the Fuzion / personal split under a combined figure. */
+  sub?: string;
 }) {
   const inner = (
     <div
@@ -338,6 +356,7 @@ function KpiCard({
       <div className={`text-xl font-bold font-mono ${accent ? "text-pink" : "text-gray-100"}`}>
         {value}
       </div>
+      {sub && <div className="text-[10px] text-gray-500 mt-1 truncate">{sub}</div>}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
