@@ -903,10 +903,14 @@ model Client {
   archivedAt    DateTime?
   startDate     DateTime?
   paymentDate   DateTime?
-  /// Cardcom's recurring-order AccountId. The only stable join key back to the
+  /// Cardcom recurring-order AccountIds. The only stable join key back to the
   /// charge stream — name, phone and ת.ז are all sparse or ambiguous, which is
   /// what made the 2026-08 personal-book reconciliation a manual pass.
-  cardcomAccountId Int?   @unique
+  ///
+  /// A LIST, not one id: מקורות is four standing orders (235 + 70 + 59 + 47 =
+  /// 411) and יוני is two. The single-id version shipped first and could not
+  /// represent either of them.
+  cardcomAccountIds Int[]
   /// Which partner generated this client — the exposure key of the partner
   /// model. null only until backfill; a client Elad brings alone carries
   /// Elad's id (which is what hides it from partners). Distinct from

@@ -68,12 +68,12 @@ async function main() {
     const clash = await prisma.client.findFirst({
       where: {
         OR: [
-          { cardcomAccountId: r.cardcomAccountId },
+          { cardcomAccountIds: { has: r.cardcomAccountId } },
           { name: r.name },
           ...(r.idNumber ? [{ idNumber: r.idNumber }] : []),
         ],
       },
-      select: { id: true, name: true, cardcomAccountId: true },
+      select: { id: true, name: true, cardcomAccountIds: true },
     });
 
     if (clash) {
@@ -103,7 +103,7 @@ async function main() {
           status: "בוצע",
           monthlyAmount: monthlyIls,
           idNumber: r.idNumber,
-          cardcomAccountId: r.cardcomAccountId,
+          cardcomAccountIds: [r.cardcomAccountId],
           // The book. Keeps it out of the Fuzion client goal.
           partner: PERSONAL_BOOK,
           // Ownership is what actually zeroes the partner share: Elad's

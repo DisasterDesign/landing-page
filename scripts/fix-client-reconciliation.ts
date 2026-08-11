@@ -50,7 +50,7 @@ async function main() {
   // 2. אמיר חן — a personal retainer, distinct from אמיר חירש who was already
   //    imported. Different person, different Cardcom account, same first name.
   const existing = await prisma.client.findFirst({
-    where: { OR: [{ cardcomAccountId: 1015 }, { idNumber: "040012379" }, { name: "אמיר חן" }] },
+    where: { OR: [{ cardcomAccountIds: { has: 1015 } }, { idNumber: "040012379" }, { name: "אמיר חן" }] },
     select: { id: true, name: true },
   });
   if (existing) {
@@ -64,7 +64,7 @@ async function main() {
           status: "בוצע",
           monthlyAmount: 118,
           idNumber: "040012379",
-          cardcomAccountId: 1015,
+          cardcomAccountIds: [1015],
           partner: PERSONAL_BOOK,
           ownerId: owner.id,
           notes: "ריטיינר אישי מלפני השותפות. Cardcom AccountId 1015.",

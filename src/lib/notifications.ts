@@ -198,6 +198,29 @@ export async function notifyAllAdmins(
  * seller-scoped `url` (e.g. /seller/leads) — the default admin URLs are
  * unreachable for the SELLER role.
  */
+/**
+ * The business owner only — `isOwner`, not role ADMIN.
+ *
+ * For findings that expose the whole book: an unlinked Cardcom order could
+ * belong to either the partnership or Elad's personal retainers, and which one
+ * is exactly what is unknown at that moment. notifyAllAdmins would widen that
+ * to anyone later given the ADMIN role. See src/lib/auth/viewer.ts.
+ */
+export async function notifyOwner(
+  input: Omit<CreateNotificationInput, "recipientId">,
+  actorId?: string,
+): Promise<void> {
+  const owners = await prisma.user.findMany({
+    where: { isOwner: true },
+    select: { id: true },
+  });
+  await Promise.all(
+    owners.map((o) =>
+      createNotification({ ...input, recipientId: o.id }, actorId),
+    ),
+  );
+}
+
 export async function notifyAllSellers(
   input: Omit<CreateNotificationInput, "recipientId">,
   actorId?: string,

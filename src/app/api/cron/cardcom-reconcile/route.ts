@@ -13,7 +13,9 @@ import {
   recordVerifiedRecurringCharge,
 } from "@/lib/cardcom-recurring-charge";
 import { sendPaymentReceivedEmail } from "@/lib/email";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyAllAdmins, notifyOwner } from "@/lib/notifications";
+import { findUnlinkedOrders, summariseUnlinked } from "@/lib/cardcom/unlinked";
+import { listSuccessfulTransactions } from "@/lib/cardcom";
 
 export const maxDuration = 60;
 
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
     chargesUpdated: 0,
     failuresNotified: 0,
     deactivations: 0,
+    unlinkedOrders: 0,
     debtors: 0,
     newDebtorAlerts: 0,
     errors: [] as string[],
@@ -119,6 +122,16 @@ export async function GET(req: NextRequest) {
     await sweepTerminalFailures(now, summary);
   } catch (e) {
     summary.errors.push(`terminal sweep: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // ---- standing orders with nobody behind them -------------------------
+  // The reconciliation on 2026-08-11 found ₪236/month being collected from a
+  // client that was never recorded, eighteen months after it started. Nothing
+  // in the app could have shown it: every other check starts FROM a client.
+  try {
+    await sweepUnlinkedOrders(now, summary);
+  } catch (e) {
+    summary.errors.push(`unlinked sweep: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return NextResponse.json(summary);
@@ -217,4 +230,55 @@ async function syncHistoryRow(
       isRecurring: true,
     }).catch((e) => console.error("[cardcom-reconcile] success email failed:", e));
   }
+}
+
+/**
+ * Cardcom standing orders that map to no client in the app.
+ *
+ * Only the owner is told. Which book an unlinked order belongs to — the
+ * partnership or Elad's personal retainers — is precisely what is unknown at
+ * this point, so the alert cannot be shown to a partner without risking a leak
+ * of the private book.
+ */
+async function sweepUnlinkedOrders(
+  now: Date,
+  summary: { unlinkedOrders: number; errors: string[] },
+): Promise<void> {
+  const fromDate = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const tx = await listSuccessfulTransactions({ fromDate, toDate: now });
+
+  const [clients, agreements] = await Promise.all([
+    prisma.client.findMany({
+      where: { NOT: { cardcomAccountIds: { isEmpty: true } } },
+      select: { cardcomAccountIds: true },
+    }),
+    prisma.agreement.findMany({
+      where: { cardcomAccountId: { not: null } },
+      select: { cardcomAccountId: true },
+    }),
+  ]);
+  const linked = new Set<number>();
+  for (const c of clients) for (const id of c.cardcomAccountIds) linked.add(id);
+  for (const a of agreements) if (a.cardcomAccountId) linked.add(a.cardcomAccountId);
+
+  const unlinked = findUnlinkedOrders(
+    tx.map((t) => ({
+      accountId: (t as { AccountId?: number }).AccountId ?? null,
+      payer: t.CardOwnerName ?? "(ללא שם)",
+      amount: t.Amount,
+      chargedAt: t.CreateDate,
+    })),
+    linked,
+  );
+
+  summary.unlinkedOrders = unlinked.length;
+  const alert = summariseUnlinked(unlinked);
+  if (!alert) return;
+
+  await notifyOwner({
+    type: "AGREEMENT_SIGNED",
+    title: alert.title,
+    body: alert.body,
+    url: "/admin/clients",
+  }).catch((e) => console.error("[cardcom-reconcile] unlinked notify failed:", e));
 }
