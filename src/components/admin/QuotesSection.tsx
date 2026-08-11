@@ -72,6 +72,7 @@ export default function QuotesSection() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/quotes", { cache: "no-store" });
@@ -121,6 +122,35 @@ export default function QuotesSection() {
     }
   }
 
+  /**
+   * Quotes are cancelled, never deleted. An agreement is a legal record and
+   * writer-boundary.test.ts blocks destructive writes to it — but a quote that
+   * was never signed is a proposal that went nowhere, so cancelling clears it
+   * from the working list while the row and its reason survive.
+   */
+  async function cancel(q: QuoteRow) {
+    const reason = window.prompt(
+      `ביטול "${q.title}" — למה? (נשמר בהיסטוריה)`,
+      "לא רלוונטי",
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 3) {
+      toast.error("צריך סיבה בת 3 תווים לפחות");
+      return;
+    }
+    const res = await fetch(`/api/agreements/${q.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "CANCELLED", reason: reason.trim() }),
+    });
+    if (!res.ok) {
+      toast.error("הביטול נכשל");
+      return;
+    }
+    toast.success("ההצעה בוטלה");
+    load();
+  }
+
   async function copyLink(token: string) {
     const url = `${window.location.origin}/agreement/${token}`;
     try {
@@ -134,7 +164,14 @@ export default function QuotesSection() {
 
   if (!allowed) return null;
 
-  const open = (rows ?? []).filter(
+  const all = rows ?? [];
+  const cancelledCount = all.filter((q) => q.agreementStatus === "CANCELLED").length;
+  // Cancelled quotes stay in the database but leave the working list — the
+  // point of cancelling is to stop looking at them.
+  const visible = showCancelled
+    ? all
+    : all.filter((q) => q.agreementStatus !== "CANCELLED");
+  const open = all.filter(
     (q) => q.status !== "PAID" && q.agreementStatus !== "CANCELLED",
   );
   const outstanding = open.reduce((s, q) => s + q.gross, 0);
@@ -157,12 +194,22 @@ export default function QuotesSection() {
             )}
           </p>
         </div>
+        <div className="flex items-center gap-3">
+        {cancelledCount > 0 && (
+          <button
+            onClick={() => setShowCancelled((v) => !v)}
+            className="text-[11px] text-gray-500 hover:text-gray-300 hover:underline"
+          >
+            {showCancelled ? "הסתר מבוטלות" : `הצג ${cancelledCount} מבוטלות`}
+          </button>
+        )}
         <button
           onClick={() => setShowAdd((v) => !v)}
           className="bg-pink hover:bg-pink-dark text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors"
         >
           {showAdd ? "סגור" : "+ הצעת מחיר חדשה"}
         </button>
+        </div>
       </div>
 
       {showAdd && (
@@ -264,8 +311,10 @@ export default function QuotesSection() {
 
       {rows === null ? (
         <p className="text-xs text-gray-500">טוען…</p>
-      ) : rows.length === 0 ? (
-        <p className="text-xs text-gray-500">אין עדיין הצעות מחיר.</p>
+      ) : visible.length === 0 ? (
+        <p className="text-xs text-gray-500">
+          {rows.length === 0 ? "אין עדיין הצעות מחיר." : "כל ההצעות בוטלו."}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -282,7 +331,7 @@ export default function QuotesSection() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((q) => {
+              {visible.map((q) => {
                 const s = stageLabel(q);
                 return (
                   <tr key={q.id} className="border-t border-gray-800 text-white">
@@ -301,15 +350,23 @@ export default function QuotesSection() {
                     </td>
                     <td className="py-2.5 px-3">
                       {q.agreementStatus !== "CANCELLED" && q.status !== "PAID" && (
-                        <button
-                          onClick={() => {
-                            copyLink(q.signToken);
-                            toast.success("הלינק הועתק");
-                          }}
-                          className="text-[11px] text-pink hover:underline"
-                        >
-                          העתק לינק
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => {
+                              copyLink(q.signToken);
+                              toast.success("הלינק הועתק");
+                            }}
+                            className="text-[11px] text-pink hover:underline"
+                          >
+                            העתק לינק
+                          </button>
+                          <button
+                            onClick={() => cancel(q)}
+                            className="text-[11px] text-gray-500 hover:text-red-400 hover:underline"
+                          >
+                            בטל
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
