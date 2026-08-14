@@ -23,13 +23,37 @@ interface Totals {
   partnerShare: number;
 }
 
+interface Settlement {
+  sharedExpenses: number;
+  personalExpenses: number;
+  profit: number;
+  royEntitlement: number;
+  transferToRoy: number;
+}
+
 interface ReportPayload {
   snapshotAt: string;
   rows: PartnerRow[];
   totals: Totals;
   averages: Totals;
   count: number;
+  /** The 12.8.2026 model: profit = fuzion net revenue − shared expenses, 50/50. */
+  settlement?: Settlement;
+  expensesByCategory?: Record<string, number>;
+  books?: { fuzion: { profit: number; count: number }; personal: { profit: number; count: number } };
 }
+
+const CATEGORY_HE: Record<string, string> = {
+  LLM_API: "מודלים",
+  SERVERS: "שרתים",
+  HOSTING: "אחסון",
+  DOMAINS: "דומיינים",
+  SAAS: "כלים",
+  PAYMENTS: "סליקה",
+  ADVERTISING: "פרסום",
+  PROFESSIONAL: "רו\"ח",
+  OTHER: "אחר",
+};
 
 const fmtNum = (n: number | null | undefined) =>
   n != null
@@ -110,18 +134,51 @@ export default function PartnerReportPage() {
           accent
         />
         <SummaryCard
-          label="חלק אלעד"
-          value={totals?.partnerShare ?? 0}
+          label="חלק אלעד (אחרי הוצאות)"
+          value={data?.settlement ? data.settlement.profit / 2 : (totals?.partnerShare ?? 0)}
           accent
           highlight
         />
         <SummaryCard
-          label="חלק רועי"
-          value={totals?.partnerShare ?? 0}
+          label="העברה לרועי"
+          value={data?.settlement?.transferToRoy ?? totals?.partnerShare ?? 0}
           accent
           highlight
         />
       </div>
+
+      {/* The settlement chain — the numbers behind the two cards above. */}
+      {data?.settlement && (
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 space-y-2">
+          <div className="text-xs text-gray-400">
+            התחשבנות חודשית (מודל 12.8): הכנסות פיוז'ן נטו{" "}
+            <span className="font-mono text-gray-200">₪{fmtNum(data.books?.fuzion.profit)}</span>
+            {" "}− הוצאות משותפות{" "}
+            <span className="font-mono text-gray-200">₪{fmtNum(data.settlement.sharedExpenses)}</span>
+            {" "}= רווח{" "}
+            <span className="font-mono text-white">₪{fmtNum(data.settlement.profit)}</span>
+            {" "}→ העברה לרועי{" "}
+            <span className="font-mono text-pink">₪{fmtNum(data.settlement.transferToRoy)}</span>
+            {data.settlement.transferToRoy !== data.settlement.royEntitlement && (
+              <> (חצי רווח + החזר הוצאות ששילם)</>
+            )}
+            {". "}הספר האישי — {data.books?.personal.count ?? 0} לקוחות,{" "}
+            <span className="font-mono text-gray-200">₪{fmtNum(data.books?.personal.profit)}</span>{" "}
+            לאלעד בלבד, מחוץ לחישוב.
+          </div>
+          {data.expensesByCategory && Object.keys(data.expensesByCategory).length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {Object.entries(data.expensesByCategory)
+                .sort((a, b) => b[1] - a[1])
+                .map(([k, v]) => (
+                  <span key={k} className="text-[11px] px-2 py-1 rounded-lg bg-gray-800 text-gray-300 font-mono">
+                    {CATEGORY_HE[k] ?? k}: ₪{fmtNum(v)}
+                  </span>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-12 text-center text-sm text-gray-500">

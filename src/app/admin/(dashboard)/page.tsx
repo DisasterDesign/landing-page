@@ -28,6 +28,9 @@ interface BusinessKpis {
   personalMrr: number;
   monthlyProfit: number;
   partnerShare: number;
+  /** settlement.transferToRoy — profit after shared expenses, halved, plus
+   *  reimbursement for what Roy paid. Null until the API ships it. */
+  settlementTransfer: number | null;
   openLeads: number;
   sellerPending: number;
 }
@@ -116,6 +119,7 @@ export default function AdminDashboardPage() {
             personalMrr: report.books?.personal?.amount ?? 0,
             monthlyProfit: report.totals?.profit ?? 0,
             partnerShare: report.totals?.partnerShare ?? 0,
+            settlementTransfer: report.settlement?.transferToRoy ?? null,
             openLeads: leads?.stats?.openCount ?? 0,
             sellerPending: sellers?.totalPending ?? 0,
           });
@@ -225,7 +229,11 @@ export default function AdminDashboardPage() {
             }
           />
           <KpiCard label="רווח חודשי" value={`₪${fmt(kpis.monthlyProfit)}`} />
-          <KpiCard label="יוצא לשותפים" value={`₪${fmt(kpis.partnerShare)}`} href="/admin/partners" />
+          <KpiCard
+            label="העברה לרועי (אחרי הוצאות)"
+            value={`₪${fmt(kpis.settlementTransfer ?? kpis.partnerShare)}`}
+            href="/admin/partner-report"
+          />
           <KpiCard label="לקוחות פעילים" value={fmt(kpis.fuzionClients)} />
           <KpiCard label="לידים פתוחים" value={fmt(kpis.openLeads)} href="/admin/leads" />
           <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/partners" />
