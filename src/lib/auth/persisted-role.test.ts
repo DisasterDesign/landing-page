@@ -128,7 +128,10 @@ test("admin PII list and detail routes guard persisted ADMIN before querying", (
   for (const [relativePath, firstPiiQuery] of routes) {
     const handler = getHandlerSource(source(relativePath));
     const guard = handler.match(
-      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
+      // requireAdmin joined the accepted forms on 12.8.2026 (Roy's return to
+      // ADMIN): it reads the persisted role via getViewer — DB, never the
+      // JWT — which is exactly the property this test exists to pin.
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\)|requireAdmin\(\s*\))/,
     );
     assert.ok(guard, `${relativePath} must require persisted ADMIN`);
     assert.ok(
@@ -224,7 +227,10 @@ test("client admin routes guard persisted ADMIN before reads and mutations", () 
   for (const [relativePath, method, firstQuery] of routes) {
     const handler = getNamedHandlerSource(source(relativePath), method);
     const guard = handler.match(
-      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
+      // requireAdmin joined the accepted forms on 12.8.2026 (Roy's return to
+      // ADMIN): it reads the persisted role via getViewer — DB, never the
+      // JWT — which is exactly the property this test exists to pin.
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\)|requireAdmin\(\s*\))/,
     );
     assert.ok(
       guard,
@@ -279,7 +285,10 @@ test("finance and billing repair routes guard persisted ADMIN before sensitive w
   for (const [relativePath, method, firstSensitiveAction] of routes) {
     const handler = getNamedHandlerSource(source(relativePath), method);
     const guard = handler.match(
-      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\))/,
+      // requireAdmin joined the accepted forms on 12.8.2026 (Roy's return to
+      // ADMIN): it reads the persisted role via getViewer — DB, never the
+      // JWT — which is exactly the property this test exists to pin.
+      /await\s+(?:requirePersistedUserRole\(\s*session\.user\.id,\s*\[\s*"ADMIN"\s*\]\s*\)|requireOwner\(\s*\)|requireAdmin\(\s*\))/,
     );
     assert.ok(
       guard,

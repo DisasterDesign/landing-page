@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import {
   monthlyIls,
@@ -25,7 +25,7 @@ import {
  */
 export async function GET() {
   try {
-    await requireOwner();
+    await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;

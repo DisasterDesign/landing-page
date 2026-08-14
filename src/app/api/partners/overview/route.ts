@@ -54,7 +54,15 @@ export async function GET(request: NextRequest) {
   const [partners, owner, clients, commissions, signedThisMonth] =
     await Promise.all([
       prisma.user.findMany({
-        where: { role: "SELLER" },
+        // Not `role: "SELLER"`: Roy went back to ADMIN on 12.8.2026 but keeps
+        // his 50% recurring share, and filtering by role would silently drop
+        // him from this page the moment he was promoted. A partner is anyone
+        // who is paid — a share percentage or the seller role — except the
+        // owner, whose money is the remainder, not a payout.
+        where: {
+          isOwner: false,
+          OR: [{ role: "SELLER" }, { revenueSharePct: { not: null } }],
+        },
         select: { id: true, name: true, username: true, revenueSharePct: true },
         orderBy: { createdAt: "asc" },
       }),

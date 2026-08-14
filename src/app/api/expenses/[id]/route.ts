@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { updateExpenseSchema } from "@/lib/validations";
 
@@ -10,7 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireOwner();
+    await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -52,7 +52,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireOwner();
+    await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;

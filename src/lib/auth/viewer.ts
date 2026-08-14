@@ -59,6 +59,19 @@ export async function getViewer(): Promise<Viewer> {
 }
 
 /** Owner-only surfaces (finance, expenses, jobs, SEO, blog, prospecting…). */
+/**
+ * Any persisted ADMIN — Elad or Roy since Roy's return (12.8.2026, full
+ * transparency). Owner-only surfaces (personal-book writes, quote creation)
+ * keep requireOwner below; shared read surfaces use this.
+ */
+export async function requireAdmin(): Promise<Viewer> {
+  const viewer = await getViewer();
+  if (viewer.role !== "ADMIN") {
+    throw new ViewerAuthorizationError("Forbidden", 403);
+  }
+  return viewer;
+}
+
 export async function requireOwner(): Promise<Viewer> {
   const viewer = await getViewer();
   if (!viewer.isOwner) {

@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { createExpenseSchema } from "@/lib/validations";
 
 // GET /api/expenses — all expense lines, newest first
 export async function GET() {
   try {
-    await requireOwner();
+    await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -24,8 +24,9 @@ export async function GET() {
 
 // POST /api/expenses — create an expense line
 export async function POST(request: NextRequest) {
+  let viewerUserId: string;
   try {
-    await requireOwner();
+    viewerUserId = (await requireAdmin()).userId;
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
       ...rest,
       clientId: clientId || null,
       startedAt: startedAt ? new Date(startedAt) : null,
+      // The payer is whoever entered the row — Roy typing in his campaign
+      // spend gets credited automatically; the settlement reimburses him.
+      paidById: viewerUserId,
     },
     include: { client: { select: { id: true, name: true, number: true } } },
   });

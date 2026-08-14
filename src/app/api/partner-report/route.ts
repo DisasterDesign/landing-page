@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { computeSettlement, monthlyIlsOf } from "@/lib/partners/settlement";
 import { bookOf, splitByBook } from "@/lib/clients/books";
 import { prisma } from "@/lib/prisma";
 
@@ -38,7 +39,13 @@ interface PartnerRow {
  */
 export async function GET(_req: NextRequest) {
   try {
-    await requireOwner();
+    // ADMIN, not owner-only: Roy is back at ADMIN under full transparency
+    // (12.8.2026), and the dashboard KPIs read this route. getViewer reads the
+    // persisted role, never the JWT.
+    const viewer = await getViewer();
+    if (viewer.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -123,6 +130,43 @@ export async function GET(_req: NextRequest) {
     })),
   );
 
+  // ---- the Elad↔Roy settlement (12.8.2026 model) -----------------------
+  // profit = Fuzion net revenue − SHARED expenses, split 50/50. An expense
+  // tied to a personal-book client is Elad's own and never enters the pool;
+  // its payer is likewise never reimbursed through the split.
+  const expenseRows = await prisma.expense.findMany({
+    where: { active: true },
+    select: {
+      name: true,
+      vendor: true,
+      category: true,
+      amount: true,
+      currency: true,
+      frequency: true,
+      isFixed: true,
+      client: { select: { partner: true } },
+      paidBy: { select: { isOwner: true } },
+    },
+  });
+  const settlementExpenses = expenseRows.map((e) => ({
+    amountIls: monthlyIlsOf(e),
+    // Backfilled to Elad; a null payer defaults to owner so a data gap can
+    // only ever under-reimburse Roy, never over-pay him.
+    paidBy: (e.paidBy?.isOwner ?? true) ? ("owner" as const) : ("partner" as const),
+    shared: e.client?.partner !== "personal",
+  }));
+  const settlement = computeSettlement({
+    fuzionNetRevenue: books.fuzion.profit,
+    expenses: settlementExpenses,
+  });
+  const expensesByCategory: Record<string, number> = {};
+  for (let i = 0; i < expenseRows.length; i++) {
+    const monthly = settlementExpenses[i].amountIls;
+    if (!settlementExpenses[i].shared || monthly === 0) continue;
+    const k = expenseRows[i].category;
+    expensesByCategory[k] = Math.round(((expensesByCategory[k] ?? 0) + monthly) * 100) / 100;
+  }
+
   return NextResponse.json({
     snapshotAt: new Date().toISOString(),
     rows,
@@ -130,5 +174,7 @@ export async function GET(_req: NextRequest) {
     averages,
     count: rows.length,
     books,
+    settlement,
+    expensesByCategory,
   });
 }

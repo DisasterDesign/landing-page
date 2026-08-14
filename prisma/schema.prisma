@@ -342,6 +342,7 @@ model User {
   assignedProspects       Prospect[]            @relation("ProspectSeller")
   prospectBatches         WeeklyProspectBatch[] @relation("WeeklyBatchSeller")
   prospectInteractions    ProspectInteraction[] @relation("ProspectInteractionAuthor")
+  expensesPaid       Expense[] @relation("ExpensePayer")
 }
 
 /// First-month commission earned by a seller when an agreement THEY created
@@ -1031,6 +1032,10 @@ model Expense {
   frequency ExpenseFrequency @default(MONTHLY)
   clientId  String?
   client    Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  /// Who actually paid — the settlement reimburses shared expenses to their
+  /// payer, so this is money-bearing, not metadata. Null only until backfill.
+  paidById  String?
+  paidBy    User?            @relation("ExpensePayer", fields: [paidById], references: [id], onDelete: SetNull)
   notes     String?
   active    Boolean          @default(true)
   startedAt DateTime?

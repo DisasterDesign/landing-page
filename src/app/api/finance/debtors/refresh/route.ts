@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { sweepTerminalFailures, bucketDebtors } from "@/lib/cardcom-debtors";
 
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ export const maxDuration = 60;
  */
 export async function POST() {
   try {
-    await requireOwner();
+    await requireAdmin();
 
     const summary = { debtors: 0, newDebtorAlerts: 0, settled: 0 };
     const snapshot = await sweepTerminalFailures(new Date(), summary);

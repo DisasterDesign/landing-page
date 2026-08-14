@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { bucketDebtors, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
 
 /**
@@ -11,7 +11,7 @@ import { bucketDebtors, type DebtorSnapshotEntry } from "@/lib/cardcom-debtors";
  */
 export async function GET() {
   try {
-    await requireOwner();
+    await requireAdmin();
 
     const [problemCharges, inactiveOrders, snapshotRow] = await Promise.all([
       prisma.agreementCharge.findMany({
