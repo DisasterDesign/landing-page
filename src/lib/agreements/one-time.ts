@@ -172,3 +172,30 @@ export function quoteBodyHtml(input: {
 </table>
 <p>${terms}</p>`;
 }
+
+/**
+ * The inverse of scopeToHtml, for the edit form.
+ *
+ * The scope of work is stored only inside customBodyHtml, followed by the price
+ * table quoteBodyHtml appends. Editing must show exactly what was typed, so
+ * this cuts the body at the price heading, turns paragraphs back into blank
+ * lines and <br/> back into newlines, and unescapes what scopeToHtml escaped.
+ * Round-tripped by test against quoteBodyHtml.
+ */
+export function scopeFromBodyHtml(body: string | null | undefined): string {
+  if (!body) return "";
+  // Everything from the price heading onward is generated, not typed.
+  const cut = body.search(/\n?<h2>(?:התמורה|Payment)<\/h2>/);
+  const scopePart = cut >= 0 ? body.slice(0, cut) : body;
+
+  const paragraphs = [...scopePart.matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => m[1]);
+  const text = (paragraphs.length ? paragraphs : [scopePart])
+    .map((p) => p.replace(/<br\s*\/?>/g, "\n"))
+    .join("\n\n");
+
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .trim();
+}

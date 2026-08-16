@@ -75,3 +75,45 @@ test("business name and id number stay optional", () => {
   });
   assert.equal(parsed.customerName, "ישראל ישראלי");
 });
+
+// ---- editing a draft quote ----
+
+import { updateOneTimeQuoteSchema } from "@/lib/validations";
+
+test("a quote edit accepts the quote-specific fields", () => {
+  const parsed = updateOneTimeQuoteSchema.parse({
+    projectTitle: "עיצוב לוגו — גרסה 2",
+    scopeOfWork: "שלוש גרסאות במקום שתיים",
+    oneTimeFee: 4200,
+    vatExempt: true,
+    locale: "en",
+  });
+  assert.equal(parsed.projectTitle, "עיצוב לוגו — גרסה 2");
+  assert.equal(parsed.oneTimeFee, 4200);
+  assert.equal(parsed.vatExempt, true);
+});
+
+test("a quote edit is partial — omitted fields stay untouched", () => {
+  const parsed = updateOneTimeQuoteSchema.parse({ oneTimeFee: 999 });
+  assert.equal("projectTitle" in parsed, false);
+  assert.equal("scopeOfWork" in parsed, false);
+});
+
+test("a quote edit can never set a monthly price, a tier or a kind", () => {
+  // Editing must not be a back door into turning a quote into a subscription.
+  const parsed = updateOneTimeQuoteSchema.parse({
+    oneTimeFee: 100,
+    monthlyPrice: 599,
+    tier: "PREMIUM",
+    kind: "SUBSCRIPTION",
+  } as Record<string, unknown>);
+  assert.equal("monthlyPrice" in parsed, false);
+  assert.equal("tier" in parsed, false);
+  assert.equal("kind" in parsed, false);
+});
+
+test("a blank title or scope is rejected on edit, same as on create", () => {
+  assert.throws(() => updateOneTimeQuoteSchema.parse({ projectTitle: "  " }));
+  assert.throws(() => updateOneTimeQuoteSchema.parse({ scopeOfWork: "" }));
+  assert.throws(() => updateOneTimeQuoteSchema.parse({ oneTimeFee: 0 }));
+});

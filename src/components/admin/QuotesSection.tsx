@@ -28,6 +28,14 @@ interface QuoteRow {
   signedAt: string | null;
   paidAt: string | null;
   createdAt: string;
+  // For prefilling the edit form
+  customerName: string;
+  businessName: string | null;
+  idNumber: string | null;
+  email: string;
+  vatExempt: boolean;
+  locale: string;
+  scopeOfWork: string;
 }
 
 const EMPTY = {
@@ -74,6 +82,8 @@ export default function QuotesSection() {
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
+  /** id of the quote being edited; null = creating a new one */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/quotes", { cache: "no-store" });
@@ -94,8 +104,11 @@ export default function QuotesSection() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch("/api/quotes", {
-        method: "POST",
+      // Editing goes through PATCH /api/quotes/[id]; the server re-renders the
+      // document so the customer never sees a stale price. Signed quotes are
+      // refused there with 409 — this button is only offered on open ones.
+      const res = await fetch(editingId ? `/api/quotes/${editingId}` : "/api/quotes", {
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectTitle: form.projectTitle,
@@ -115,13 +128,24 @@ export default function QuotesSection() {
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error === "Validation failed" ? "יש שדות חסרים" : "השמירה נכשלה");
+        toast.error(
+          json.error === "Validation failed"
+            ? "יש שדות חסרים"
+            : typeof json.error === "string"
+              ? json.error
+              : "השמירה נכשלה",
+        );
         return;
       }
-      await copyLink(json.data.signToken);
-      toast.success("ההצעה נוצרה והלינק הועתק");
+      if (editingId) {
+        toast.success("ההצעה עודכנה — המסמך נבנה מחדש");
+      } else {
+        await copyLink(json.data.signToken);
+        toast.success("ההצעה נוצרה והלינק הועתק");
+      }
       setForm({ ...EMPTY });
       setShowAdd(false);
+      setEditingId(null);
       load();
     } finally {
       setSaving(false);
@@ -155,6 +179,23 @@ export default function QuotesSection() {
     }
     toast.success("ההצעה בוטלה");
     load();
+  }
+
+  function edit(q: QuoteRow) {
+    setForm({
+      projectTitle: q.title,
+      customerName: q.customerName,
+      businessName: q.businessName ?? "",
+      idNumber: q.idNumber ?? "",
+      phone: q.phone,
+      email: q.email,
+      oneTimeFee: String(q.amount),
+      scopeOfWork: q.scopeOfWork,
+      foreign: q.vatExempt || q.locale === "en",
+    });
+    setEditingId(q.id);
+    setShowAdd(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function copyLink(token: string) {
@@ -210,7 +251,10 @@ export default function QuotesSection() {
           </button>
         )}
         <button
-          onClick={() => setShowAdd((v) => !v)}
+          onClick={() => {
+            if (showAdd) { setEditingId(null); setForm({ ...EMPTY }); }
+            setShowAdd((v) => !v);
+          }}
           className="bg-pink hover:bg-pink-dark text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors"
         >
           {showAdd ? "סגור" : "+ הצעת מחיר חדשה"}
@@ -223,6 +267,11 @@ export default function QuotesSection() {
           onSubmit={submit}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4"
         >
+          {editingId && (
+            <div className="text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded-xl px-3 py-2">
+              עריכת הצעה קיימת. הלינק לא משתנה — הלקוח יראה את הגרסה המעודכנת באותה כתובת.
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
               <label className={labelCls}>כותרת הפרויקט *</label>
@@ -329,7 +378,7 @@ export default function QuotesSection() {
             disabled={saving}
             className="bg-pink hover:bg-pink-dark disabled:opacity-50 text-white text-sm font-bold px-5 py-2.5 rounded-xl"
           >
-            {saving ? "שומר…" : "צור והעתק לינק"}
+            {saving ? "שומר…" : editingId ? "שמור שינויים" : "צור והעתק לינק"}
           </button>
         </form>
       )}
@@ -384,6 +433,12 @@ export default function QuotesSection() {
                             className="text-[11px] text-pink hover:underline"
                           >
                             העתק לינק
+                          </button>
+                          <button
+                            onClick={() => edit(q)}
+                            className="text-[11px] text-gray-300 hover:text-white hover:underline"
+                          >
+                            ערוך
                           </button>
                           <button
                             onClick={() => cancel(q)}

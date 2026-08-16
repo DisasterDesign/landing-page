@@ -351,6 +351,9 @@ export async function updateAgreementDraftFields(
       vatExempt?: boolean;
       content?: string;
       documentVersion?: number;
+      /** Quote-only fields; the caller rebuilds customBodyHtml when they change. */
+      projectTitle?: string;
+      customBodyHtml?: string;
     };
   },
   dependencies: { store?: AgreementLifecycleStore } = {},

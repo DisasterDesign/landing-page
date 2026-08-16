@@ -217,3 +217,35 @@ test("a domestic quote still grosses up — vatIncluded stays false", () => {
   });
   assert.equal(row.vatIncluded, false);
 });
+
+// ---- recovering the scope text from the stored body, for the edit form ----
+
+import { quoteBodyHtml, scopeFromBodyHtml } from "./one-time";
+
+test("scope text round-trips through the rendered body", () => {
+  // The edit form must show exactly what was typed. The scope is not stored
+  // as text — only inside customBodyHtml, followed by the price table — so it
+  // has to be recovered from the HTML without the price table bleeding in.
+  const scope = "שלב א — עיצוב\nשלב ב — פיתוח\n\nתנאים: 50% מראש & השאר במסירה";
+  const body = quoteBodyHtml({ scope, oneTimeFee: 3500, vatExempt: false, locale: "he" });
+  assert.equal(scopeFromBodyHtml(body), scope);
+});
+
+test("recovery unescapes what scopeToHtml escaped, and drops the price table", () => {
+  const scope = 'A <b>bold</b> claim & "quotes"';
+  const body = quoteBodyHtml({ scope, oneTimeFee: 100, vatExempt: true, locale: "en" });
+  const back = scopeFromBodyHtml(body);
+  assert.equal(back, scope);
+  assert.equal(back.includes("Total due"), false);
+  assert.equal(back.includes("Project fee"), false);
+});
+
+test("recovery of a body with no price table returns the whole text", () => {
+  // Older rows (before the price table existed) are just paragraphs.
+  assert.equal(scopeFromBodyHtml("<p>עיצוב לוגו</p>\n<p>קבצי מקור</p>"), "עיצוב לוגו\n\nקבצי מקור");
+});
+
+test("recovery of an empty or missing body is an empty string, not a crash", () => {
+  assert.equal(scopeFromBodyHtml(""), "");
+  assert.equal(scopeFromBodyHtml(null), "");
+});

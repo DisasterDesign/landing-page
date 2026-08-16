@@ -123,6 +123,25 @@ export const createOneTimeQuoteSchema = z
     tier: null,
   }));
 
+/**
+ * Editing a DRAFT/SENT quote. Partial — send only what changed. Deliberately a
+ * strict allow-list of the quote's own fields: no monthlyPrice, no tier, no
+ * kind, so an edit can never turn a one-off into a subscription. Signed
+ * quotes are frozen by agreement-lifecycle (CONFLICT), not here.
+ */
+export const updateOneTimeQuoteSchema = z.object({
+  projectTitle: z.string().trim().min(1, "כותרת הפרויקט חובה").max(160).optional(),
+  scopeOfWork: z.string().trim().min(1, "תיאור העבודה חובה").max(20000).optional(),
+  oneTimeFee: z.number().positive("הסכום חייב להיות חיובי").optional(),
+  customerName: z.string().min(1, "שם חובה").optional(),
+  businessName: z.string().nullable().optional(),
+  idNumber: z.string().nullable().optional(),
+  phone: z.string().min(9, "טלפון לא תקין").optional(),
+  email: z.string().email("אימייל לא תקין").optional(),
+  locale: agreementLocaleEnum.optional(),
+  vatExempt: z.boolean().optional(),
+});
+
 // ==================
 // COLD PROSPECTING
 // ==================

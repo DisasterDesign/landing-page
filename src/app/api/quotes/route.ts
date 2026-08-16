@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOneTimeQuoteSchema } from "@/lib/validations";
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
-import { quoteJobInput, quoteBodyHtml } from "@/lib/agreements/one-time";
+import { quoteJobInput, quoteBodyHtml, scopeFromBodyHtml } from "@/lib/agreements/one-time";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
 import { createStandaloneAgreement } from "@/lib/leads/agreement-lifecycle";
 import {
@@ -36,6 +36,9 @@ export async function GET() {
         email: true,
         oneTimeFee: true,
         vatExempt: true,
+        locale: true,
+        idNumber: true,
+        customBodyHtml: true,
         status: true,
         paymentStatus: true,
         // A bearer credential for /agreement/[token]. It ships here for the
@@ -71,6 +74,14 @@ export async function GET() {
         signedAt: q.signedAt ? q.signedAt.toISOString() : null,
         createdAt: q.createdAt.toISOString(),
         isFuture: base.closedAt > now ? true : false,
+        // Prefill for the edit form. The scope is recovered from the stored
+        // body — it is not kept as text anywhere else.
+        customerName: q.customerName,
+        businessName: q.businessName,
+        idNumber: q.idNumber,
+        vatExempt: q.vatExempt,
+        locale: q.locale,
+        scopeOfWork: scopeFromBodyHtml(q.customBodyHtml),
       };
     });
 
