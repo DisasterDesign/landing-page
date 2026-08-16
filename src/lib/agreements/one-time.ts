@@ -138,11 +138,13 @@ export function scopeToHtml(scope: string): string {
  * Shows the gross total too: the studio quotes ex-VAT, but the signer needs to
  * see what actually leaves their card.
  */
+export type QuoteLocale = "he" | "en";
+
 export function quoteBodyHtml(input: {
   scope: string;
   oneTimeFee: number;
   vatExempt: boolean;
-  locale: "he" | "en";
+  locale: QuoteLocale;
 }): string {
   const he = input.locale !== "en";
   const money = (n: number) =>
