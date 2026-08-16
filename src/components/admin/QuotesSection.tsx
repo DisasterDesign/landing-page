@@ -39,6 +39,7 @@ const EMPTY = {
   email: "",
   oneTimeFee: "",
   scopeOfWork: "",
+  foreign: false,
 };
 
 const inputCls =
@@ -105,6 +106,11 @@ export default function QuotesSection() {
           email: form.email,
           oneTimeFee: parseFloat(form.oneTimeFee),
           scopeOfWork: form.scopeOfWork,
+          // Foreign client = English document + Cardcom page, and zero-rated
+          // VAT (export of services, sec. 30(a)(5)). One toggle, two fields —
+          // the same pattern the subscription-agreement form uses.
+          locale: form.foreign ? "en" : "he",
+          vatExempt: form.foreign,
         }),
       });
       const json = await res.json();
@@ -285,15 +291,34 @@ export default function QuotesSection() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
+            <div className="md:col-span-3 flex flex-wrap items-center gap-4 pt-1">
+              <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="accent-pink w-4 h-4"
+                  checked={form.foreign}
+                  onChange={(e) => setForm({ ...form, foreign: e.target.checked })}
+                />
+                לקוח מחו״ל — הצעה באנגלית, ללא מע״מ
+              </label>
+              {form.oneTimeFee && !Number.isNaN(parseFloat(form.oneTimeFee)) && (
+                <span className="text-[11px] text-gray-500">
+                  {form.foreign
+                    ? `הלקוח ישלם ₪${fmt(parseFloat(form.oneTimeFee))} — ללא מע״מ (סעיף 30(א)(5))`
+                    : `הלקוח ישלם ₪${fmt(parseFloat(form.oneTimeFee) * 1.18)} כולל מע״מ`}
+                </span>
+              )}
+            </div>
             <div className="md:col-span-3">
               <label className={labelCls}>
                 תיאור העבודה * — זה הגוף המשפטי של ההצעה שהלקוח חותם עליה
+                {form.foreign && " (באנגלית)"}
               </label>
               <textarea
                 required
                 rows={6}
                 className={inputCls}
-                placeholder={"עיצוב לוגו בשלוש גרסאות\nמדריך מותג קצר\nקבצי מקור"}
+                placeholder={form.foreign ? "Logo design, three concepts\nShort brand guide\nSource files" : "עיצוב לוגו בשלוש גרסאות\nמדריך מותג קצר\nקבצי מקור"}
                 value={form.scopeOfWork}
                 onChange={(e) => setForm({ ...form, scopeOfWork: e.target.value })}
               />

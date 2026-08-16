@@ -35,6 +35,7 @@ export async function GET() {
         phone: true,
         email: true,
         oneTimeFee: true,
+        vatExempt: true,
         status: true,
         paymentStatus: true,
         // A bearer credential for /agreement/[token]. It ships here for the

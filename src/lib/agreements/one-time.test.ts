@@ -163,3 +163,57 @@ test("blank lines become paragraphs and single newlines become breaks", () => {
 test("a one-line scope is still a paragraph", () => {
   assert.equal(scopeToHtml("עיצוב לוגו"), "<p>עיצוב לוגו</p>");
 });
+
+// ---- Foreign one-time quote: the same guards must hold with vatExempt + en ----
+
+test("GUARD: a foreign (en, VAT-exempt) quote still never provisions a Client", () => {
+  assert.equal(shouldProvisionClient({ kind: "ONE_TIME" }), false);
+});
+
+test("GUARD: a foreign quote paid through Cardcom never creates a recurring order", () => {
+  // The recurring gate keys on kind + monthlyPrice; locale and VAT status
+  // must not be able to reopen it.
+  assert.equal(
+    shouldCreateRecurringOrder({
+      kind: "ONE_TIME",
+      monthlyPrice: 0,
+      cardcomRecurringId: null,
+      lowProfileId: "lp-foreign",
+    }),
+    false,
+  );
+});
+
+test("a VAT-exempt quote reports its fee as the gross — no 18% is added on top", () => {
+  // jobFinance grosses up any row with vatIncluded=false. A foreign quote is
+  // charged exactly its fee, so it must present as VAT-inclusive-at-zero or
+  // the jobs table shows ₪2,360 for a ₪2,000 job and the settlement over-counts.
+  const row = quoteJobInput({
+    id: "ag-f",
+    projectTitle: "Landing page",
+    customerName: "Acme Ltd",
+    businessName: null,
+    oneTimeFee: 2000,
+    signedAt: null,
+    paidAt: null,
+    createdAt: new Date("2026-08-16T00:00:00Z"),
+    vatExempt: true,
+  });
+  assert.equal(row.vatIncluded, true);
+  assert.equal(row.amount, 2000);
+});
+
+test("a domestic quote still grosses up — vatIncluded stays false", () => {
+  const row = quoteJobInput({
+    id: "ag-d",
+    projectTitle: "לוגו",
+    customerName: "א",
+    businessName: null,
+    oneTimeFee: 2000,
+    signedAt: null,
+    paidAt: null,
+    createdAt: new Date("2026-08-16T00:00:00Z"),
+    vatExempt: false,
+  });
+  assert.equal(row.vatIncluded, false);
+});

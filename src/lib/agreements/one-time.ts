@@ -61,6 +61,8 @@ export function quoteJobInput(a: {
   signedAt: Date | null;
   paidAt: Date | null;
   createdAt: Date;
+  /** Foreign client, zero-rated VAT — the fee IS the gross. */
+  vatExempt?: boolean;
 }): {
   source: "quote";
   id: string;
@@ -86,8 +88,11 @@ export function quoteJobInput(a: {
       number: null,
     },
     amount: a.oneTimeFee ?? 0,
-    // Every price in the system is stored net of VAT.
-    vatIncluded: false,
+    // Every price in the system is stored net of VAT, so jobFinance grosses
+    // up by 18% — except a zero-rated foreign quote, where the fee is exactly
+    // what the customer pays. Presenting it as "VAT included at zero" is what
+    // stops the jobs table showing ₪2,360 for a ₪2,000 job.
+    vatIncluded: a.vatExempt === true,
     // Always collected through Cardcom, so the ~2% always applies — unlike a
     // ClientJob, which may be settled by bank transfer.
     cardcomFee: true,

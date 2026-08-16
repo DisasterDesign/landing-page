@@ -78,3 +78,49 @@ test("a VAT-exempt quote shows no VAT line", () => {
   assert.equal(html.includes("VAT 18%"), false);
   assert.ok(html.includes("Total due"));
 });
+
+// ---- Foreign quote: English + zero-rated VAT ----
+
+function renderForeign(fee: number) {
+  return renderAgreement(null, {
+    customerName: "Acme Ltd",
+    businessName: undefined,
+    idNumber: undefined,
+    phone: "+14155550100",
+    email: "ops@acme.example",
+    monthlyPrice: 0,
+    oneTimeFee: fee,
+    tier: null,
+    additionalServices: [],
+    date: "16/08/2026",
+    locale: "en",
+    vatExempt: true,
+    customBodyHtml: quoteBodyHtml({
+      scope: "Landing page design and build",
+      oneTimeFee: fee,
+      vatExempt: true,
+      locale: "en",
+    }),
+  });
+}
+
+test("a foreign quote renders in English, left-to-right", () => {
+  const html = renderForeign(2000);
+  assert.ok(html.includes('dir="ltr"'), "document must be LTR");
+  assert.ok(html.includes("Total due"));
+  assert.ok(html.includes("Project fee"));
+  assert.equal(/סה״כ לתשלום|התמורה/.test(html), false, "no Hebrew price labels");
+});
+
+test("a foreign quote charges the net amount — no VAT line, total equals the fee", () => {
+  const html = renderForeign(2000);
+  assert.equal(html.includes("VAT 18%"), false);
+  // Total due must be the fee itself, not fee × 1.18.
+  assert.ok(/Total due<\/th><td><strong>₪2,000/.test(html), "total must equal the net fee");
+  assert.equal(/2,360/.test(html), false, "a grossed-up figure must not appear");
+});
+
+test("a foreign quote states in English that nothing recurs", () => {
+  const html = renderForeign(500);
+  assert.ok(html.includes("No subscription and no recurring charge"));
+});
