@@ -151,7 +151,7 @@ export default function PartnerReportPage() {
       {data?.settlement && (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 space-y-2">
           <div className="text-xs text-gray-400">
-            התחשבנות חודשית (מודל 12.8): הכנסות פיוז'ן נטו{" "}
+            התחשבנות חודשית (מודל 12.8): הכנסות פיוז&apos;ן נטו{" "}
             <span className="font-mono text-gray-200">₪{fmtNum(data.books?.fuzion.profit)}</span>
             {" "}− הוצאות משותפות{" "}
             <span className="font-mono text-gray-200">₪{fmtNum(data.settlement.sharedExpenses)}</span>
