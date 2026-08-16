@@ -6,6 +6,7 @@ import {
   requirePersistedUserRole,
 } from "@/lib/auth/persisted-role";
 import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
+import { decideClientDeletion } from "@/lib/clients/deletion";
 
 export async function GET(
   _request: NextRequest,
@@ -181,9 +182,44 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await prisma.client.delete({ where: { id } });
+    // A client with any financial trace is ARCHIVED, never deleted. This
+    // route hard-deleted סולל בונה in Aug 2026 and onDelete: Cascade took
+    // three one-off jobs (₪4,000) with it; the DB's 6-hour history window had
+    // long closed. See src/lib/clients/deletion.ts.
+    const history = await prisma.client.findUnique({
+      where: { id },
+      select: {
+        _count: {
+          select: { jobs: true, agreements: true, products: true, expenses: true },
+        },
+        agreements: { select: { _count: { select: { charges: true } } } },
+      },
+    });
+    if (!history) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const decision = decideClientDeletion({
+      jobs: history._count.jobs,
+      agreements: history._count.agreements,
+      products: history._count.products,
+      expenses: history._count.expenses,
+      charges: history.agreements.reduce((n, a) => n + a._count.charges, 0),
+    });
 
-    return NextResponse.json({ success: true });
+    if (decision.action === "archive") {
+      await prisma.client.update({
+        where: { id },
+        data: { archivedAt: new Date() },
+      });
+      return NextResponse.json({
+        success: true,
+        action: "archived",
+        reason: decision.reason,
+      });
+    }
+
+    await prisma.client.delete({ where: { id } });
+    return NextResponse.json({ success: true, action: "deleted" });
   } catch (error) {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

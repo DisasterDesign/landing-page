@@ -74,10 +74,22 @@ export async function DELETE(
     throw error;
   }
   const { id } = await params;
-  try {
-    await prisma.clientJob.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch {
+  const job = await prisma.clientJob.findUnique({
+    where: { id },
+    select: { status: true, paidAt: true },
+  });
+  if (!job) {
     return NextResponse.json({ error: "העבודה לא נמצאה" }, { status: 404 });
   }
+  // A paid job is a settled receivable — money that arrived and was counted.
+  // Deleting it silently rewrites the month it landed in. Only an unpaid,
+  // still-open job may be removed (a typo, a duplicate); a paid one stays.
+  if (job.status === "PAID" || job.paidAt) {
+    return NextResponse.json(
+      { error: "עבודה ששולמה היא רשומה כספית ולא ניתן למחוק אותה. אפשר לערוך את הפרטים." },
+      { status: 409 },
+    );
+  }
+  await prisma.clientJob.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
 }

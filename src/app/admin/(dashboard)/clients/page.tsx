@@ -274,9 +274,9 @@ export default function ClientsPage() {
   const deleteClient = async (id: string) => {
     const client = clients.find((c) => c.id === id);
     const ok = await confirmDanger({
-      title: `מחיקת לקוח`,
-      message: `הלקוח "${client?.name || "לקוח"}" יימחק לצמיתות. הפעולה אינה הפיכה.`,
-      confirmLabel: "מחק",
+      title: `הסרת לקוח`,
+      message: `הלקוח "${client?.name || "לקוח"}" יוסר מהרשימה. אם יש לו היסטוריה כספית (עבודות, הסכמים, חיובים) הוא יועבר לארכיון ולא יימחק.`,
+      confirmLabel: "הסר",
       dangerous: true,
     });
     if (!ok) return;
@@ -286,7 +286,12 @@ export default function ClientsPage() {
     try {
       const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
-      toast.success("נמחק");
+      const json = await res.json().catch(() => ({}));
+      if (json.action === "archived") {
+        toast.success("הועבר לארכיון — ההיסטוריה נשמרה", { duration: 5000 });
+      } else {
+        toast.success("נמחק");
+      }
     } catch {
       toast.error("שגיאה במחיקה");
       fetchClients();
