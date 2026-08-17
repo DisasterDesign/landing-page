@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import {
   getFormLeads,
@@ -21,7 +21,7 @@ import { ingestMetaLead } from "@/lib/leads/meta-ingestion";
  */
 export async function POST(req: Request) {
   try {
-    const { userId } = await requireOwner();
+    const { userId } = await requireAdmin();
 
     // Determine which form to pull from
     let formId: string | undefined;

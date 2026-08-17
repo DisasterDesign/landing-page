@@ -1,12 +1,15 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { buildAuthUrl, getMetaConfig } from "@/lib/facebook";
 import { randomBytes } from "crypto";
 
 export async function GET() {
   try {
-    const { userId } = await requireOwner();
+    // ADMIN, not owner: the connection is made by whichever admin has a
+    // Facebook profile with access to the Page. Since 16.8.2026 that is Roy —
+    // Elad's profile is gone. Pinned by src/lib/integrations/facebook-gate.test.ts.
+    const { userId } = await requireAdmin();
 
     if (!getMetaConfig()) {
       return NextResponse.json(

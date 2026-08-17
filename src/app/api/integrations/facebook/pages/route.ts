@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 
 /**
  * Returns the list of Pages from the OAuth-set fb_pages cookie.
@@ -9,7 +9,7 @@ import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
  */
 export async function GET() {
   try {
-    await requireOwner();
+    await requireAdmin();
 
     const cookieStore = await cookies();
     const raw = cookieStore.get("fb_pages")?.value;

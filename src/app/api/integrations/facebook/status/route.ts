@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getMetaConfig } from "@/lib/facebook";
 
 export async function GET() {
   try {
-    const { userId } = await requireOwner();
+    const { userId } = await requireAdmin();
 
     const oauthConfigured = getMetaConfig() !== null;
 

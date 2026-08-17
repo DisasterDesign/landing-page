@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, ViewerAuthorizationError } from "@/lib/auth/viewer";
+import { requireAdmin, ViewerAuthorizationError } from "@/lib/auth/viewer";
 import {
   exchangeCodeForUserToken,
   exchangeForLongLivedUserToken,
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     // auth gate translates to the error-redirect instead of viewerErrorResponse.
     let userId: string;
     try {
-      ({ userId } = await requireOwner());
+      ({ userId } = await requireAdmin());
     } catch (error) {
       if (error instanceof ViewerAuthorizationError) {
         return redirectWithError(req, "unauthorized");

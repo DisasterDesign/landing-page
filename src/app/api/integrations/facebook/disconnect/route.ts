@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import { unsubscribePage } from "@/lib/facebook";
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await requireOwner();
+    const { userId } = await requireAdmin();
 
     const body = await req.json().catch(() => ({}));
     const pageId: string | undefined = body.pageId;

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { decrypt } from "@/lib/crypto";
 import { subscribePageToLeadgen } from "@/lib/facebook";
 
@@ -13,7 +13,7 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await requireOwner();
+    const { userId } = await requireAdmin();
 
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) {
