@@ -1,7 +1,14 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-const GRAPH = "https://graph.facebook.com/v19.0";
-const OAUTH = "https://www.facebook.com/v19.0/dialog/oauth";
+// Pinned deliberately. v19.0 sat here past its 21.5.2026 expiry — Meta does
+// not reject expired versions, it silently serves "the next oldest usable
+// version", so the integration was running on a version that could move
+// without warning. v25.0 is what Meta reports for our own leadgen webhook
+// subscription. Bumping this means checking Meta's changelog for the new
+// expiry first; pinned by src/lib/integrations/graph-version.test.ts.
+const GRAPH_VERSION = "v25.0";
+const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const OAUTH = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`;
 
 export const FACEBOOK_SCOPES = [
   "pages_show_list",
