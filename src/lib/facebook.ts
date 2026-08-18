@@ -20,13 +20,19 @@ export interface MetaConfig {
 }
 
 export function getMetaConfig(): MetaConfig | null {
-  // Hardcoded fallbacks — Vercel env vars not yet provisioned for META_*.
-  // Once added, env values take precedence. See cardcom.ts for the same
-  // pattern; do NOT mirror this back into cardcom.ts (those env vars are set).
-  const appId = process.env.META_APP_ID || "1731795861128446";
-  const appSecret = process.env.META_APP_SECRET || "fb1f38c1737ead86b3cea5ebc2685c12";
-  const redirectUri = process.env.META_REDIRECT_URI || "https://www.fuzionwebz.com/api/integrations/facebook/callback";
-  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || "f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9";
+  // Env only. The previous app's id, secret and verify token were literals
+  // here and went public on GitHub on 23.4.2026 (GitGuardian flagged them the
+  // same day). That app is also dead — its sole admin was Elad's since-deleted
+  // profile — so it is being replaced by one Roy owns, and the replacement's
+  // secret must never live in source. Pinned by
+  // src/lib/integrations/meta-config.test.ts.
+  //
+  // Missing values return null, which makes /admin/integrations/facebook show
+  // "מחכה להגדרת מפתחות Meta" rather than authenticate against nothing.
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  const redirectUri = process.env.META_REDIRECT_URI;
+  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
   if (!appId || !appSecret || !redirectUri || !verifyToken) return null;
   return { appId, appSecret, redirectUri, verifyToken };
 }

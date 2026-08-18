@@ -54,7 +54,7 @@
 META_APP_ID = <מהשלב הקודם>
 META_APP_SECRET = <מהשלב הקודם>
 META_REDIRECT_URI = https://www.fuzionwebz.com/api/integrations/facebook/callback
-META_WEBHOOK_VERIFY_TOKEN = f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9
+META_WEBHOOK_VERIFY_TOKEN = <META_WEBHOOK_VERIFY_TOKEN — ראה Vercel env, לא נכתב במסמך>
 
 # סינון — ה-Page שלנו + הטופס הפנימי של Fuzion
 META_PAGE_ID = 482956251578120
@@ -71,7 +71,7 @@ FACEBOOK_LEAD_FORM_ID = 1505628047948105
 
 1. ב-App Dashboard → **Webhooks** (Products) → **Subscribe to this object → Page**
 2. **Callback URL**: `https://www.fuzionwebz.com/api/webhooks/facebook`
-3. **Verify Token**: `f3a0ac807a7ef890660df600f6b354c07fb8c9ccdf9aaaa9`
+3. **Verify Token**: `<META_WEBHOOK_VERIFY_TOKEN — ראה Vercel env, לא נכתב במסמך>`
 4. **Verify and Save** — Meta יקרא ל-GET שלנו ויחפש את ה-token. אם זה תואם → ✓ Verified.
 5. אחרי Verified: בלשונית `Page` → **Subscribe to fields** → סמן **`leadgen`** ✓
 
