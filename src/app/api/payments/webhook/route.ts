@@ -13,6 +13,7 @@ import { encrypt } from "@/lib/crypto";
 import { withVat } from "@/lib/vat";
 import { applyPaymentToProduct } from "@/lib/client-products";
 import { notifyAllAdmins } from "@/lib/notifications";
+import { recurringChargeNeedsAttention } from "@/lib/payments/recurring-notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
 import {
   applyPaymentFailure,
@@ -409,22 +410,15 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
   }
   if (result.disposition === "unchanged") return;
 
-  notifyAllAdmins({
-    type: "AGREEMENT_SIGNED",
-    title: success
-      ? `💰 חיוב חודשי התקבל — ${result.customerName}`
-      : `⚠️ חיוב חודשי נכשל — ${result.customerName}`,
-    body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
-  }).catch((e) => console.error("notify admins after recurring charge failed:", e));
-
-  if (result.revenueApplied) {
-    sendPaymentReceivedEmail({
-      customerName: result.customerName,
-      amount: result.amount,
-      invoiceNumber: result.invoiceNumber ?? undefined,
-      agreementTier: result.tier,
-      isRecurring: true,
-    }).catch((e) => console.error("email after recurring charge failed:", e));
+  // Successful monthly charges stay silent; only exceptions interrupt.
+  // See src/lib/payments/recurring-notifications.ts.
+  if (recurringChargeNeedsAttention({ success, reviewRequired: false })) {
+    notifyAllAdmins({
+      type: "AGREEMENT_SIGNED",
+      title: `⚠️ חיוב חודשי נכשל — ${result.customerName}`,
+      body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
+      url: "/admin/finance/debtors",
+    }).catch((e) => console.error("notify admins after recurring charge failed:", e));
   }
 }
 

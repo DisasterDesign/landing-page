@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { notifyAllAdmins } from "@/lib/notifications";
 import { verifyRecurringWebhookSecret } from "@/lib/cardcom-webhook-auth";
 import { recordVerifiedRecurringCharge } from "@/lib/cardcom-recurring-charge";
-import { sendPaymentReceivedEmail } from "@/lib/email";
 
 /**
  * Cardcom's OFFICIAL recurring-payments webhook ("דיווח למערכת חיצונית",
@@ -117,20 +116,10 @@ export async function POST(req: NextRequest) {
           body: `סטטוס: ${status ?? "?"} · קוד דחייה ${num(payload.ResposeCode) ?? num(payload.ResponseCode) ?? "?"} · ניסיון ${num(payload.BillingAttempts) ?? "?"} · ₪${result.amount}`,
           url: "/admin/finance/debtors",
         }).catch((e) => console.error("[recurring-webhook] failure notify failed:", e));
-      } else if (result.revenueApplied) {
-        await notifyAllAdmins({
-          type: "AGREEMENT_SIGNED",
-          title: `💰 חיוב חודשי התקבל — ${result.customerName}`,
-          body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
-        }).catch((e) => console.error("[recurring-webhook] success notify failed:", e));
-        await sendPaymentReceivedEmail({
-          customerName: result.customerName,
-          amount: result.amount,
-          invoiceNumber: result.invoiceNumber ?? undefined,
-          agreementTier: result.tier,
-          isRecurring: true,
-        }).catch((e) => console.error("[recurring-webhook] success email failed:", e));
       }
+      // A charge that simply worked is not news — see
+      // src/lib/payments/recurring-notifications.ts. The money is recorded
+      // above and visible in /admin/finance; only exceptions interrupt.
       return NextResponse.json({ ok: true });
     } catch (error) {
       console.error("[recurring-webhook] charge processing failed:", error);

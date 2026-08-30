@@ -12,7 +12,6 @@ import {
   cardcomRecurringHistoryProviderDealId,
   recordVerifiedRecurringCharge,
 } from "@/lib/cardcom-recurring-charge";
-import { sendPaymentReceivedEmail } from "@/lib/email";
 import { notifyAllAdmins, notifyOwner } from "@/lib/notifications";
 import { findUnlinkedOrders, summariseUnlinked } from "@/lib/cardcom/unlinked";
 import { listSuccessfulTransactions } from "@/lib/cardcom";
@@ -215,21 +214,9 @@ async function syncHistoryRow(
       body: `סטטוס: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ₪${result.amount} (התגלה ב-reconciliation, לא הגיע webhook)`,
       url: "/admin/finance/debtors",
     }).catch((e) => console.error("[cardcom-reconcile] failure notify failed:", e));
-  } else if (result.revenueApplied) {
-    await notifyAllAdmins({
-      type: "AGREEMENT_SIGNED",
-      title: `💰 חיוב חודשי התגלה בסנכרון — ${result.customerName}`,
-      body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
-      url: "/admin/finance",
-    }).catch((e) => console.error("[cardcom-reconcile] success notify failed:", e));
-    await sendPaymentReceivedEmail({
-      customerName: result.customerName,
-      amount: result.amount,
-      invoiceNumber: result.invoiceNumber ?? undefined,
-      agreementTier: result.tier,
-      isRecurring: true,
-    }).catch((e) => console.error("[cardcom-reconcile] success email failed:", e));
   }
+  // A charge the sweep merely confirms as collected is not news — see
+  // src/lib/payments/recurring-notifications.ts.
 }
 
 /**
