@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/prospecting-worker",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/20 * * * *"
     },
     {
       "path": "/api/cron/prospecting-maintenance",
@@ -22,11 +22,11 @@
     },
     {
       "path": "/api/cron/lead-followups",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/20 * * * *"
     },
     {
       "path": "/api/cron/facebook-sync",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/20 * * * *"
     }
   ]
 }
