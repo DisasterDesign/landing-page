@@ -1074,6 +1074,10 @@ model Agreement {
   // of services to a foreign resident). Both default to the Israeli case.
   locale             String          @default("he") // "he" | "en"
   vatExempt          Boolean         @default(false)
+  /// Months of active subscription before the website becomes the client's
+  /// (contract sections 4-5). 18 is the term since 9.2026; rows signed under
+  /// the v7 document were backfilled to 12, the figure frozen in their content.
+  ownershipMonths    Int             @default(18)
   // True when issued by a seller — captured at creation so the first-month
   // commission is owed even if the creator's role changes before payment.
   isSellerDeal       Boolean         @default(false)

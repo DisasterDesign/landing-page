@@ -132,6 +132,7 @@ export async function PATCH(
       "email",
       "locale",
       "vatExempt",
+      "ownershipMonths",
     ];
     const contentChanged = contentKeys.some((k) => k in draftFields);
     const isUnsigned = existing.status === "DRAFT" || existing.status === "SENT";
@@ -153,6 +154,7 @@ export async function PATCH(
         date: new Date().toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
         locale,
         vatExempt: merged.vatExempt,
+        ownershipMonths: merged.ownershipMonths,
         // Preserve custom-proposal rendering (e.g. Ormat) on admin edits;
         // null for all standard tier agreements → unchanged path.
         customBodyHtml: merged.customBodyHtml ?? undefined,

@@ -178,6 +178,8 @@ export interface ValidatedAgreementDraft {
   content: string;
   locale: "he" | "en";
   vatExempt: boolean;
+  /** Ownership-transfer horizon (sections 4-5). Omitted = the DB default, 18. */
+  ownershipMonths?: number;
   documentVersion: number;
   clientId?: string | null;
   /**

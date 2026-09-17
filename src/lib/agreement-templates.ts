@@ -8,8 +8,15 @@ export type AgreementLocale = "he" | "en";
 // v6: added English (LTR) rendering + VAT-exempt (zero-rate) pricing for
 // foreign clients.
 // v7: term clause — no minimum commitment; website ownership transfers to the
-// client (ZIP of raw materials) after 12 consecutive months of active subscription.
-export const AGREEMENT_DOCUMENT_VERSION = 7;
+// client (ZIP of raw materials) after N consecutive months of active subscription.
+// v8: N is a per-agreement field (Agreement.ownershipMonths), default 18. Signed
+// v7 documents keep their frozen 12-month text; only new renders use the field.
+export const AGREEMENT_DOCUMENT_VERSION = 8;
+
+// Re-exported for callers that already import the renderer; the constant
+// itself lives in a fs-free module so client forms can share it.
+export { DEFAULT_OWNERSHIP_MONTHS } from "@/lib/agreements/ownership";
+import { DEFAULT_OWNERSHIP_MONTHS } from "@/lib/agreements/ownership";
 
 let cachedLogoDataUrl: string | null = null;
 function getLogoDataUrl(): string {
@@ -43,6 +50,8 @@ export interface AgreementData {
   locale?: AgreementLocale;
   /** Zero-rate VAT (export of services to a foreign resident). */
   vatExempt?: boolean;
+  /** Ownership-transfer horizon in months; DEFAULT_OWNERSHIP_MONTHS when absent. */
+  ownershipMonths?: number;
   /**
    * One-off custom proposals (e.g. video production) supply their own legal
    * body as trusted HTML. When present, renderAgreement renders a document
@@ -212,7 +221,7 @@ interface LocaleStrings {
   monthlyLineVatFree: (net: string) => string;
   setupLine: (net: string, gross: string) => string;
   setupLineVatFree: (net: string) => string;
-  clauses: { title: string; body: string }[];
+  clauses: (ownershipMonths: number) => { title: string; body: string }[];
   signaturesHeading: string;
   customerSignatureLabel: (name: string) => string;
   providerSignatureLabel: string;
@@ -227,14 +236,14 @@ interface LocaleStrings {
   customLabel: string;
 }
 
-const HE_CLAUSES: { title: string; body: string }[] = [
+const HE_CLAUSES = (m: number): { title: string; body: string }[] => [
   {
     title: "4. תקופת ההסכם",
-    body: "להתקשרות אין תקופת התחייבות מינימלית. השירות ניתן על בסיס חודשי, והלקוח רשאי להפסיק את ההתקשרות בכל עת; ההפסקה תיכנס לתוקף בתום החודש ששולם. לאחר 12 חודשים רצופים של מנוי פעיל, בעלות האתר עוברת ללקוח כמפורט בסעיף 5.",
+    body: `להתקשרות אין תקופת התחייבות מינימלית. השירות ניתן על בסיס חודשי, והלקוח רשאי להפסיק את ההתקשרות בכל עת; ההפסקה תיכנס לתוקף בתום החודש ששולם. לאחר ${m} חודשים רצופים של מנוי פעיל, בעלות האתר עוברת ללקוח כמפורט בסעיף 5.`,
   },
   {
     title: "5. בעלות על קבצי האתר",
-    body: "עד להשלמת 12 חודשים רצופים של מנוי פעיל, קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות. בתום 12 חודשים רצופים של מנוי פעיל ולאחר תשלום מלא של כל המגיע, האתר עובר לבעלותו המלאה של הלקוח, והלקוח מקבל קובץ ZIP הכולל את חומרי הגלם וקבצי הבנייה של האתר, ללא תשלום נוסף.",
+    body: `עד להשלמת ${m} חודשים רצופים של מנוי פעיל, קוד המקור וקבצי הבנייה של האתר נמצאים בבעלות נותן השירות. בתום ${m} חודשים רצופים של מנוי פעיל ולאחר תשלום מלא של כל המגיע, האתר עובר לבעלותו המלאה של הלקוח, והלקוח מקבל קובץ ZIP הכולל את חומרי הגלם וקבצי הבנייה של האתר, ללא תשלום נוסף.`,
   },
   {
     title: "6. בעלות על תכנים",
@@ -274,14 +283,14 @@ const HE_CLAUSES: { title: string; body: string }[] = [
   },
 ];
 
-const EN_CLAUSES: { title: string; body: string }[] = [
+const EN_CLAUSES = (m: number): { title: string; body: string }[] => [
   {
     title: "4. Term of the Agreement",
-    body: "This engagement has no minimum commitment period. The service is provided on a monthly basis, and the Client may terminate the engagement at any time; termination takes effect at the end of the month already paid for. After 12 consecutive months of active subscription, ownership of the website transfers to the Client as set out in section 5.",
+    body: `This engagement has no minimum commitment period. The service is provided on a monthly basis, and the Client may terminate the engagement at any time; termination takes effect at the end of the month already paid for. After ${m} consecutive months of active subscription, ownership of the website transfers to the Client as set out in section 5.`,
   },
   {
     title: "5. Ownership of the Website Files",
-    body: "Until the Client completes 12 consecutive months of active subscription, the source code and build files of the website remain the property of the Service Provider. Upon completion of 12 consecutive months of active subscription, and after full payment of all amounts due, the website becomes the full property of the Client, and the Client receives a ZIP archive containing the raw materials and build files of the website, at no additional charge.",
+    body: `Until the Client completes ${m} consecutive months of active subscription, the source code and build files of the website remain the property of the Service Provider. Upon completion of ${m} consecutive months of active subscription, and after full payment of all amounts due, the website becomes the full property of the Client, and the Client receives a ZIP archive containing the raw materials and build files of the website, at no additional charge.`,
   },
   {
     title: "6. Ownership of Content",
@@ -550,6 +559,12 @@ export function renderAgreement(
   }
   const locale: AgreementLocale = data.locale === "en" ? "en" : "he";
   const vatExempt = !!data.vatExempt;
+  // A whole, positive month count or the business default — never NaN/0 in a
+  // legal clause, whatever a caller passed.
+  const ownershipMonths =
+    Number.isInteger(data.ownershipMonths) && (data.ownershipMonths as number) > 0
+      ? (data.ownershipMonths as number)
+      : DEFAULT_OWNERSHIP_MONTHS;
   const t = STRINGS[locale];
   const fmtMoney = moneyFormatter(locale);
 
@@ -690,7 +705,7 @@ ${extras.length > 0 ? `
   <p>${escapeHtml(payClause2)}</p>
 </div>
 
-${t.clauses
+${t.clauses(ownershipMonths)
   .map(
     (c) => `<h2>${escapeHtml(c.title)}</h2>
 <div class="clause">

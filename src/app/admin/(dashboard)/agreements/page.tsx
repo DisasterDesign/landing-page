@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { DEFAULT_OWNERSHIP_MONTHS, MAX_OWNERSHIP_MONTHS, MIN_OWNERSHIP_MONTHS } from "@/lib/agreements/ownership";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -151,6 +152,9 @@ export default function AgreementsPage() {
   const [contactKey, setContactKey] = useState<string>("");
   // Foreign client: English contract + English Cardcom page + zero-rate VAT.
   const [isForeign, setIsForeign] = useState(false);
+  // Ownership-transfer horizon (contract sections 4-5). Kept as text so the
+  // field can be cleared while typing; validated on submit.
+  const [ownershipMonths, setOwnershipMonths] = useState<string>(String(DEFAULT_OWNERSHIP_MONTHS));
 
   // Client list (for create-time picker + inline relink action)
   const [clientsList, setClientsList] = useState<ClientLite[]>([]);
@@ -350,6 +354,7 @@ export default function AgreementsPage() {
     setNewProductName("");
     setContactKey("");
     setIsForeign(false);
+    setOwnershipMonths(String(DEFAULT_OWNERSHIP_MONTHS));
   };
 
   // Every contact identity known for a client: one per distinct signer on its
@@ -507,6 +512,13 @@ export default function AgreementsPage() {
         return;
       }
 
+      const months = Number(ownershipMonths);
+      if (!Number.isInteger(months) || months < MIN_OWNERSHIP_MONTHS || months > MAX_OWNERSHIP_MONTHS) {
+        toast.error(`מספר חודשים להעברת בעלות: מספר שלם בין ${MIN_OWNERSHIP_MONTHS} ל-${MAX_OWNERSHIP_MONTHS}`);
+        setCreating(false);
+        return;
+      }
+
       const res = await fetch("/api/agreements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -522,6 +534,7 @@ export default function AgreementsPage() {
           email: email.trim(),
           locale: isForeign ? "en" : "he",
           vatExempt: isForeign,
+          ownershipMonths: months,
           ...(agreementLeadId ? { leadId: agreementLeadId } : {}),
           ...(clientId ? { clientId } : {}),
           ...(clientId && productChoice && productChoice !== "new"
@@ -1124,6 +1137,38 @@ export default function AgreementsPage() {
               ? "לקוח חו״ל: המחירים נרשמים בש״ח ללא מע״מ (עסקה בשיעור מע״מ אפס). החוזה והחיוב ב-Cardcom יהיו ללא מע״מ."
               : "המחירים נרשמים לפני מע״מ. החוזה והחיוב ב-Cardcom יוסיפו מע״מ אוטומטית."}
           </p>
+
+          {/* Ownership-transfer horizon — sections 4-5 of the contract. 18 is the
+              business term; a deal can set another value. */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">
+              העברת בעלות על האתר ללקוח אחרי (חודשים)
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                value={ownershipMonths}
+                onChange={(e) => setOwnershipMonths(e.target.value)}
+                inputMode="numeric"
+                min={MIN_OWNERSHIP_MONTHS}
+                max={MAX_OWNERSHIP_MONTHS}
+                step={1}
+                className="w-28 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
+              />
+              {ownershipMonths !== String(DEFAULT_OWNERSHIP_MONTHS) && (
+                <button
+                  type="button"
+                  onClick={() => setOwnershipMonths(String(DEFAULT_OWNERSHIP_MONTHS))}
+                  className="text-xs text-cyan hover:underline"
+                >
+                  חזרה ל-{DEFAULT_OWNERSHIP_MONTHS}
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              נכנס לסעיפים 4 ו-5 בחוזה: אחרי {ownershipMonths || "—"} חודשים רצופים של מנוי פעיל האתר עובר לבעלות הלקוח (קובץ ZIP). ברירת המחדל {DEFAULT_OWNERSHIP_MONTHS}.
+            </p>
+          </div>
 
           {/* Foreign client toggle — English contract + English Cardcom page + zero-rate VAT */}
           <button

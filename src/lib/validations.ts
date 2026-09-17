@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_OWNERSHIP_MONTHS, MAX_OWNERSHIP_MONTHS, MIN_OWNERSHIP_MONTHS } from "@/lib/agreements/ownership";
 
 export const createContactSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -90,6 +91,16 @@ export const createAgreementSchema = z.object({
   // "foreign client" toggle in the admin UI; stored as two fields.
   locale: agreementLocaleEnum.optional().default("he"),
   vatExempt: z.boolean().optional().default(false),
+  // Months of active subscription before the website becomes the client's
+  // (sections 4-5 of the contract). Whole months, bounded so a typo cannot
+  // put "0" or "180" into a signed document.
+  ownershipMonths: z
+    .number()
+    .int("מספר חודשים שלם")
+    .min(MIN_OWNERSHIP_MONTHS, "לפחות חודש אחד")
+    .max(MAX_OWNERSHIP_MONTHS, "עד 60 חודשים")
+    .optional()
+    .default(DEFAULT_OWNERSHIP_MONTHS),
 });
 
 /**
@@ -430,6 +441,7 @@ export const updateAgreementSchema = z.object({
   clientId: z.string().nullable().optional(),
   locale: agreementLocaleEnum.optional(),
   vatExempt: z.boolean().optional(),
+  ownershipMonths: z.number().int().min(MIN_OWNERSHIP_MONTHS).max(MAX_OWNERSHIP_MONTHS).optional(),
 });
 
 export const signAgreementSchema = z.object({

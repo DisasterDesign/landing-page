@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
       newProductName,
       locale,
       vatExempt,
+      ownershipMonths,
     } = parsed.data;
 
     const cleanedExtras = (additionalServices ?? [])
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
       date: new Date().toLocaleDateString(locale === "en" ? "en-GB" : "he-IL"),
       locale,
       vatExempt,
+      ownershipMonths,
     });
 
     // Product coverage is meaningless without a client to hang it on.
@@ -204,6 +206,7 @@ export async function POST(request: NextRequest) {
         content,
         locale,
         vatExempt,
+        ownershipMonths,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
         clientId: clientId ?? null,
       } as const;

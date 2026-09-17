@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
       date: new Date().toLocaleDateString("he-IL"),
       locale: "he",
       vatExempt: false,
+      ownershipMonths: parsed.data.ownershipMonths,
     });
 
     await updateLeadContactDetails({
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
         content,
         locale: "he",
         vatExempt: false,
+        ownershipMonths: parsed.data.ownershipMonths,
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
       },
     });

@@ -349,6 +349,7 @@ export async function updateAgreementDraftFields(
       clientId?: string | null;
       locale?: string;
       vatExempt?: boolean;
+      ownershipMonths?: number;
       content?: string;
       documentVersion?: number;
       /** Quote-only fields; the caller rebuilds customBodyHtml when they change. */

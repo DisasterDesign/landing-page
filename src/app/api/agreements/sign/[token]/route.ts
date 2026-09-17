@@ -47,6 +47,7 @@ export async function GET(
         signedAt: true,
         locale: true,
         vatExempt: true,
+        ownershipMonths: true,
       },
     });
 
@@ -133,6 +134,8 @@ export async function POST(
         signedIp: signedIp ?? undefined,
         signedUserAgent: signedUserAgent ?? undefined,
         locale,
+        // The horizon the customer saw in the draft is the one they sign.
+        ownershipMonths: existing.ownershipMonths,
         vatExempt: existing.vatExempt,
         // One-off custom proposals (e.g. Ormat video) render their own legal body.
         customBodyHtml: existing.customBodyHtml ?? undefined,
