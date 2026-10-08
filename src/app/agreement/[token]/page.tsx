@@ -5,6 +5,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import DocumentLocale from "@/components/util/DocumentLocale";
 import SignAgreementClient from "./SignAgreementClient";
+import ResumePaymentButton from "./ResumePaymentButton";
+import { signedAgreementView } from "@/lib/agreements/signed-view";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,7 @@ const getAgreement = cache(async (token: string) => {
       phone: true,
       email: true,
       status: true,
+      paymentStatus: true,
       content: true,
       signedAt: true,
       locale: true,
@@ -148,6 +151,9 @@ export default async function AgreementSignPage({
   }
 
   if (agreement.status === "SIGNED") {
+    // Signed is not done: until the first payment completes, the page must
+    // still lead to Cardcom (src/lib/agreements/signed-view.ts).
+    const view = signedAgreementView(agreement);
     return (
       <BrandShell dir={dir}>
         <div className="min-h-screen flex items-center justify-center px-6">
@@ -171,6 +177,7 @@ export default async function AgreementSignPage({
                       : ""
                   }. תודה!`}
             </p>
+            {view === "resume-payment" && <ResumePaymentButton token={token} en={en} />}
             <a
               href={`/agreement/${token}/pdf`}
               target="_blank"
