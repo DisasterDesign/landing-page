@@ -806,6 +806,10 @@ model BlogPost {
   /// Previous slug, populated by the slug migration. Used to 301-redirect
   /// stale URLs to the new canonical slug.
   oldSlug     String?
+  /// Other historical URLs for this post, redirected exactly. For one-off
+  /// slugs that `oldSlug` (one generation) and the gen-1 heuristic cannot
+  /// reach — Search Console still crawled `35-טפסים-שממירים` in 10.2026.
+  slugAliases String[]  @default([])
   excerpt     String?
   content     String // Rich HTML from TipTap
   coverImage  String?

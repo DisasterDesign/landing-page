@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { matchLegacySlug } from "@/lib/blog/legacy-slug";
+import { resolveSlugRedirect } from "@/lib/blog/slug-aliases";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import BlogPostClient from "./BlogPostClient";
 
@@ -32,20 +32,13 @@ async function getPost(slug: string) {
  * history. Both queries run only on the miss path, never on a live URL.
  */
 async function findRedirectTarget(slug: string): Promise<string | null> {
-  const stale = await prisma.blogPost.findFirst({
-    where: { oldSlug: slug, published: true },
-    select: { slug: true },
-  });
-  if (stale) return stale.slug;
-
+  // One query on the miss path. Resolution order (explicit alias → oldSlug →
+  // gen-1 shape) lives in src/lib/blog/slug-aliases.ts and is unit-tested.
   const published = await prisma.blogPost.findMany({
     where: { published: true },
-    select: { slug: true },
+    select: { slug: true, oldSlug: true, slugAliases: true },
   });
-  return matchLegacySlug(
-    slug,
-    published.map((p) => p.slug),
-  );
+  return resolveSlugRedirect(slug, published);
 }
 
 async function getAdjacentPosts(publishedAt: Date) {
