@@ -1,21 +1,18 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
+import { financeClientScope, financeProductScope, financeAgreementScope, redactFinanceAgreement, requireBookSelection } from "@/lib/finance/access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { createAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
+import { claimUnlinkedProductForAgreement } from "@/lib/client-products";
 import { withVat } from "@/lib/vat";
 import type { AgreementStatus, AgreementTier, Prisma } from "@prisma/client";
-import {
-  createAgreementForLead,
-  createStandaloneAgreement,
-} from "@/lib/leads/agreement-lifecycle";
+import { createAgreementForLead, createStandaloneAgreement } from "@/lib/leads/agreement-lifecycle";
 import { updateLeadContactDetails } from "@/lib/leads/corrections";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireOwner, requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 
 /**
  * Which agreements a given partner generated.
@@ -54,6 +51,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const url = new URL(request.url);
     const status = url.searchParams.get("status") as AgreementStatus | null;
@@ -71,6 +69,7 @@ export async function GET(request: NextRequest) {
         // belong to /admin/jobs — mixing them in here would put a ₪3,500 logo
         // job next to the monthly contracts and break every count on the page.
         kind: "SUBSCRIPTION",
+        ...financeAgreementScope(viewer),
         ...(status ? { status } : {}),
         ...(tier ? { tier } : {}),
         ...(partnerId ? partnerAttributionScope(partnerId) : {}),
@@ -85,8 +84,10 @@ export async function GET(request: NextRequest) {
     // "copy link" button building /agreement/undefined, which failed silently
     // for days. The rule that actually holds: the token may ride on
     // admin/owner-scoped responses, never on public or unscoped ones.
-    return NextResponse.json({ data: agreements });
+    return NextResponse.json({ data: agreements.map(a => redactFinanceAgreement(viewer, a)) });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -109,7 +110,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const viewer = await requireAdmin();
     const body = await request.json();
+    const financeBook = requireBookSelection(viewer, body.financeBook, viewer.isOwner ? "PRIVATE" : "SHARED");
     const parsed = createAgreementSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -167,9 +170,9 @@ export async function POST(request: NextRequest) {
     // Validate the picked product BEFORE creating the agreement, so a bad pick
     // doesn't leave an orphan agreement behind.
     if (clientId && productId) {
-      const product = await prisma.clientProduct.findUnique({
-        where: { id: productId },
-        select: { clientId: true, archivedAt: true },
+      const product = await prisma.clientProduct.findFirst({
+        where: { id: productId, ...financeProductScope(viewer) },
+        select: { clientId: true, archivedAt: true, financeBook: true, agreementId: true },
       });
       if (!product || product.clientId !== clientId || product.archivedAt) {
         return NextResponse.json(
@@ -177,10 +180,20 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      if (product.agreementId) return NextResponse.json({ error: "המוצר כבר מקושר להסכם; יש ליצור מוצר חדש" }, { status: 409 });
     }
 
+    if (clientId) {
+      const linkedClient = await prisma.client.findFirst({ where: { id: clientId, ...financeClientScope(viewer) }, select: { id: true } });
+      if (!linkedClient) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (clientId && productId) {
+      const picked = await prisma.clientProduct.findUnique({ where: { id: productId }, select: { financeBook: true } });
+      if (picked?.financeBook !== financeBook) return NextResponse.json({ error: "יש ליצור מוצר חדש לשיוך כספי שונה" }, { status: 409 });
+    }
     if (leadId) {
-      await updateLeadContactDetails({
+      await requireFinanceLeadAccess(viewer.userId, leadId);
+    await updateLeadContactDetails({
         leadId,
         details: {
           name: customerName,
@@ -190,10 +203,11 @@ export async function POST(request: NextRequest) {
         },
         confirmation: "ADMIN_CONFIRMED",
         reason: "Agreement creation contact synchronization",
-        actor: { userId: session.user.id, role: "ADMIN" },
+        actor: { userId: viewer.userId, role: "ADMIN" },
       });
     }
     const agreementDraft = {
+        financeBook,
         tier: tier ?? null,
         additionalServices: cleanedExtras,
         monthlyPrice,
@@ -210,43 +224,46 @@ export async function POST(request: NextRequest) {
         documentVersion: AGREEMENT_DOCUMENT_VERSION,
         clientId: clientId ?? null,
       } as const;
-    const agreement = leadId
-      ? await createAgreementForLead({
-          leadId,
-          actor: { userId: session.user.id, role: "ADMIN" },
-          agreement: agreementDraft,
-        })
-      : await createStandaloneAgreement({
-          actor: { userId: session.user.id, role: "ADMIN" },
-          agreement: agreementDraft,
+    const agreement = await prisma.$transaction(async (transaction) => {
+      const store = {
+        transaction: <T>(operation: (db: Prisma.TransactionClient) => Promise<T>) => operation(transaction),
+      };
+      const created = leadId
+        ? await createAgreementForLead({
+            leadId,
+            actor: { userId: viewer.userId, role: "ADMIN" },
+            agreement: agreementDraft,
+          }, { store })
+        : await createStandaloneAgreement({
+            actor: { userId: viewer.userId, role: "ADMIN" },
+            agreement: agreementDraft,
+          }, { store });
+
+      // The conditional claim and agreement creation commit together. A
+      // concurrent claim cannot replace an existing agreement or leave an orphan.
+      if (clientId && productId) {
+        await claimUnlinkedProductForAgreement(transaction, {
+          productId, clientId, financeBook, agreementId: created.id,
         });
+      } else if (clientId && newProductName) {
+        await transaction.clientProduct.create({
+          data: {
+            clientId,
+            financeBook,
+            name: newProductName,
+            monthlyAmount: vatExempt ? monthlyPrice : withVat(monthlyPrice),
+            status: "",
+            agreementId: created.id,
+          },
+        });
+      }
+      return created;
+    }, { isolationLevel: "Serializable" });
 
-    // Wire the agreement to the product it pays for. This is the link the
-    // Cardcom webhook resolves by — with it in place, the first verified
-    // payment flips the product to "בוצע", stamps its entry month and
-    // re-rolls the client's MRR without anyone touching the admin.
-    if (clientId && productId) {
-      await prisma.clientProduct.update({
-        where: { id: productId },
-        data: { agreementId: agreement.id },
-      });
-    } else if (clientId && newProductName) {
-      await prisma.clientProduct.create({
-        data: {
-          clientId,
-          name: newProductName,
-          // Reference figure only — status stays ריק (not counted in MRR)
-          // until the first payment verifies, matching the strike-through
-          // presentation in the clients table.
-          monthlyAmount: vatExempt ? monthlyPrice : withVat(monthlyPrice),
-          status: "",
-          agreementId: agreement.id,
-        },
-      });
-    }
-
-    return NextResponse.json(agreement, { status: 201 });
+    return NextResponse.json(redactFinanceAgreement(viewer, agreement), { status: 201 });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     console.error("Error creating agreement:", error);
     return leadDomainErrorResponse(error);
   }

@@ -1,12 +1,10 @@
+import { financeClientScope, financeProductScope, redactFinanceClient, requireBookSelection } from "@/lib/finance/access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireOwner, requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 
 // GET - Auth required: list all clients
 //
@@ -24,6 +22,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const partnerId = new URL(request.url).searchParams.get("partnerId");
     // Only the owner may look at the business through another person's eyes.
@@ -38,20 +37,23 @@ export async function GET(request: NextRequest) {
       // partnerId — attribution is decided on the agreement, never here.
       where: {
         archivedAt: null,
+        ...financeClientScope(viewer),
         ...(partnerId ? { ownerId: partnerId } : {}),
       },
       orderBy: { number: "asc" },
       include: {
         products: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, ...financeProductScope(viewer) },
           select: CLIENT_PRODUCT_SELECT,
           orderBy: { createdAt: "asc" },
         },
       },
     });
 
-    return NextResponse.json({ data: clients });
+    return NextResponse.json({ data: clients.map(client => redactFinanceClient(viewer, client)) });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -75,12 +77,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const body = await request.json();
+    const financeBook = requireBookSelection(viewer, body.financeBook, viewer.isOwner ? "PRIVATE" : "SHARED");
 
     const client = await prisma.client.create({
       data: {
         name: body.name || "",
+        partner: financeBook === "PRIVATE" ? "personal" : "fuzion",
         status: body.status || "",
         notes: body.notes || null,
         amount: body.amount != null ? parseFloat(body.amount) : null,
@@ -97,6 +102,7 @@ export async function POST(request: NextRequest) {
     const product = await prisma.clientProduct.create({
       data: {
         clientId: client.id,
+        financeBook,
         name: client.name || "מוצר ראשי",
         status: client.status,
         monthlyAmount: body.monthlyAmount != null ? parseFloat(body.monthlyAmount) : null,
@@ -108,8 +114,10 @@ export async function POST(request: NextRequest) {
 
     // Must carry `products` — the clients table reads products.length on every
     // row, so returning a bare client would crash the render for the new row.
-    return NextResponse.json({ ...client, monthlyAmount, products: [product] }, { status: 201 });
+    return NextResponse.json(redactFinanceClient(viewer, { ...client, monthlyAmount, products: [product] }), { status: 201 });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

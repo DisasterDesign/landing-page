@@ -12,7 +12,7 @@ import {
 import { encrypt } from "@/lib/crypto";
 import { withVat } from "@/lib/vat";
 import { applyPaymentToProduct } from "@/lib/client-products";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyFinanceAdmins, notifyOwner } from "@/lib/notifications";
 import { recurringChargeNeedsAttention } from "@/lib/payments/recurring-notifications";
 import { sendPaymentReceivedEmail } from "@/lib/email";
 import {
@@ -152,6 +152,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
       cardcomRecurringId: true,
       cardcomDealId: true,
       cardcomToken: true,
+      financeBook: true,
       cardcomLowProfileId: true,
       invoiceNumber: true,
       paymentId: true,
@@ -169,7 +170,7 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
     // not enough. Alert the humans; the money side self-heals via the daily
     // reconcile, but the welcome flow (recurring order, emails) will not run
     // until someone connects this payment to an agreement.
-    await notifyAllAdmins({
+    await notifyOwner({
       type: "AGREEMENT_SIGNED",
       title: "🚨 תשלום קארדקום ללא הסכם תואם",
       body: `LowProfileId=${lowProfileId} — נמצאו ${matchingAgreements.length} הסכמים. ייתכן תשלום אמיתי שלא נקלט.`,
@@ -271,11 +272,11 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   // not repeat revenue, email, admin fan-out or recurring-order creation.
   if (!lifecycle.paymentRecorded) return;
 
-  notifyAllAdmins({
+  notifyFinanceAdmins({
     type: "AGREEMENT_SIGNED",
     title: `תשלום התקבל — ${agreement.customerName}`,
     body: `סכום: ${paidAmount} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
-  }).catch((e) => console.error("notify admins after payment failed:", e));
+  }, agreement.financeBook).catch((e) => console.error("notify admins after payment failed:", e));
 
   sendPaymentReceivedEmail({
     customerName: agreement.customerName,
@@ -336,19 +337,19 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
         // wrong flag would not error. Ask an admin to eyeball the first
         // recurring invoice (English + 0% VAT) once.
         if (agreement.vatExempt || agreement.locale === "en") {
-          await notifyAllAdmins({
+          await notifyFinanceAdmins({
             type: "AGREEMENT_SIGNED",
             title: `🌍 הוראת קבע ללקוח חו״ל נוצרה — ${agreement.customerName}`,
             body: `יש לאמת בחשבונית הראשונה ב-Cardcom שהיא באנגלית וב-0% מע״מ.`,
-          }).catch(() => {});
+          }, agreement.financeBook).catch(() => {});
         }
       } catch (err) {
         console.error("Cardcom recurring setup failed:", err);
-        await notifyAllAdmins({
+        await notifyFinanceAdmins({
           type: "AGREEMENT_SIGNED",
           title: `⚠️ הוראת קבע לא נוצרה — ${agreement.customerName}`,
           body: `החיוב הראשון הצליח. הקמת החיוב החודשי נכשלה — להקים ידנית מול Cardcom.`,
-        }).catch(() => {});
+        }, agreement.financeBook).catch(() => {});
       }
     });
   } else {
@@ -399,13 +400,14 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
     providerChargedAt: webhookDate(p.BillingDate),
     rawPayload: safeRecurringAuditPayload(p),
   });
+  const financeAgreement = await prisma.agreement.findUnique({ where: { id: result.agreementId }, select: { financeBook: true } });
   if (result.reviewRequired) {
-    await notifyAllAdmins({
+    await notifyFinanceAdmins({
       type: "AGREEMENT_SIGNED",
       title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
       body: `עסקה ${dealId} נקלטה, אך לא ניתן היה להוכיח אם ההכנסה ההיסטורית כבר נרשמה.`,
       url: "/admin/finance/debtors",
-    });
+    }, financeAgreement?.financeBook);
     return;
   }
   if (result.disposition === "unchanged") return;
@@ -413,12 +415,12 @@ async function handleRecurringCharge(p: CardcomWebhookPayload): Promise<void> {
   // Successful monthly charges stay silent; only exceptions interrupt.
   // See src/lib/payments/recurring-notifications.ts.
   if (recurringChargeNeedsAttention({ success, reviewRequired: false })) {
-    notifyAllAdmins({
+    notifyFinanceAdmins({
       type: "AGREEMENT_SIGNED",
       title: `⚠️ חיוב חודשי נכשל — ${result.customerName}`,
       body: `₪${result.amount}${result.invoiceNumber ? ` · חשבונית #${result.invoiceNumber}` : ""}`,
       url: "/admin/finance/debtors",
-    }).catch((e) => console.error("notify admins after recurring charge failed:", e));
+    }, financeAgreement?.financeBook).catch((e) => console.error("notify admins after recurring charge failed:", e));
   }
 }
 

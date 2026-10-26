@@ -337,6 +337,7 @@ export async function updateAgreementDraftFields(
     agreementId: string;
     actor: AuthenticatedLeadActor;
     data: {
+      financeBook?: Agreement["financeBook"];
       tier?: Agreement["tier"];
       additionalServices?: string[];
       monthlyPrice?: number;
@@ -876,7 +877,7 @@ export async function applyPaymentSuccess(
       })
     : null;
   const firstMonthEligible =
-    creditedSellerId !== null && creditedPartner?.revenueSharePct == null;
+    agreement.financeBook === "SHARED" && creditedSellerId !== null && creditedPartner?.revenueSharePct == null;
   let commissionCreated = false;
   const existingCommission = await transaction.sellerCommission.findUnique({
     where: { agreementId: agreement.id },
@@ -973,7 +974,7 @@ export async function applyPaymentSuccess(
     });
     if (fromStage === "LOST") {
       const admins = await transaction.user.findMany({
-        where: { role: "ADMIN" },
+        where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
         select: { id: true },
       });
       for (const admin of admins) {
@@ -991,7 +992,7 @@ export async function applyPaymentSuccess(
       }
     }
   }
-  if (creditedSellerId && (commissionCreated || existingCommission)) {
+  if (agreement.financeBook === "SHARED" && creditedSellerId && (commissionCreated || existingCommission)) {
     effects.push({
       kind: "NOTIFICATION",
       input: {
@@ -1006,7 +1007,7 @@ export async function applyPaymentSuccess(
     });
   } else if (agreement.isSellerDeal && !creditedSellerId) {
     const admins = await transaction.user.findMany({
-      where: { role: "ADMIN" },
+      where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
       select: { id: true },
     });
     for (const admin of admins) {
@@ -1092,7 +1093,7 @@ export async function applyPaymentFailure(
       });
     } else {
       const admins = await transaction.user.findMany({
-        where: { role: "ADMIN" },
+        where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
         select: { id: true },
       });
       for (const admin of admins) {

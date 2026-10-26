@@ -1,10 +1,9 @@
+import { financeAgreementScope } from "@/lib/finance/access";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 
 function safeFilename(s: string): string {
   return s
@@ -24,8 +23,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleAgreement = await prisma.agreement.findFirst({ where: { id, ...financeAgreementScope(viewer) }, select: { id: true } });
+    if (!visibleAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const agreement = await prisma.agreement.findUnique({
       where: { id },
       select: { content: true, customerName: true, signedAt: true, createdAt: true },
@@ -49,6 +51,8 @@ export async function GET(
       },
     });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

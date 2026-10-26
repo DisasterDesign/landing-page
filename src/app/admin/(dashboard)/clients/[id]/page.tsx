@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import FinanceBookSelect, { useFinanceOwner, FinanceBookBadge } from "@/components/admin/FinanceBookSelect";
 import Badge from "@/components/ui/Badge";
 import { confirmDanger } from "@/lib/confirm";
 
@@ -10,6 +11,7 @@ type AgreementStatus = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
 type Tier = "LANDING" | "BASIC" | "ADVANCED" | "PREMIUM";
 
 interface AgreementSummary {
+  financeBook?: string;
   id: string;
   tier: Tier | null;
   monthlyPrice: number;
@@ -35,6 +37,7 @@ interface ClientNote {
 }
 
 interface ClientDetail {
+  partner: string;
   id: string;
   number: number;
   name: string;
@@ -114,6 +117,7 @@ export default function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const isOwner = useFinanceOwner();
   const [client, setClient] = useState<ClientDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("details");
@@ -291,6 +295,10 @@ export default function ClientDetailPage({
         </div>
       </div>
 
+      {isOwner && <div className="max-w-sm space-y-2">
+        <FinanceBookSelect value={client.partner === "personal" ? "PRIVATE" : client.partner === "fuzion" ? "SHARED" : ""} onChange={(value) => updateField("partner", value === "PRIVATE" ? "personal" : "fuzion")} />
+        <p className="text-xs text-gray-500">ברירת מחדל למוצרים עתידיים. שיוך עסקאות ותקבולים קיימים נשמר.</p>
+      </div>}
       {/* Tabs */}
       <div className="border-b border-gray-700">
         <nav className="flex gap-6">
@@ -382,7 +390,7 @@ export default function ClientDetailPage({
                       <Badge variant="gray">מותאם</Badge>
                     )}
                     <span className="text-sm text-white font-mono">
-                      {a.monthlyPrice.toLocaleString("he-IL")} ₪/חודש
+                      {a.monthlyPrice.toLocaleString("he-IL")} ₪/חודש {isOwner && <FinanceBookBadge book={a.financeBook} />}
                     </span>
                     {a.oneTimeFee ? (
                       <span className="text-xs text-gray-400 font-mono">

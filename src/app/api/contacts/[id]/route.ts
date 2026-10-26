@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { auth } from "@/lib/auth";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { markLeadRead } from "@/lib/leads/lifecycle";
@@ -34,6 +35,7 @@ export async function PATCH(
     if (persisted?.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    await requireFinanceLeadAccess(session.user.id,id);
     return NextResponse.json(
       await markLeadRead({
         leadId: id,

@@ -1,3 +1,4 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
@@ -17,6 +18,7 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     const lead = await prisma.contactSubmission.findUnique({
       where: { id },
       select: {
@@ -73,6 +75,7 @@ export async function POST(
   }
   try {
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     const note = await addLeadNote({
       leadId: id,
       body: parsed.data.body,

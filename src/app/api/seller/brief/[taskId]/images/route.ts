@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -23,6 +25,7 @@ export async function POST(
     }
 
     const { taskId } = await params;
+    await requireFinanceTaskAccess(await getViewer(), taskId);
 
     // The seller may only attach to a brief task they themselves created.
     const task = await prisma.task.findUnique({
@@ -73,6 +76,7 @@ export async function POST(
 
     return NextResponse.json(attachment, { status: 201 });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error uploading brief image:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

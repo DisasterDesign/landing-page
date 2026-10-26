@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum FinanceBook {
+  PRIVATE
+  SHARED
+  UNASSIGNED
+}
+
 enum Role {
   ADMIN
   MEMBER
@@ -944,6 +950,8 @@ model Client {
 // monthlyAmount is now a denormalised mirror of SUM(products.monthlyAmount)
 // kept in sync so legacy readers and the Cardcom webhook keep working.
 model ClientProduct {
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id            String    @id @default(cuid())
   clientId      String
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -983,6 +991,8 @@ enum JobStatus {
 // days after the end of the month the job closed). Income lands in the month
 // `paidAt` falls in — see src/lib/finance.ts jobFinance().
 model ClientJob {
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id               String    @id @default(cuid())
   clientId         String
   client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -1026,6 +1036,12 @@ enum ExpenseFrequency {
 // Hetzner server). `amount` is in the ORIGINAL billing currency — ILS
 // normalization happens at read time via src/lib/finance.ts rates.
 model Expense {
+  /// Partnership allocation, 0..10000 basis points. Null uses financeBook.
+  sharedBasisPoints Int?
+  /// Optional resource-level attribution, validated by the financial service.
+  clientProductId String?
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id        String           @id @default(cuid())
   name      String
   vendor    String
@@ -1063,6 +1079,8 @@ model ClientNote {
 }
 
 model Agreement {
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id                 String          @id @default(cuid())
   tier               AgreementTier? // base tier (required for new agreements; nullable for legacy rows)
   kind               AgreementKind  @default(SUBSCRIPTION)
@@ -1338,4 +1356,65 @@ model KeyValue {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+
+// Provider cash evidence also covers legacy clients without an app agreement.
+// Scalar links intentionally preserve the transaction when a business record is archived.
+model FinanceTransaction {
+  id                    String      @id @default(cuid())
+  provider              String
+  terminalId            String
+  providerTransactionId String
+  kind                  String      @default("CHARGE")
+  amountMinor           Int
+  currency              String
+  ilsAmountMinor        Int?
+  // Signed VAT from the original receipt/document, in ILS minor units.
+  vatIlsMinor           Int?
+  occurredAt            DateTime
+  financeBook           FinanceBook @default(UNASSIGNED)
+  clientId              String?
+  clientProductId       String?
+  agreementId           String?
+  invoiceNumber         String?
+  accountId             Int?
+  recurringId           Int?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@unique([provider, terminalId, providerTransactionId, kind])
+  @@index([financeBook, occurredAt])
+  @@index([clientId, occurredAt])
+}
+
+model FinanceSyncState {
+  key           String   @id
+  status        String
+  lastAttemptAt DateTime
+  lastSuccessAt DateTime?
+  coveredFrom   DateTime?
+  coveredTo     DateTime?
+  error         String?
+  metadata      Json?
+}
+
+// Immutable evidence of money paid, distinct from recurring expense forecasts.
+model FinanceExpensePayment {
+  id String @id @default(cuid())
+  expenseId String
+  paymentKey String @unique
+  amountIlsMinor Int
+  paidAt DateTime
+  financeBook FinanceBook @default(UNASSIGNED)
+  sharedBasisPoints Int?
+  clientId String?
+  clientProductId String?
+  paidById String
+  frequency ExpenseFrequency @default(ONE_TIME)
+  reference String?
+  source String @default("MANUAL")
+  createdAt DateTime @default(now())
+  @@index([financeBook, paidAt])
+  @@index([expenseId, paidAt])
 }

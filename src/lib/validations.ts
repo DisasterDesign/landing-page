@@ -65,12 +65,15 @@ export const createCommentSchema = z.object({
 // AGREEMENTS
 // ==================
 
+export const financeBookInputEnum = z.enum(["PRIVATE", "SHARED"]);
+
 export const agreementTierEnum = z.enum(["LANDING", "BASIC", "ADVANCED", "PREMIUM"]);
 export const agreementStatusEnum = z.enum(["DRAFT", "SENT", "SIGNED", "CANCELLED"]);
 
 export const agreementLocaleEnum = z.enum(["he", "en"]);
 
 export const createAgreementSchema = z.object({
+  financeBook: financeBookInputEnum.optional(),
   tier: agreementTierEnum.nullable().optional(),
   additionalServices: z.array(z.string().min(1).max(300)).max(30).optional().default([]),
   monthlyPrice: z.number().positive("מחיר חודשי חייב להיות חיובי"),
@@ -114,6 +117,7 @@ export const createAgreementSchema = z.object({
  */
 export const createOneTimeQuoteSchema = z
   .object({
+    financeBook: financeBookInputEnum.optional(),
     projectTitle: z.string().trim().min(1, "כותרת הפרויקט חובה").max(160),
     scopeOfWork: z.string().trim().min(1, "תיאור העבודה חובה").max(20000),
     oneTimeFee: z.number().positive("הסכום חייב להיות חיובי"),
@@ -141,6 +145,7 @@ export const createOneTimeQuoteSchema = z
  * quotes are frozen by agreement-lifecycle (CONFLICT), not here.
  */
 export const updateOneTimeQuoteSchema = z.object({
+  financeBook: financeBookInputEnum.optional(),
   projectTitle: z.string().trim().min(1, "כותרת הפרויקט חובה").max(160).optional(),
   scopeOfWork: z.string().trim().min(1, "תיאור העבודה חובה").max(20000).optional(),
   oneTimeFee: z.number().positive("הסכום חייב להיות חיובי").optional(),
@@ -494,6 +499,9 @@ export const expenseCategoryEnum = z.enum([
 ]);
 
 export const createExpenseSchema = z.object({
+  financeBook: financeBookInputEnum.optional(),
+  sharedBasisPoints: z.number().int().min(0).max(10000).nullable().optional(),
+  clientProductId: z.string().min(1).nullable().optional(),
   name: z.string().min(1, "שם ההוצאה חובה").max(200),
   vendor: z.string().min(1, "ספק חובה").max(200),
   category: expenseCategoryEnum.default("OTHER"),
@@ -514,6 +522,7 @@ export const updateExpenseSchema = createExpenseSchema.partial();
 // ==================
 
 export const createJobSchema = z.object({
+  financeBook: financeBookInputEnum.optional(),
   // Attach to an existing client OR create a lightweight one by name.
   clientId: z.string().nullable().optional(),
   clientName: z.string().max(200).nullable().optional(),
@@ -531,6 +540,7 @@ export const createJobSchema = z.object({
 });
 
 export const updateJobSchema = z.object({
+  financeBook: financeBookInputEnum.optional(),
   title: z.string().min(1).max(200).optional(),
   amount: z.number().min(0).optional(),
   vatIncluded: z.boolean().optional(),

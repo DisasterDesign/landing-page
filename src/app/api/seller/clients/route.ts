@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
 import { clientScope, getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeProductScope, redactFinanceClient } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -21,7 +22,7 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const clients = await prisma.client.findMany({
+    const rawClients = await prisma.client.findMany({
       where: { ...clientScope(viewer), archivedAt: null },
       select: {
         id: true,
@@ -32,13 +33,14 @@ export async function GET() {
         startDate: true,
         createdAt: true,
         products: {
-          where: { archivedAt: null },
-          select: { id: true, name: true, monthlyAmount: true, status: true },
+          where: { archivedAt: null, ...financeProductScope(viewer) },
+          select: { id: true, name: true, monthlyAmount: true, status: true, financeBook: true },
         },
       },
       orderBy: { createdAt: "desc" },
     });
 
+    const clients = rawClients.map(client => redactFinanceClient(viewer, client));
     const monthlyTotal = clients.reduce(
       (sum, client) => sum + (client.monthlyAmount ?? 0),
       0,

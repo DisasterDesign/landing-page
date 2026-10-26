@@ -1,3 +1,4 @@
+import { FinanceAccessError } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
@@ -45,7 +46,8 @@ export async function syncClientMonthly(clientId: string, db: Db = prisma): Prom
  * agreement covers, then re-derive the client rollup.
  *
  * Resolution order: the product explicitly linked to the agreement, else the
- * client's only product. A multi-product client with no agreement link gets
+ * client's only unlinked product with the same finance book. A product linked
+ * to another agreement is never reassigned. A multi-product client with no agreement link gets
  * NO product write — guessing which of יוני's sites a charge belongs to would
  * corrupt the per-product figures the rollup is built on.
  *
@@ -62,18 +64,20 @@ export async function applyPaymentToProduct(
 ): Promise<void> {
   if (grossMonthly <= 0) return;
 
+  const agreement = await db.agreement.findUnique({ where: { id: agreementId }, select: { financeBook: true } });
+  const financeBook = agreement?.financeBook ?? "UNASSIGNED";
   const products = await db.clientProduct.findMany({
     where: { clientId, archivedAt: null },
-    select: { id: true, agreementId: true, startDate: true },
+    select: { id: true, agreementId: true, startDate: true, financeBook: true },
   });
 
   const target =
     products.find((p) => p.agreementId === agreementId) ??
-    (products.length === 1 ? products[0] : null);
+    (products.length === 1 && products[0].agreementId === null && products[0].financeBook === financeBook ? products[0] : null);
 
   if (target) {
-    await db.clientProduct.update({
-      where: { id: target.id },
+    await db.clientProduct.updateMany({
+      where: { id: target.id, clientId, archivedAt: null, financeBook, agreementId: target.agreementId },
       data: {
         monthlyAmount: grossMonthly,
         status: "בוצע",
@@ -89,6 +93,7 @@ export async function applyPaymentToProduct(
     await db.clientProduct.create({
       data: {
         clientId,
+        financeBook,
         name: client?.name || "מנוי",
         monthlyAmount: grossMonthly,
         status: "בוצע",
@@ -103,6 +108,7 @@ export async function applyPaymentToProduct(
 
 /** Shape the clients table and client card both render. */
 export const CLIENT_PRODUCT_SELECT = {
+  financeBook: true,
   id: true,
   name: true,
   websiteUrl: true,
@@ -135,4 +141,16 @@ export function parseProductBody(body: Record<string, unknown>) {
   if ("paymentDate" in body) data.paymentDate = body.paymentDate ? new Date(String(body.paymentDate)) : null;
 
   return data;
+}
+
+/** Call inside the agreement creation transaction so a failed claim rolls back the new agreement. */
+export async function claimUnlinkedProductForAgreement(
+ db: Db,
+ input: { productId: string; clientId: string; financeBook: "PRIVATE" | "SHARED" | "UNASSIGNED"; agreementId: string },
+): Promise<void> {
+ const result = await db.clientProduct.updateMany({
+  where: { id: input.productId, clientId: input.clientId, financeBook: input.financeBook, archivedAt: null, agreementId: null },
+  data: { agreementId: input.agreementId },
+ });
+ if (result.count !== 1) throw new FinanceAccessError("המוצר כבר מקושר להסכם; יש ליצור מוצר חדש", 409);
 }

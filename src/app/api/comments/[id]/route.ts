@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -23,6 +25,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Comment not found" }, { status: 404 });
     }
 
+    await requireFinanceTaskAccess(await getViewer(), comment.taskId);
     if (comment.authorId !== session.user.id) {
       return NextResponse.json(
         { error: "You can only delete your own comments" },
@@ -34,6 +37,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error deleting comment:", error);
     return NextResponse.json(
       { error: "Internal server error" },

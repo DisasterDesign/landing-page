@@ -15,12 +15,10 @@
  */
 import type { Prisma } from "@prisma/client";
 
+import { FinanceAccessError, financeClientScope, financeAgreementScope } from "@/lib/finance/access";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  sellerAgreementScope,
-  sellerLeadScope,
-} from "@/lib/leads/authorization";
+import { sellerLeadScope } from "@/lib/leads/authorization";
 
 export interface Viewer {
   userId: string;
@@ -82,6 +80,7 @@ export async function requireOwner(): Promise<Viewer> {
 
 /** Route-boundary translation for the two errors above. */
 export function viewerErrorResponse(error: unknown): Response | null {
+  if (error instanceof FinanceAccessError) return Response.json({ error: error.message }, { status: error.status });
   if (error instanceof ViewerAuthorizationError) {
     return Response.json(
       { error: error.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -93,12 +92,12 @@ export function viewerErrorResponse(error: unknown): Response | null {
 
 /** Clients the viewer may see. Owner: everything. Partner: theirs only. */
 export function clientScope(viewer: Viewer): Prisma.ClientWhereInput {
-  return viewer.isOwner ? {} : { ownerId: viewer.userId };
+  return financeClientScope(viewer);
 }
 
 /** Agreements the viewer may see. Wraps the battle-tested seller scope. */
 export function agreementScope(viewer: Viewer): Prisma.AgreementWhereInput {
-  return viewer.isOwner ? {} : sellerAgreementScope(viewer.userId);
+  return financeAgreementScope(viewer);
 }
 
 /** Leads the viewer may see. Wraps the existing seller scope. */
