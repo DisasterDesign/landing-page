@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { getCardcomConfig, getRecurringPaymentHistory, listSuccessfulTransactions, type RecurringHistoryRow } from '@/lib/cardcom';
+import { getCardcomConfig, getRecurringPaymentHistory, listSuccessfulTransactions, type FailedTransaction, type RecurringHistoryRow } from '@/lib/cardcom';
 import { deduplicateReceipts, normalizeCardcomTransaction, resolveTransactionBook, readAccountBookOverrides, receiptsWithinWindow } from './transactions';
 /** Full covered read before persisting; any failed account/page invalidates this attempt. */
 export async function syncCardcomLedger(fromDate: Date, toDate: Date, options: {persist?:boolean} = {}) {
@@ -15,33 +15,12 @@ export async function syncCardcomLedger(fromDate: Date, toDate: Date, options: {
     ]);
     const overrides = readAccountBookOverrides(overrideState?.metadata);
     const accountIds = new Set([...clients.flatMap(c => c.cardcomAccountIds), ...agreements.flatMap(a => a.cardcomAccountId ? [a.cardcomAccountId] : []), ...overrides.keys()]);
-    const identities = new Map<string, {
-        accountId: number;
-        recurringId: number;
-    }>();
     const histories = new Map<number, RecurringHistoryRow[]>();
     for (const accountId of accountIds) {
         const history = await getRecurringPaymentHistory({ accountId, fromDate, toDate });
         histories.set(accountId, history);
-        for (const h of history) {
-            if (h.Status !== 'SUCCESSFUL' || !h.TranzactionId)
-                continue;
-            const key = String(h.TranzactionId);
-            const old = identities.get(key);
-            if (old && (old.accountId !== accountId || old.recurringId !== h.RecurringId))
-                throw new Error('Conflicting exact provider transaction mapping');
-            identities.set(key, { accountId, recurringId: h.RecurringId });
-        }
     }
-    const normalized = transactions.map(t => normalizeCardcomTransaction(t, String(cfg.terminal))).filter(t => t !== null);
-    const prepared = deduplicateReceipts(receiptsWithinWindow(normalized, fromDate, toDate)).map(receipt => {
-        const identity = identities.get(receipt.providerTransactionId);
-        if (identity) {
-            receipt.accountId = identity.accountId;
-            receipt.recurringId = identity.recurringId;
-        }
-        return { ...receipt, ...resolveTransactionBook(receipt, agreements, clients, overrides) };
-    });
+    const prepared = prepareCardcomLedgerReceipts({ transactions, terminalId: String(cfg.terminal), histories, agreements, clients, overrides, fromDate, toDate });
     let unknown = 0;
     for (const r of prepared) {
         if (r.financeBook === 'UNASSIGNED')
@@ -50,4 +29,43 @@ export async function syncCardcomLedger(fromDate: Date, toDate: Date, options: {
         if(options.persist!==false) await prisma.financeTransaction.upsert({ where: { provider_terminalId_providerTransactionId_kind: { provider: r.provider, terminalId: r.terminalId, providerTransactionId: r.providerTransactionId, kind: r.kind } }, create: { ...r, financeBook: r.financeBook as 'PRIVATE' | 'SHARED' | 'UNASSIGNED' }, update: {} });
     }
     return { transactions: prepared.length, unknown, histories, receipts:prepared };
+}
+
+/** Prepare a fully covered provider read before any ledger writes. */
+export function prepareCardcomLedgerReceipts(input: {
+    transactions: FailedTransaction[];
+    terminalId: string;
+    histories: ReadonlyMap<number, readonly RecurringHistoryRow[]>;
+    agreements: Parameters<typeof resolveTransactionBook>[1];
+    clients: Parameters<typeof resolveTransactionBook>[2];
+    overrides: Parameters<typeof resolveTransactionBook>[3];
+    fromDate: Date;
+    toDate: Date;
+}) {
+    const identities = new Map<string, { accountId: number; recurringId: number | null }>();
+    for (const [accountId, history] of input.histories) {
+        for (const h of history) {
+            if (h.Status !== 'SUCCESSFUL' || !h.TranzactionId)
+                continue;
+            const key = String(h.TranzactionId);
+            const old = identities.get(key);
+            if (old && old.accountId !== accountId)
+                throw new Error('Conflicting exact provider transaction mapping');
+            identities.set(key, { accountId, recurringId: old && old.recurringId !== h.RecurringId ? null : h.RecurringId });
+        }
+    }
+    const normalized = input.transactions.map(t => normalizeCardcomTransaction(t, input.terminalId)).filter(t => t !== null);
+    return deduplicateReceipts(receiptsWithinWindow(normalized, input.fromDate, input.toDate)).map(receipt => {
+        const identity = identities.get(receipt.providerTransactionId);
+        if (identity) {
+            receipt.accountId = identity.accountId;
+            receipt.recurringId = identity.recurringId;
+        }
+        // One settlement can cover several orders. Its full amount cannot be
+        // attributed to any one order, even if an unrelated account agreement exists.
+        if (identity?.recurringId === null) {
+            return { ...receipt, financeBook: 'UNASSIGNED', clientId: null, agreementId: null, clientProductId: null };
+        }
+        return { ...receipt, ...resolveTransactionBook(receipt, input.agreements, input.clients, input.overrides) };
+    });
 }

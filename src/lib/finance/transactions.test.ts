@@ -91,3 +91,27 @@ test('an inclusive provider receipt on a monthly boundary belongs to exactly one
     assert.equal(jan.length, 0);
     assert.equal(deduplicateReceipts([...jan, ...feb]).length, 1);
 });
+
+
+test('nonpositive provider identity sentinels do not contradict a verified transaction match', () => {
+    const candidates = [{ id: 'verified-order', clientId: 'verified-client', cardcomAccountId: 804, cardcomRecurringId: 8401, financeBook: 'SHARED', cardcomVerifiedTransactionId: '800004' }];
+    const source = { TranzactionId: 800004, Amount: 45, CreateDate: '2026-04-02T09:00:00Z', ResponseCode: 0, CoinId: 1 };
+    const receipt = normalizeCardcomTransaction({ ...source, AccountId: 0, RecurringId: 0 }, 'synthetic-terminal');
+    assert.equal(receipt?.accountId, null);
+    assert.equal(receipt?.recurringId, null);
+    assert.equal(resolveTransactionBook(receipt!, candidates, [])?.agreementId, 'verified-order');
+    const contradictory = normalizeCardcomTransaction({ ...source, AccountId: 805, RecurringId: 8501 }, 'synthetic-terminal');
+    assert.equal(resolveTransactionBook(contradictory!, candidates, []), null);
+});
+
+test('provider identity fields retain only positive safe integer identifiers', () => {
+    const source = { TranzactionId: 800005, Amount: 45, CreateDate: '2026-04-02T09:00:00Z', ResponseCode: 0, CoinId: 1 };
+    for (const invalid of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN]) {
+        const receipt = normalizeCardcomTransaction({ ...source, AccountId: invalid, RecurringId: invalid }, 'synthetic-terminal');
+        assert.equal(receipt?.accountId, null);
+        assert.equal(receipt?.recurringId, null);
+    }
+    const valid = normalizeCardcomTransaction({ ...source, AccountId: 806, RecurringId: 8601 }, 'synthetic-terminal');
+    assert.equal(valid?.accountId, 806);
+    assert.equal(valid?.recurringId, 8601);
+});
