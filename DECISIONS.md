@@ -293,3 +293,24 @@ successful call from the parent dot are separate acceptance gates. No public
 plugin or Roy grant. See `docs/mcp/README.md` and `docs/mcp/VERIFICATION.md` for
 configuration proposal, tests, revocation and outstanding deployment/security
 gates. Canonical main changes and the existing finance worktree were preserved.
+
+### 2026-10-26 — MCP release dependency triage
+
+**Status:** Locally implemented/tested; deployment and Auth0 approval pending.
+
+Apply same-major/same-beta-line security releases for the actual framework/auth/
+validation surface: Next16.4.3, NextAuth5.0.0-beta.32/Auth core0.41.3,
+@auth/prisma-adapter2.11.3 and Zod4.6.6. Lock-only compatible patches cover
+source-map-js1.2.2 and the existing same-origin editor paste-XSS in
+ProseMirror1.42.8. Do not migrate middleware/auth architecture or change finance
+formulas. Preserve the original dev-only ESLint config/Hooks7.0.1 behavior with
+an explicit override instead of broad unrelated UI refactors or rule disabling.
+
+Audit entries are classified by actual API/import exposure, not npm's production
+flag alone. No critical entry remains; existing blog/editor conditional highs
+and the pre-hydration raw-HTML trust assumption are documented for a separate
+release-risk decision, not silently accepted or called MCP vulnerabilities.
+Auth0 Free is a published option, but account/tenant/plan entitlements remain
+unverified after a read-only dashboard visit reached login. No provisioning,
+credentials, terms, grants, security settings or production data changed.
+See docs/mcp/DEPENDENCY-REVIEW.md and docs/mcp/AUTH0-SETUP.md.

@@ -128,7 +128,8 @@ against a guarded loopback synthetic database.
 
 ## Deploy and connect — pending explicit approval
 
-1. Resolve the existing dependency security gate in VERIFICATION.md. Review the
+1. Use the patched stack and document the residual-risk decision in
+   DEPENDENCY-REVIEW.md; read VERIFICATION.md and AUTH0-SETUP.md. Review the
    exact diff and base commit; any PR must be draft only. Merge/release/deploy
    and apply the additive migration only within the user's explicit approval.
 2. Set public resource/provider metadata and perform the exact approved Auth0
@@ -170,3 +171,9 @@ Primary references checked 2026-10-26:
 [Auth0 Auth for MCP](https://auth0.com/ai/docs/mcp/overview),
 [OpenAI auth](https://developers.openai.com/plugins/build/auth),
 [OpenAI connect/test](https://developers.openai.com/plugins/deploy/connect-chatgpt).
+
+Follow-up security/plan review: see [DEPENDENCY-REVIEW.md](DEPENDENCY-REVIEW.md)
+for the scoped runtime fixes and remaining advisory/API exposure, and
+[AUTH0-SETUP.md](AUTH0-SETUP.md) for Free-plan constraints, the unverified tenant
+status, exact future tenant-wide settings and supported action-time steps.
+Approval remains pending.

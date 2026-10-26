@@ -18,7 +18,7 @@ installation was performed. No endpoint is claimed live/connected.
 | Migration | PASS — exact SQL executed in temporary test schema; creates zero grants; schema removed afterward |
 | Prisma generation / types | PASS — Prisma 5.22 generated; `tsc --noEmit` zero errors |
 | Lint | PASS with existing warnings — zero errors, 17 warnings; scoped MCP/finance route lint zero errors/warnings |
-| Production build | PASS — `npm run build`, Next 16.2.1; route manifest includes MCP and protected-resource discovery |
+| Production build | PASS — `npm run build`, final patched Next16.4.3; route manifest includes MCP and protected-resource discovery |
 | Actual Auth0 tenant / OAuth browser flow | NOT RUN — provider/client/grant provisioning requires explicit approval |
 | Production data parity and live auth | NOT RUN — no deployment/access provisioned; production checks must remain read-only |
 | Local Codex connection | NOT RUN — no persistent setup authorized yet |
@@ -50,24 +50,28 @@ An initial source-structure test was updated to check the extracted guarded
 read-loader call, preserving its original authorization-before-sensitive-work
 assertion. No unresolved test failure is hidden as a pass.
 
-## Existing dependency security gate — unresolved
+## Dependency gate — follow-up triage and scoped patches
 
-`npm audit --omit=dev` reports **21** vulnerable production dependency entries:
-4 critical, 10 high, 7 moderate. Direct/related affected packages include Next,
-NextAuth/Auth core/Prisma adapter, Zod and existing UI/email dependencies. No
-advisory was returned for the added MCP SDK or `jose`. Existing versions were
-not broadly upgraded as part of this integration; **do not deploy/enable this
-branch until the critical/high baseline is patched and the auth/report/build
-checks pass on the selected patched versions**. The audit offers Next 16.4.3
-and compatible package updates; those have not been installed or verified.
+The initial implementation audit found 21 production dependency entries
+(4 critical,10 high,7 moderate). This historical gate was investigated and
+narrow compatible security patches were applied in the follow-up work:
+Next16.4.3, NextAuth5.0.0-beta.32/Auth core0.41.3, Prisma auth adapter2.11.3,
+Zod4.6.6, source-map-js1.2.2 and ProseMirror1.42.8. Original lint rules and
+Hooks plugin7.0.1 are retained, without suppressing new errors in UI code.
 
-Relevant advisory examples:
-[Next RCE](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j),
-[Next middleware authorization bypass](https://github.com/advisories/GHSA-26hh-7cqf-hhc6),
-[Zod constrained collection exhaustion](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
-This is a release gate, not a claim that MCP JWT verification was bypassed.
-The MCP route independently authenticates before any data read, enforces a
-16-KiB request bound and does not trust the legacy middleware session role.
+Final production audit: **10 entries, 0 critical, 4 high, 6 moderate**. Full audit
+including dev tools: **14 entries, 0 critical, 6 high, 7 moderate, 1 low**.
+See DEPENDENCY-REVIEW.md for every advisory ID, runtime/API preconditions,
+resolved packages, inherited audit noise and residual blog/editor risks.
+No MCP import path to residual parser/editor/email findings was found; this
+does not establish that the whole app is XSS-safe. In particular, existing raw
+blog HTML before hydration sanitization needs a separate trust-boundary review.
+A documented release decision on those residual risks is still required.
+
+The final patched stack passed **629/629 tests, 0 failures/skips**, tsc and
+Next16.4.3 production build. Final lint passed with 0 errors/17 existing warnings.
+No provider/tenant/grant or production state was changed. Auth0 approval remains
+pending; cost/account findings and exact future steps are in AUTH0-SETUP.md.
 
 ## Independent review and final state
 
@@ -79,3 +83,15 @@ verification document was completed. Final full suite: **629/629 passed, no
 skips/failures**. Final typecheck, lint and production build exited 0; lint has
 the same 17 pre-existing warnings. The disposable Postgres instance was stopped
 after verification. No process providing access to business data was installed.
+
+Follow-up review of dependency changes found no important/critical regression.
+All final-stack checks above were rerun after preserving the original Hooks
+plugin. The original framework16.2.1 build result remains historical evidence,
+not the version proposed for release. No broad editor/email upgrade, automatic
+audit fix, lint-rule disabling or architecture migration was performed.
+
+Additional patched-library check: actual next-auth/jwt getToken returned null
+without throwing for malformed bearer percent encodings and an invalid token
+(three synthetic requests, no database/provider I/O). No real login credentials
+were used. Final audit was rechecked after the lint-plugin override and retained
+the same 10 production/14 total affected-package counts.
