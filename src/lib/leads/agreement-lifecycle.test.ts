@@ -457,12 +457,16 @@ test("payment retry records one payment, won event and frozen commission", async
     verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
     actor: integration,
   };
-  await store.transaction((transaction) =>
+  const first = await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, input),
   );
-  await store.transaction((transaction) =>
+  const retry = await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, input),
   );
+  assert.deepEqual(first.effects, []);
+  assert.deepEqual(retry.effects, []);
+  assert.equal(first.paymentRecorded, true);
+  assert.equal(retry.paymentRecorded, false);
   assert.equal(store.lead.stage, "WON");
   assert.equal(
     store.events.filter((event) => event.type === "PAYMENT_SUCCEEDED").length,
@@ -611,11 +615,13 @@ test("payment keeps frozen credit after reassignment and flags a lost-lead misma
 
   assert.equal(store.lead.stage, "WON");
   assert.equal(store.commissions[0]?.sellerId, "seller-1");
-  assert.ok(
-    result.effects.some(
-      (effect) => effect.input.type === "PAYMENT_MISMATCH",
-    ),
-  );
+  assert.deepEqual(result.effects.map((effect) => ({
+    type: effect.input.type,
+    title: effect.input.title,
+  })), [{
+    type: "PAYMENT_MISMATCH",
+    title: "תשלום התקבל לאחר שהליד סומן כאבוד",
+  }]);
 });
 
 test("reassignment transfers agreement operations without changing frozen seller credit", async () => {

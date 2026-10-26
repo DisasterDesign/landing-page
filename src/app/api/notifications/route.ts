@@ -3,6 +3,7 @@ import { financeTaskScope } from "@/lib/finance/task-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { notificationReadWhere } from "@/lib/notifications/visibility";
 
 export async function GET() {
   try {
@@ -19,9 +20,10 @@ export async function GET() {
       { OR: [{ leadId: null }, { lead: leadScope }] },
       { OR: [{ type: { not: "AGREEMENT_SIGNED" as const } }, { dedupeKey: { startsWith: "finance:SHARED:" } }, { leadId: { not: null }, lead: leadScope }] },
     ] };
+    const readWhere = notificationReadWhere(session.user.id, financeWhere);
     const [notifications, unreadCount] = await Promise.all([
       prisma.notification.findMany({
-        where: { recipientId: session.user.id, ...financeWhere },
+        where: readWhere,
         orderBy: { createdAt: "desc" },
         take: 30,
         include: {
@@ -29,7 +31,7 @@ export async function GET() {
         },
       }),
       prisma.notification.count({
-        where: { recipientId: session.user.id, readAt: null, ...financeWhere },
+        where: { AND: [readWhere, { readAt: null }] },
       }),
     ]);
 

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { listFailedTransactions, listSuccessfulTransactions } from "@/lib/cardcom";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyOwner } from "@/lib/notifications";
+import { partitionDebtors, type DebtorLists } from "@/lib/debtor-dismissal";
 
 /**
  * Terminal-wide debt sweep — shared by the daily reconcile cron and the
@@ -54,22 +55,8 @@ export function debtorKey(d: { idNumber: string | null; name: string }): string 
  * the read route and the refresh route so both can never disagree about what
  * counts as an open debt.
  */
-export async function bucketDebtors(snapshot: Record<string, DebtorSnapshotEntry>): Promise<{
-  terminalDebtors: DebtorSnapshotEntry[];
-  settledDebtors: DebtorSnapshotEntry[];
-  dismissedDebtors: DebtorSnapshotEntry[];
-}> {
-  const dismissed = await getDismissedDebtors();
-  const all = Object.values(snapshot).sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
-  const visible = all.filter((d) => !dismissed[debtorKey(d)]);
-  return {
-    terminalDebtors: visible.filter((d) => !d.settledAt),
-    // Newest payment first — this list is a "what closed recently" log.
-    settledDebtors: visible
-      .filter((d) => d.settledAt)
-      .sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? "")),
-    dismissedDebtors: all.filter((d) => dismissed[debtorKey(d)]),
-  };
+export async function bucketDebtors(snapshot: Record<string, DebtorSnapshotEntry>): Promise<DebtorLists> {
+  return partitionDebtors(snapshot, await getDismissedDebtors());
 }
 
 /** Grouping key — an identity number when Cardcom has one, else the name. */
@@ -81,14 +68,43 @@ function txKey(t: {
   return t.CardOwnerIdentityNumber || t.CardOwnerName || `tx-${t.TranzactionId}`;
 }
 
+export interface TerminalDebtorSweepDependencies {
+  listFailedTransactions: typeof listFailedTransactions;
+  listSuccessfulTransactions: typeof listSuccessfulTransactions;
+  loadSnapshot(): Promise<Record<string, DebtorSnapshotEntry>>;
+  loadDismissed: typeof getDismissedDebtors;
+  saveSnapshot(snapshot: Record<string, DebtorSnapshotEntry>): Promise<void>;
+  notifyOwner: typeof notifyOwner;
+}
+
+const sweepDependencies: TerminalDebtorSweepDependencies = {
+  listFailedTransactions,
+  listSuccessfulTransactions,
+  async loadSnapshot() {
+    const row = await prisma.keyValue.findUnique({ where: { key: DEBTORS_SNAPSHOT_KEY } });
+    return (row?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
+  },
+  loadDismissed: getDismissedDebtors,
+  async saveSnapshot(snapshot) {
+    await prisma.keyValue.upsert({
+      where: { key: DEBTORS_SNAPSHOT_KEY },
+      create: { key: DEBTORS_SNAPSHOT_KEY, value: snapshot as object },
+      update: { value: snapshot as object },
+    });
+  },
+  notifyOwner,
+};
+
 export async function sweepTerminalFailures(
   now: Date,
-  summary: { debtors: number; newDebtorAlerts: number; settled?: number }
+  summary: { debtors: number; newDebtorAlerts: number; settled?: number },
+  options: { notify?: boolean } = {},
+  dependencies: TerminalDebtorSweepDependencies = sweepDependencies,
 ): Promise<Record<string, DebtorSnapshotEntry>> {
   const fromDate = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
   const [failures, successes] = await Promise.all([
-    listFailedTransactions({ fromDate, toDate: now }),
-    listSuccessfulTransactions({ fromDate, toDate: now }),
+    dependencies.listFailedTransactions({ fromDate, toDate: now }),
+    dependencies.listSuccessfulTransactions({ fromDate, toDate: now }),
   ]);
 
   // Newest successful debit per payer — the settlement candidate.
@@ -143,11 +159,11 @@ export async function sweepTerminalFailures(
   summary.debtors = byDebtor.size - settledCount;
   summary.settled = settledCount;
 
-  const prevRow = await prisma.keyValue.findUnique({ where: { key: DEBTORS_SNAPSHOT_KEY } });
-  const prev = (prevRow?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
-  const dismissed = await getDismissedDebtors();
+  const prev = await dependencies.loadSnapshot();
+  const dismissed = await dependencies.loadDismissed();
 
   for (const [key, d] of byDebtor) {
+    if (options.notify === false) continue; // manual report refresh is quiet
     if (dismissed[key]) continue; // ruled irrelevant — never alert
     if (d.settledAt) continue; // paid — nothing to chase
     const before = prev[key];
@@ -156,7 +172,7 @@ export async function sweepTerminalFailures(
     // but was settled, so the debt is genuinely back.
     if (!before || before.settledAt) {
       summary.newDebtorAlerts++;
-      await notifyAllAdmins({
+      await dependencies.notifyOwner({
         type: "AGREEMENT_SIGNED",
         title: `🚨 חייב חדש בקארדקום — ${d.name}`,
         body: `חוב ₪${d.amount} · ${d.reason || `קוד ${d.responseCode}`}`,
@@ -164,7 +180,7 @@ export async function sweepTerminalFailures(
       });
     } else if (d.amount > before.amount) {
       summary.newDebtorAlerts++;
-      await notifyAllAdmins({
+      await dependencies.notifyOwner({
         type: "AGREEMENT_SIGNED",
         title: `🚨 חוב גדל — ${d.name}`,
         body: `₪${before.amount} → ₪${d.amount} · ${d.reason || `קוד ${d.responseCode}`}`,
@@ -174,11 +190,7 @@ export async function sweepTerminalFailures(
   }
 
   const snapshot = Object.fromEntries(byDebtor);
-  await prisma.keyValue.upsert({
-    where: { key: DEBTORS_SNAPSHOT_KEY },
-    create: { key: DEBTORS_SNAPSHOT_KEY, value: snapshot as object },
-    update: { value: snapshot as object },
-  });
+  await dependencies.saveSnapshot(snapshot);
 
   return snapshot;
 }

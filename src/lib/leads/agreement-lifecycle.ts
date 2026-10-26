@@ -992,20 +992,9 @@ export async function applyPaymentSuccess(
       }
     }
   }
-  if (agreement.financeBook === "SHARED" && creditedSellerId && (commissionCreated || existingCommission)) {
-    effects.push({
-      kind: "NOTIFICATION",
-      input: {
-        recipientId: creditedSellerId,
-        type: "AGREEMENT_SIGNED",
-        title: `העסקה שולמה — ${agreement.customerName}`,
-        body: `עמלה: ${agreement.monthlyPrice} ₪ נרשמה לך`,
-        leadId: agreement.leadId ?? undefined,
-        url: `/seller/report/${agreement.id}`,
-        dedupeKey: `${creditedSellerId}:commission-created:${agreement.id}`,
-      },
-    });
-  } else if (agreement.isSellerDeal && !creditedSellerId) {
+  // Commission records remain canonical accounting truth; routine payment
+  // success does not interrupt the seller. Missing attribution still does.
+  if (agreement.isSellerDeal && !creditedSellerId) {
     const admins = await transaction.user.findMany({
       where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
       select: { id: true },
