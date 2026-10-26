@@ -119,3 +119,8 @@ test("a one-time expense contributes nothing to the monthly settlement", () => {
     0,
   );
 });
+
+test('mixed bill reduces shared profit only by its allocated portion and reimburses Roy once',()=>{
+ const s=computeSettlement({fuzionNetRevenue:1000,expenses:[{amountIls:100,paidBy:'partner',shared:true,sharedBasisPoints:4000}]});
+ assert.equal(s.sharedExpenses,40);assert.equal(s.personalExpenses,60);assert.equal(s.profit,960);assert.equal(s.transferToRoy,520);
+});

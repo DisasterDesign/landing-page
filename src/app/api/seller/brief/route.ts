@@ -1,3 +1,6 @@
+import { financeAgreementScope } from "@/lib/finance/access";
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -44,6 +47,9 @@ export async function POST(request: NextRequest) {
       );
     }
     const d = parsed.data;
+    const financeViewer = await getViewer();
+    const visibleAgreement = await prisma.agreement.findFirst({ where: { id: d.agreementId, ...financeAgreementScope(financeViewer) }, select: { id: true } });
+    if (!visibleAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     // The report is allowed only for a closed deal that belongs to this seller.
     const commission = await prisma.sellerCommission.findFirst({
@@ -105,6 +111,7 @@ export async function POST(request: NextRequest) {
         actor: { userId: sellerId, role: "SELLER" },
       });
     } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
       await prisma.task.delete({ where: { id: task.id } }).catch(() => {});
       return leadDomainErrorResponse(error);
     }
@@ -126,6 +133,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ taskId: task.id }, { status: 201 });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error creating developer report:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

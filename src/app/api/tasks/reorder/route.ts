@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -21,6 +23,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const financeViewer = await getViewer();
+    for (const task of parsed.data.tasks) await requireFinanceTaskAccess(financeViewer, task.id);
     const updates = parsed.data.tasks.map((task) =>
       prisma.task.update({
         where: { id: task.id },
@@ -32,6 +36,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error reordering tasks:", error);
     return NextResponse.json(
       { error: "Internal server error" },

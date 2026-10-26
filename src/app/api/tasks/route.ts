@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeTaskScope } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.TaskWhereInput = {};
+    const where: Prisma.TaskWhereInput = { AND: [await financeTaskScope(await getViewer())] };
 
     if (status) where.status = status as Prisma.EnumTaskStatusFilter;
     if (projectId) where.projectId = projectId;
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error fetching tasks:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -112,6 +115,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error creating task:", error);
     return NextResponse.json(
       { error: "Internal server error" },

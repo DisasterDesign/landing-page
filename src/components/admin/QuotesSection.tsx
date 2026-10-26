@@ -1,18 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import FinanceBookSelect, { useFinanceOwner, FinanceBookBadge, type SelectableFinanceBook } from "@/components/admin/FinanceBookSelect";
 import toast from "react-hot-toast";
 
 /**
  * One-time project quotes, rendered inside /admin/jobs.
  *
- * Owner-only. The gate is /api/quotes (requireOwner); this component simply
- * renders nothing on 403, so a partner never sees the section exists. The UI
- * check is cosmetic — never the enforcement point.
+ * Server scoped: the owner sees all books and partners see shared quotes.
+ * Book controls are cosmetic; authorization is enforced by the API.
  */
 
 interface QuoteRow {
   id: string;
+  financeBook?: string;
   title: string;
   customer: { name: string };
   amount: number;
@@ -48,6 +49,7 @@ const EMPTY = {
   oneTimeFee: "",
   scopeOfWork: "",
   foreign: false,
+  financeBook: "PRIVATE" as SelectableFinanceBook | "",
 };
 
 const inputCls =
@@ -76,6 +78,7 @@ function stageLabel(q: QuoteRow): { text: string; cls: string } {
 }
 
 export default function QuotesSection() {
+  const isOwner = useFinanceOwner();
   const [rows, setRows] = useState<QuoteRow[] | null>(null);
   const [allowed, setAllowed] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -111,6 +114,7 @@ export default function QuotesSection() {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isOwner && form.financeBook ? { financeBook: form.financeBook } : {}),
           projectTitle: form.projectTitle,
           customerName: form.customerName,
           businessName: form.businessName || undefined,
@@ -192,6 +196,7 @@ export default function QuotesSection() {
       oneTimeFee: String(q.amount),
       scopeOfWork: q.scopeOfWork,
       foreign: q.vatExempt || q.locale === "en",
+      financeBook: q.financeBook === "PRIVATE" || q.financeBook === "SHARED" ? q.financeBook : "",
     });
     setEditingId(q.id);
     setShowAdd(true);
@@ -267,6 +272,7 @@ export default function QuotesSection() {
           onSubmit={submit}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4"
         >
+          {isOwner && <FinanceBookSelect value={form.financeBook} onChange={(financeBook) => setForm({ ...form, financeBook })} />}
           {editingId && (
             <div className="text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded-xl px-3 py-2">
               עריכת הצעה קיימת. הלינק לא משתנה — הלקוח יראה את הגרסה המעודכנת באותה כתובת.
@@ -409,7 +415,7 @@ export default function QuotesSection() {
                 const s = stageLabel(q);
                 return (
                   <tr key={q.id} className="border-t border-gray-800 text-white">
-                    <td className="py-2.5 px-3">{q.title}</td>
+                    <td className="py-2.5 px-3">{q.title} {isOwner && <FinanceBookBadge book={q.financeBook} />}</td>
                     <td className="py-2.5 px-3 text-gray-300">{q.customer.name}</td>
                     <td className="py-2.5 px-3">₪{fmt(q.net)}</td>
                     <td className="py-2.5 px-3 text-gray-300">₪{fmt(q.gross)}</td>

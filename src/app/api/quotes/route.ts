@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { financeAgreementScope, requireBookSelection } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import { createOneTimeQuoteSchema } from "@/lib/validations";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { quoteJobInput, quoteBodyHtml, scopeFromBodyHtml } from "@/lib/agreements/one-time";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
 import { createStandaloneAgreement } from "@/lib/leads/agreement-lifecycle";
@@ -22,14 +23,15 @@ import {
 
 export async function GET() {
   try {
-    await requireOwner();
+    const viewer = await requireAdmin();
 
     const quotes = await prisma.agreement.findMany({
-      where: { kind: "ONE_TIME" },
+      where: { kind: "ONE_TIME", ...financeAgreementScope(viewer) },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
         projectTitle: true,
+        financeBook: true,
         customerName: true,
         businessName: true,
         phone: true,
@@ -58,6 +60,7 @@ export async function GET() {
       const expected = expectedPaymentDate(base.closedAt, base.paymentTermsDays);
       return {
         ...base,
+        financeBook: q.financeBook,
         ...money,
         closedAt: base.closedAt.toISOString(),
         paidAt: base.paidAt ? base.paidAt.toISOString() : null,
@@ -96,7 +99,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const viewer = await requireOwner();
+    const viewer = await requireAdmin();
 
     const body = await request.json();
     const parsed = createOneTimeQuoteSchema.safeParse(body);
@@ -107,6 +110,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const q = parsed.data;
+    const financeBook = requireBookSelection(viewer, body.financeBook, viewer.isOwner ? "PRIVATE" : "SHARED");
 
     // The sign page renders `agreement.content`, and renderAgreement only runs
     // again at signing — so a draft created with an empty content field shows
@@ -142,6 +146,7 @@ export async function POST(request: NextRequest) {
       actor: { userId: viewer.userId, role: "ADMIN" },
       agreement: {
         kind: q.kind,
+        financeBook,
         projectTitle: q.projectTitle,
         // Zero monthly is what keeps BillGold out: the recurring gate in the
         // payment webhook requires monthlyPrice > 0.

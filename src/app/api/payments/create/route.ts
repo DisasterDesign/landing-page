@@ -1,3 +1,6 @@
+import { prisma } from "@/lib/prisma";
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeAgreementScope } from "@/lib/finance/access";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -21,6 +24,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "agreementId required" }, { status: 400 });
     }
 
+    const financeViewer = await getViewer();
+    const scopedAgreement = await prisma.agreement.findFirst({ where: { id: agreementId, ...financeAgreementScope(financeViewer) }, select: { id: true } });
+    if (!scopedAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const result = await ensurePaymentUrlForAgreement(agreementId);
     if (!result) {
       return NextResponse.json(
@@ -31,6 +37,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

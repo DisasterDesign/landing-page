@@ -1,3 +1,4 @@
+import { financeLeadViewer } from "@/lib/finance/lead-access";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -73,7 +74,8 @@ export async function GET(request: NextRequest) {
     }
     await requirePersistedLeadReadRole(session.user.id, ["ADMIN"]);
     const url = new URL(request.url);
-    const filters = parseAdminLeadFilters(url.searchParams);
+    const financeViewer = await financeLeadViewer(session.user.id);
+    const filters = { ...parseAdminLeadFilters(url.searchParams), financeOwner: financeViewer.isOwner };
     const unified = getLeadLifecycleConfig().enabled;
     // Open leads by default in BOTH modes: a new lead is something that came
     // in and was not handled; history (won/lost/spam) shows only when asked
@@ -99,7 +101,7 @@ export async function GET(request: NextRequest) {
     }
     if (focus && !leads.some((lead) => lead.id === focus)) {
       try {
-        const focused = await getAdminLeadDetail(focus);
+        const focused = await getAdminLeadDetail(focus, {isOwner: financeViewer.isOwner});
         leads = [focused, ...leads];
         focusState = "found";
       } catch {

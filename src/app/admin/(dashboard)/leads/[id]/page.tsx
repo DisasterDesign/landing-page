@@ -20,7 +20,7 @@ export default async function AdminLeadPage({
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true },
+    select: { role: true, isOwner: true },
   });
   if (user?.role !== "ADMIN") notFound();
 
@@ -30,7 +30,7 @@ export default async function AdminLeadPage({
 
   let lead: Awaited<ReturnType<typeof getAdminLeadDetail>>;
   try {
-    lead = await getAdminLeadDetail(id);
+    lead = await getAdminLeadDetail(id, {isOwner: user.isOwner});
   } catch {
     notFound();
   }

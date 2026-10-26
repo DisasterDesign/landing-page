@@ -1,3 +1,4 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -34,6 +35,7 @@ export async function GET(
   try {
     await requirePersistedLeadReadRole(session.user.id, ["ADMIN", "SELLER"]);
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     const lead = await getSellerLeadDetail({
       id,
       sellerId: session.user.id,
@@ -81,6 +83,7 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     if (parsed.data.action === "release") {
       return NextResponse.json(
         { error: "Seller release is not allowed" },

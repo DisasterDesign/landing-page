@@ -1,16 +1,12 @@
+import { financeAgreementScope, redactFinanceAgreement, requireBookSelection, requireUnpaidBookChange } from "@/lib/finance/access";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { updateAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
-import {
-  applyAgreementEvent,
-  updateAgreementDraftFields,
-} from "@/lib/leads/agreement-lifecycle";
+import { applyAgreementEvent, updateAgreementDraftFields } from "@/lib/leads/agreement-lifecycle";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 
 export async function GET(
@@ -23,8 +19,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleAgreement = await prisma.agreement.findFirst({ where: { id, ...financeAgreementScope(viewer) }, select: { id: true } });
+    if (!visibleAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const agreement = await prisma.agreement.findUnique({
       where: { id },
       include: { client: true },
@@ -34,8 +33,10 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json(agreement);
+    return NextResponse.json(redactFinanceAgreement(viewer, agreement));
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -57,8 +58,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleAgreement = await prisma.agreement.findFirst({ where: { id, ...financeAgreementScope(viewer) }, select: { id: true } });
+    if (!visibleAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const body = await request.json();
     const parsed = updateAgreementSchema.safeParse(body);
     if (!parsed.success) {
@@ -74,7 +78,15 @@ export async function PATCH(
     }
 
     const { status, ...draftFields } = parsed.data;
-    const hasDraftChanges = Object.keys(draftFields).length > 0;
+    const financeBook = requireBookSelection(viewer, body.financeBook, existing.financeBook);
+    if (financeBook !== existing.financeBook) {
+      const receipts = await prisma.financeTransaction.count({ where: { agreementId: id } });
+      const charges = await prisma.agreementCharge.count({ where: { agreementId: id } });
+      requireUnpaidBookChange(existing.financeBook, financeBook, Boolean(existing.paidAt) || receipts > 0 || charges > 0);
+      const linkedProduct = await prisma.clientProduct.count({ where: { agreementId: id } });
+      if (linkedProduct) return NextResponse.json({ error: "יש ליצור מוצר והסכם חדשים לשיוך כספי שונה" }, { status: 409 });
+    }
+    const hasDraftChanges = Object.keys(draftFields).length > 0 || financeBook !== existing.financeBook;
     if (status && status !== "CANCELLED") {
       return NextResponse.json(
         {
@@ -112,14 +124,14 @@ export async function PATCH(
     }
 
     if (!hasDraftChanges) {
-      return NextResponse.json(existing);
+      return NextResponse.json(redactFinanceAgreement(viewer, existing));
     }
 
     // If any content-affecting field changed on an UNSIGNED agreement, re-render
     // the stored HTML so the customer's preview matches (language, VAT, price,
     // tier, services, party details). Signed agreements are frozen — their
     // content is the legally-binding signed document and must never change.
-    const data = { ...draftFields };
+    const data = { ...draftFields, financeBook };
     const contentKeys: (keyof typeof draftFields)[] = [
       "tier",
       "additionalServices",
@@ -172,8 +184,10 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(agreement);
+    return NextResponse.json(redactFinanceAgreement(viewer, agreement));
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

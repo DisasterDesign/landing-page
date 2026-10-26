@@ -1,3 +1,6 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeAgreementScope, requireBookSelection } from "@/lib/finance/access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -25,12 +28,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const sellerId = session.user.id;
+    const viewer = await getViewer();
     await requirePersistedLeadReadRole(
       session.user.id,
       ["ADMIN", "SELLER"],
     );
     const agreements = await prisma.agreement.findMany({
-      where: sellerAgreementScope(sellerId),
+      where: { AND: [sellerAgreementScope(sellerId), financeAgreementScope(viewer)] },
       select: {
         id: true,
         tier: true,
@@ -103,6 +107,7 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error listing seller agreements:", error);
     return leadDomainErrorResponse(error);
   }
@@ -117,8 +122,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const sellerId = session.user.id;
+    const viewer = await getViewer();
 
     const body = await request.json();
+    const financeBook = requireBookSelection(viewer, body.financeBook, "SHARED");
     const parsed = createAgreementSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -167,6 +174,7 @@ export async function POST(request: NextRequest) {
       ownershipMonths: parsed.data.ownershipMonths,
     });
 
+    await requireFinanceLeadAccess(viewer.userId, leadId);
     await updateLeadContactDetails({
       leadId,
       details: {
@@ -183,6 +191,7 @@ export async function POST(request: NextRequest) {
       leadId,
       actor: { userId: sellerId, role: "SELLER" },
       agreement: {
+        financeBook,
         tier: tier ?? null,
         additionalServices: cleanedExtras,
         monthlyPrice,
@@ -209,6 +218,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error creating seller agreement:", error);
     return leadDomainErrorResponse(error);
   }

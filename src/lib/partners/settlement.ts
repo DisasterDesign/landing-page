@@ -15,6 +15,7 @@
  * book he earns nothing from.
  */
 
+import { roundMinor } from '@/lib/finance/report';
 import { USD_TO_ILS, EUR_TO_ILS } from "@/lib/finance";
 
 export interface SettlementExpense {
@@ -22,6 +23,7 @@ export interface SettlementExpense {
   paidBy: "owner" | "partner";
   /** false = tied to the personal book; the split never touches it. */
   shared: boolean;
+  sharedBasisPoints?: number | null;
 }
 
 export interface Settlement {
@@ -42,19 +44,17 @@ export function computeSettlement(input: {
   let partnerPaidShared = 0;
 
   for (const e of input.expenses) {
-    if (e.shared) {
-      shared += e.amountIls;
-      if (e.paidBy === "partner") partnerPaidShared += e.amountIls;
-    } else {
-      // A non-shared expense the partner somehow paid is deliberately NOT
-      // reimbursed here — the split must never quietly refund the private
-      // book. Settle such cases by hand.
-      personal += e.amountIls;
-    }
+    const total=Math.round(e.amountIls*100);
+    const bps=e.sharedBasisPoints??(e.shared?10000:0);
+    if(!Number.isInteger(bps)||bps<0||bps>10000)throw new Error('Invalid shared allocation');
+    const allocated=roundMinor(total*bps/10000);
+    shared+=allocated; personal+=total-allocated;
+    if(e.paidBy==='partner')partnerPaidShared+=allocated;
   }
+  shared/=100;personal/=100;partnerPaidShared/=100;
 
-  const profit = input.fuzionNetRevenue - shared;
-  const royEntitlement = profit / 2;
+  const profit = Math.round(input.fuzionNetRevenue*100 - shared*100)/100;
+  const royEntitlement = Math.trunc(profit*100/2)/100;
 
   return {
     sharedExpenses: shared,

@@ -34,24 +34,15 @@ test("a fuzion-book client owned by Roy splits 50/50 — both calculations agree
   assert.equal(r.status, "settled");
 });
 
-test("a fuzion-book client NOT owned by Roy is flagged, not guessed", () => {
-  // The settlement (src/lib/partners/settlement.ts) pools every fuzion-book
-  // client and halves it, so these contribute 50% to Roy there. The per-row
-  // share (ownerId → revenueSharePct) says 0. Until Elad rules, the only
-  // honest answer is "ambiguous" with both readings attached.
-  for (const owner of [elad, seller, null]) {
-    const r = splitRuleFor({ partner: "fuzion", owner });
-    assert.equal(r.book, "fuzion");
-    assert.equal(r.status, "ambiguous");
-    assert.equal(r.royPct, null);
-    assert.equal(r.readings.settlement, 50);
-    assert.equal(r.readings.perRow, 0);
-  }
+test("every explicitly shared client splits 50/50 independently of ownership",()=>{
+ for(const owner of [elad,seller,null]){
+  const r=splitRuleFor({partner:'fuzion',owner});assert.equal(r.status,'settled');assert.equal(r.royPct,50);
+ }
 });
 
-test("an unknown book label fails safe into the fuzion book (never silently private)", () => {
+test("an unknown book label requires review and never allocates money", () => {
   // Mirrors bookOf() in src/lib/clients/books.ts.
   const r = splitRuleFor({ partner: "legacy-whatever", owner: roy });
   assert.equal(r.book, "fuzion");
-  assert.equal(r.royPct, 50);
+  assert.equal(r.royPct, null);
 });

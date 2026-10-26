@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import FinanceBookSelect, { useFinanceOwner, type SelectableFinanceBook } from "@/components/admin/FinanceBookSelect";
 import QuotesSection from "@/components/admin/QuotesSection";
 
 interface JobRow {
@@ -79,6 +80,7 @@ const todayISO = () => {
 };
 
 const EMPTY_FORM = {
+  financeBook: "PRIVATE" as SelectableFinanceBook,
   clientId: "",
   clientName: "",
   newClient: false,
@@ -92,19 +94,23 @@ const EMPTY_FORM = {
 };
 
 export default function JobsPage() {
+  const isOwner = useFinanceOwner();
   const [data, setData] = useState<Payload | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/jobs", { cache: "no-store" });
       if (!res.ok) throw new Error();
       setData(await res.json());
+      setLoadError(false);
     } catch {
+      setLoadError(true);
       toast.error("שגיאה בטעינת העבודות");
     } finally {
       setLoading(false);
@@ -150,6 +156,7 @@ export default function JobsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isOwner ? { financeBook: form.financeBook } : {}),
           clientId: form.newClient ? null : form.clientId,
           clientName: form.newClient ? form.clientName.trim() : null,
           title: form.title.trim(),
@@ -250,6 +257,7 @@ export default function JobsPage() {
         </button>
       </div>
 
+      {loadError && <p role="alert" className="text-sm text-amber-300">טעינת העבודות נכשלה. {data ? "מוצגים הנתונים האחרונים." : "אין נתונים זמינים כרגע."}</p>}
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card label="סה״כ חייבים לנו (כולל מע״מ)" value={t?.outstandingGross} accent />
@@ -258,7 +266,7 @@ export default function JobsPage() {
         <Card label="עבודות פתוחות" value={t?.openCount} int sub={t?.overdueCount ? `${t.overdueCount} באיחור` : undefined} />
       </div>
 
-      {/* One-time project quotes — owner-only; renders nothing for partners. */}
+      {/* Quotes are scoped to the viewer by the server. */}
       <QuotesSection />
 
       {/* Add form */}
@@ -304,6 +312,7 @@ export default function JobsPage() {
                 </select>
               )}
             </div>
+            {isOwner && <FinanceBookSelect value={form.financeBook} onChange={(financeBook) => setForm({ ...form, financeBook })} />}
             <div>
               <label className={labelCls}>תיאור העבודה</label>
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="דף נחיתה / וידאו..." className={inputCls} />
@@ -353,7 +362,7 @@ export default function JobsPage() {
       {/* Per-client jobs */}
       {rowsByClient.length === 0 ? (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-12 text-center text-sm text-gray-500">
-          אין עבודות עדיין. הוסף את הראשונה עם ״עבודה חדשה״.
+          {data ? "אין עבודות עדיין. הוסף את הראשונה עם ״עבודה חדשה״." : "נתוני העבודות אינם זמינים."}
         </div>
       ) : (
         <div className="space-y-5">
@@ -494,7 +503,7 @@ function Card({
     <div className={`rounded-2xl border p-4 ${highlight ? "bg-pink/15 border-pink/40" : accent ? "bg-amber-500/10 border-amber-500/30" : "bg-gray-900 border-gray-700"}`}>
       <div className="text-[11px] text-gray-400 mb-1 leading-tight">{label}</div>
       <div className={`font-bold font-mono text-xl md:text-2xl ${highlight ? "text-pink" : accent ? "text-amber-400" : "text-white"}`}>
-        {int ? fmt(v) : `₪${fmt(v)}`}
+        {value == null ? "—" : int ? fmt(v) : `₪${fmt(v)}`}
       </div>
       {sub && <div className="text-[10px] text-red-400 mt-0.5">{sub}</div>}
     </div>

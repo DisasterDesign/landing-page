@@ -14,6 +14,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 
+import { financeLeadScope } from "@/lib/finance/lead-access";
 import { prisma } from "@/lib/prisma";
 import { getProspectingConfig } from "@/lib/prospecting/config";
 import { GooglePlacesProspectingProvider } from "@/lib/prospecting/places";
@@ -415,6 +416,7 @@ export const leadProjectionInclude = {
 export type ProjectionDatabase = Pick<typeof prisma, "contactSubmission">;
 
 export interface ProjectionDependencies {
+  isOwner?: boolean;
   db?: ProjectionDatabase;
   loadLiveDetails?: (
     placeIds: string[],
@@ -1079,6 +1081,7 @@ export async function getSellerLeadList(
       AND: [
         sellerLeadScope(input.sellerId),
         sellerIntentWhere(input.sellerId, input.intents),
+        financeLeadScope(),
         ...(input.search?.trim()
           ? [
               {
@@ -1161,7 +1164,7 @@ export async function getSellerLeadDetail(
   const db = dependencies.db ?? prisma;
   const row = (await db.contactSubmission.findFirst({
     where: {
-      AND: [{ id: input.id }, sellerLeadScope(input.sellerId)],
+      AND: [{ id: input.id }, financeLeadScope(), sellerLeadScope(input.sellerId)],
     },
     include: leadProjectionInclude,
   })) as unknown as LeadProjectionRecord | null;
@@ -1196,7 +1199,7 @@ export async function getSellerLeadDetailsByIds(
   const db = dependencies.db ?? prisma;
   const rows = (await db.contactSubmission.findMany({
     where: {
-      AND: [{ id: { in: ids } }, sellerLeadScope(input.sellerId)],
+      AND: [{ id: { in: ids } }, financeLeadScope(), sellerLeadScope(input.sellerId)],
     },
     include: leadProjectionInclude,
   })) as unknown as LeadProjectionRecord[];
@@ -1239,7 +1242,7 @@ export async function getLeadIntentForSeller(
 ): Promise<LeadIntentLevel> {
   const db = dependencies.db ?? prisma;
   const row = await db.contactSubmission.findFirst({
-    where: { AND: [{ id }, sellerLeadScope(sellerId)] },
+    where: { AND: [{ id }, financeLeadScope(), sellerLeadScope(sellerId)] },
     select: { intentLevel: true },
   });
   if (!row?.intentLevel) {
@@ -1254,7 +1257,7 @@ export async function getAdminLeadDetail(
 ): Promise<LeadDetail> {
   const db = dependencies.db ?? prisma;
   const row = (await db.contactSubmission.findUnique({
-    where: { id },
+    where: { ...financeLeadScope({isOwner: dependencies.isOwner === true}), id },
     include: leadProjectionInclude,
   })) as unknown as LeadProjectionRecord | null;
   if (!row) throw new LeadDomainError("NOT_FOUND", "Lead not found");

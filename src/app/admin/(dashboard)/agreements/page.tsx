@@ -5,6 +5,7 @@ import { DEFAULT_OWNERSHIP_MONTHS, MAX_OWNERSHIP_MONTHS, MIN_OWNERSHIP_MONTHS } 
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import FinanceBookSelect, { useFinanceOwner, type SelectableFinanceBook } from "@/components/admin/FinanceBookSelect";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import PullToRefresh from "@/components/ui/PullToRefresh";
@@ -101,6 +102,7 @@ interface ProductLite {
   name: string;
   monthlyAmount: number | null;
   agreementId: string | null;
+  financeBook?: string;
 }
 
 // A distinct contact identity under one paying client — each past agreement
@@ -127,6 +129,8 @@ interface ClientLite {
 }
 
 export default function AgreementsPage() {
+  const isOwner = useFinanceOwner();
+  const [financeBook, setFinanceBook] = useState<SelectableFinanceBook>("PRIVATE");
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -338,6 +342,7 @@ export default function AgreementsPage() {
   }, [agreements, focusAgreementId, loading, router]);
 
   const resetForm = () => {
+    setFinanceBook("PRIVATE");
     setTierChoice("ADVANCED");
     setMonthlyPrice(String(TIER_PRICE.ADVANCED));
     setOneTimeFee("");
@@ -427,6 +432,8 @@ export default function AgreementsPage() {
     // almost always mean a NEW project is being sold. Both stay overridable.
     const prods = c.products ?? [];
     setProductChoice(prods.length === 1 ? prods[0].id : "new");
+    const productBook = prods.length === 1 ? prods[0].financeBook : undefined;
+    if (productBook === "PRIVATE" || productBook === "SHARED") setFinanceBook(productBook);
 
     const profiles = contactProfilesFor(id);
     if (profiles.length > 1) {
@@ -523,6 +530,7 @@ export default function AgreementsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isOwner ? { financeBook } : {}),
           tier: tierChoice === "CUSTOM" ? null : tierChoice,
           additionalServices,
           monthlyPrice: monthly,
@@ -1036,6 +1044,7 @@ export default function AgreementsPage() {
       {/* Create modal */}
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="הסכם חדש">
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
+          {isOwner && <FinanceBookSelect value={financeBook} onChange={setFinanceBook} />}
           <div>
             <label className="block text-sm text-gray-400 mb-2">סוג ההסכם *</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
@@ -1256,7 +1265,11 @@ export default function AgreementsPage() {
               <label className="block text-sm text-gray-400 mb-1">שיוך למוצר</label>
               <select
                 value={productChoice}
-                onChange={(e) => setProductChoice(e.target.value)}
+                onChange={(e) => {
+                  setProductChoice(e.target.value);
+                  const book = clientsList.find((client) => client.id === clientId)?.products?.find((product) => product.id === e.target.value)?.financeBook;
+                  if (book === "PRIVATE" || book === "SHARED") setFinanceBook(book);
+                }}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               >
                 <option value="new">➕ מוצר חדש</option>

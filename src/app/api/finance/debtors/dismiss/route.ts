@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { DEBTORS_DISMISSED_KEY, getDismissedDebtors } from "@/lib/cardcom-debtors";
 
 /**
@@ -10,7 +10,7 @@ import { DEBTORS_DISMISSED_KEY, getDismissedDebtors } from "@/lib/cardcom-debtor
  */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireOwner();
 
     const body = (await req.json()) as { key?: string; name?: string; dismissed?: boolean };
     const key = typeof body.key === "string" ? body.key.trim() : "";

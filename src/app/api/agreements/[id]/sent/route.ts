@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeAgreementScope } from "@/lib/finance/access";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
@@ -22,6 +24,9 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const { id } = await params;
+    const financeViewer = await getViewer();
+    const scopedAgreement = await prisma.agreement.findFirst({ where: { id: id, ...financeAgreementScope(financeViewer) }, select: { id: true } });
+    if (!scopedAgreement) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const result = await applyAgreementEvent({
       agreementId: id,
       type: "SENT",
@@ -29,6 +34,7 @@ export async function POST(
     });
     return NextResponse.json(result);
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     return leadDomainErrorResponse(error);
   }
 }

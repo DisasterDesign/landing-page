@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireBookSelection, financeClientScope } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import { createJobSchema } from "@/lib/validations";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
@@ -9,8 +10,9 @@ const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 // GET /api/jobs — every one-off job + per-client and per-month rollups.
 export async function GET() {
+  let viewer;
   try {
-    await requireOwner();
+    viewer = await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -18,6 +20,7 @@ export async function GET() {
   }
 
   const jobs = await prisma.clientJob.findMany({
+    where: viewer.isOwner ? {} : { financeBook: "SHARED" },
     include: { client: { select: { id: true, name: true, number: true } } },
     orderBy: [{ status: "asc" }, { closedAt: "desc" }],
   });
@@ -32,6 +35,7 @@ export async function GET() {
       id: j.id,
       client: j.client,
       title: j.title,
+      financeBook: j.financeBook,
       amount: j.amount,
       vatIncluded: j.vatIncluded,
       cardcomFee: j.cardcomFee,
@@ -113,7 +117,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   let viewer;
   try {
-    viewer = await requireOwner();
+    viewer = await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -129,6 +133,9 @@ export async function POST(request: NextRequest) {
     );
   }
   const d = parsed.data;
+  let financeBook;
+  try { financeBook = requireBookSelection(viewer, d.financeBook, viewer.isOwner ? "PRIVATE" : "SHARED"); }
+  catch (error) { return viewerErrorResponse(error) ?? NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
 
   // Resolve client: existing id, or create a lightweight one-off client.
   let clientId = d.clientId ?? null;
@@ -142,6 +149,7 @@ export async function POST(request: NextRequest) {
         source: "one_off",
         status: "",
         ownerId: viewer.userId,
+        partner: financeBook === "PRIVATE" ? "personal" : "fuzion",
       },
       select: { id: true },
     });
@@ -151,9 +159,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "לקוח לא נמצא" }, { status: 400 });
   }
 
+  const visibleClient = await prisma.client.findFirst({ where: { id: clientId, ...financeClientScope(viewer) }, select: { id: true } });
+  if (!visibleClient && d.clientId) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const job = await prisma.clientJob.create({
     data: {
       clientId,
+      financeBook,
       title: d.title.trim(),
       amount: d.amount,
       vatIncluded: d.vatIncluded,

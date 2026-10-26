@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -12,11 +14,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const attachmentLink = await prisma.taskAttachment.findUnique({ where: { id }, select: { taskId: true } });
+    if (!attachmentLink) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const commission = await prisma.sellerCommission.findFirst({ where: { briefTaskId: attachmentLink.taskId }, select: { agreementRefId: true, agreementId: true } });
+    if (commission) {
+      const linkedAgreement = await prisma.agreement.findUnique({ where: { id: commission.agreementRefId ?? commission.agreementId }, select: { financeBook: true } });
+      if (linkedAgreement?.financeBook !== "SHARED") await requireFinanceTaskAccess(await getViewer(), attachmentLink.taskId);
+    }
 
     // max-age covers browsers; s-maxage makes Vercel's edge cache absorb
     // repeat fetches (email proxies, doc renderers) instead of hitting the
     // function + Neon every time. Attachments are immutable after upload.
-    const cacheControl = "public, max-age=31536000, s-maxage=31536000, immutable";
+    const cacheControl = commission ? "private, no-store" : "public, max-age=31536000, s-maxage=31536000, immutable";
 
     // The id doubles as a strong ETag. Verify the row still exists (cheap,
     // no bytes) so deleted attachments return 404 rather than 304-forever.
@@ -57,6 +66,7 @@ export async function GET(
       },
     });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error serving attachment:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -77,6 +87,13 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const attachmentLink = await prisma.taskAttachment.findUnique({ where: { id }, select: { taskId: true } });
+    if (!attachmentLink) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const commission = await prisma.sellerCommission.findFirst({ where: { briefTaskId: attachmentLink.taskId }, select: { agreementRefId: true, agreementId: true } });
+    if (commission) {
+      const linkedAgreement = await prisma.agreement.findUnique({ where: { id: commission.agreementRefId ?? commission.agreementId }, select: { financeBook: true } });
+      if (linkedAgreement?.financeBook !== "SHARED") await requireFinanceTaskAccess(await getViewer(), attachmentLink.taskId);
+    }
 
     const attachment = await prisma.taskAttachment.findUnique({
       where: { id },
@@ -89,6 +106,7 @@ export async function DELETE(
     await prisma.taskAttachment.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error deleting attachment:", error);
     return NextResponse.json(
       { error: "Internal server error" },

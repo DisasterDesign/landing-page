@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client";
 import { z } from "zod";
 
+import { financeLeadScope } from "@/lib/finance/lead-access";
 import { prisma } from "@/lib/prisma";
 
 import { LeadDomainError } from "./errors";
@@ -21,6 +22,8 @@ import {
 import { isLeadSourceKey } from "./source";
 
 export interface AdminLeadFilters {
+  /** Server supplied only; never accepted by the query-string parser. */
+  financeOwner?: boolean;
   intent?: LeadIntentLevel;
   source?: string;
   owner?: string | "UNASSIGNED";
@@ -238,7 +241,7 @@ export function buildAdminLeadWhere(
   filters: AdminLeadFilters,
   now: Date,
 ): Prisma.ContactSubmissionWhereInput {
-  const where: Prisma.ContactSubmissionWhereInput = {};
+  const where: Prisma.ContactSubmissionWhereInput = { ...financeLeadScope({isOwner: filters.financeOwner === true}) };
   const and: Prisma.ContactSubmissionWhereInput[] = [];
   if (filters.intent) where.intentLevel = filters.intent;
   if (filters.source) where.sourceKey = filters.source;

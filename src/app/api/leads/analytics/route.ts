@@ -1,3 +1,4 @@
+import { financeLeadViewer } from "@/lib/finance/lead-access";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,7 +17,8 @@ export async function GET(request: NextRequest) {
     }
     await requirePersistedLeadReadRole(session.user.id, ["ADMIN"]);
     const filters = parseAdminLeadFilters(new URL(request.url).searchParams);
-    const metrics = await getLeadMetrics(filters);
+    const financeViewer = await financeLeadViewer(session.user.id);
+    const metrics = await getLeadMetrics({ ...filters, financeOwner: financeViewer.isOwner });
     return NextResponse.json({ metrics });
   } catch (error) {
     console.error("Lead analytics error:", error);

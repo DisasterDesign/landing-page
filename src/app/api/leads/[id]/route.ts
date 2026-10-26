@@ -1,3 +1,4 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
@@ -37,7 +38,8 @@ export async function GET(
   try {
     await requirePersistedLeadReadRole(session.user.id, ["ADMIN"]);
     const { id } = await params;
-    const lead = await getAdminLeadDetail(id);
+    const financeViewer = await requireFinanceLeadAccess(session.user.id, id);
+    const lead = await getAdminLeadDetail(id, {isOwner: financeViewer.isOwner});
     if (getLeadLifecycleConfig().enabled) {
       return NextResponse.json(lead);
     }
@@ -99,6 +101,7 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     const actor = { userId: session.user.id, role: "ADMIN" as const };
     if (parsed.data.isRead !== undefined) {
       return NextResponse.json(

@@ -1,10 +1,9 @@
+
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { bulkClientUrlsSchema } from "@/lib/validations";
 
 export async function POST(request: NextRequest) {
@@ -14,6 +13,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
+    if (!viewer.isOwner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await request.json();
     const parsed = bulkClientUrlsSchema.safeParse(body);
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ updated: results.length });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { buildFinanceReport } from "@/lib/finance/report-data";
+import { partnerForecastFigures } from "@/lib/finance/partner-forecast";
+import type { Viewer } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
 import { CARDCOM_FEE_RATE, VAT_RATE } from "@/lib/finance";
 
@@ -63,8 +66,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  let viewer: Viewer;
   try {
-    await requireOwner();
+    viewer = await requireOwner();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -90,14 +94,14 @@ export async function GET(
 
   // Only the owner and the partners are drillable — a MEMBER has no
   // attribution and would render an empty, confusing page.
-  if (!partner || (!partner.isOwner && partner.role !== "SELLER")) {
+  if (!partner || (!partner.isOwner && partner.role !== "SELLER" && partner.revenueSharePct === null)) {
     return NextResponse.json({ error: "Partner not found" }, { status: 404 });
   }
 
   const [clients, agreements, leadsByStage, commissions, monthCommissions] =
     await Promise.all([
       prisma.client.findMany({
-        where: { ownerId: id, archivedAt: null },
+        where: { archivedAt: null, ...(partner.isOwner ? {} : partner.revenueSharePct != null ? {OR:[{products:{some:{financeBook:"SHARED"}}},{agreements:{some:{financeBook:"SHARED"}}}]} : {ownerId:id}) },
         select: {
           id: true,
           number: true,
@@ -110,7 +114,7 @@ export async function GET(
           startDate: true,
           paymentDate: true,
           products: {
-            where: { archivedAt: null },
+            where: { archivedAt: null, ...(partner.revenueSharePct != null ? {financeBook:"SHARED" as const} : {}) },
             select: {
               id: true,
               name: true,
@@ -123,7 +127,7 @@ export async function GET(
         },
       }),
       prisma.agreement.findMany({
-        where: partnerAgreementScope(id),
+        where: partner.isOwner ? {} : partner.revenueSharePct != null ? {financeBook:"SHARED"} : partnerAgreementScope(id),
         select: {
           id: true,
           customerName: true,
@@ -163,9 +167,12 @@ export async function GET(
       }),
     ]);
 
+  const report = await buildFinanceReport(viewer, "combined");
+  const forecast = partnerForecastFigures(partner.isOwner,partner.revenueSharePct,report);
+
   /** Monthly profit of one billing client: gross → net of VAT → net of fee. */
   const clientFigures = (client: (typeof clients)[number]) => {
-    const gross = client.monthlyAmount ?? client.amount ?? 0;
+    const gross = partner.revenueSharePct != null ? client.products.filter(p=>p.status==="בוצע").reduce((sum,p)=>sum+(p.monthlyAmount??0),0) : client.monthlyAmount ?? 0;
     const vat = client.vatExempt ? 0 : (gross * VAT_RATE) / (100 + VAT_RATE);
     return { gross, profit: gross - vat - gross * CARDCOM_FEE_RATE };
   };
@@ -182,9 +189,9 @@ export async function GET(
   }
 
   const sharePct = partner.isOwner ? null : partner.revenueSharePct;
-  const recurringPayout =
-    sharePct != null ? monthlyProfit * (sharePct / 100) : 0;
-  const firstMonthPayout = monthCommissions.reduce(
+  if(forecast){monthlyGross=forecast.gross;monthlyProfit=forecast.profit;}
+  const recurringPayout = sharePct != null ? forecast!.payout : 0;
+  const firstMonthPayout = sharePct != null ? 0 : monthCommissions.reduce(
     (sum, row) => sum + row.amount,
     0,
   );
@@ -202,7 +209,7 @@ export async function GET(
         name: client.name,
         businessName: client.businessName,
         status: client.status,
-        monthlyAmount: client.monthlyAmount ?? client.amount ?? 0,
+        monthlyAmount: figures.gross,
         // Zero unless billing, so the column sums to monthlyGross/monthlyProfit
         // above instead of promising money that is not being charged.
         monthlyGross: isBilling ? round(figures.gross) : 0,
@@ -231,6 +238,8 @@ export async function GET(
 
   return NextResponse.json({
     month: key,
+    forecast: true,
+    snapshotAt: report.snapshotAt,
     partner: {
       id: partner.id,
       name: partner.name,

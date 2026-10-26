@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { useFinanceOwner, FinanceBookBadge } from "@/components/admin/FinanceBookSelect";
 import Modal from "@/components/ui/Modal";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { parseUrlPaste, type ParsedRow } from "@/lib/import-urls";
@@ -10,6 +11,7 @@ import { confirmDanger } from "@/lib/confirm";
 import { tapMedium } from "@/lib/haptic";
 
 interface ClientProduct {
+  financeBook?: string;
   id: string;
   name: string;
   websiteUrl: string | null;
@@ -107,6 +109,7 @@ function matchClient(name: string, clients: Client[]): Client | null {
 }
 
 export default function ClientsPage() {
+  const isOwner = useFinanceOwner();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
@@ -876,7 +879,7 @@ export default function ClientsPage() {
                           </span>
                         </button>
                       ) : null}
-                      <div className="flex-1 min-w-0">{renderCell(client, "name")}</div>
+                      <div className="flex-1 min-w-0">{renderCell(client, "name")}{isOwner && <div className="px-2">{products.length > 1 ? <span className="text-[10px] text-gray-400">שיוך לפי מוצר</span> : <FinanceBookBadge book={products[0]?.financeBook} />}</div>}</div>
                       <Link
                         href={`/admin/clients/${client.id}`}
                         className="shrink-0 text-gray-500 hover:text-pink p-1.5 rounded hover:bg-gray-700/50"
@@ -978,6 +981,7 @@ export default function ClientsPage() {
                             <span className="text-gray-600 text-xs shrink-0">└</span>
                             <div className="flex-1 min-w-0">
                               {renderProductCell(client, product, "name")}
+                              {isOwner && <FinanceBookBadge book={product.financeBook} />}
                             </div>
                             {/* Lane chip — click to edit. Lives beside the name
                                 because the status column now carries the
