@@ -39,7 +39,10 @@ export function normalizeCardcomTransaction(row: FailedTransaction, terminalId: 
     const sign = refund ? -1 : 1;
     const amountMinor = sign * Math.round(Math.abs(row.Amount) * 100);
     const valued = row.AmountILS ?? row.AmountInILS;
-    return { provider: 'CARDCOM', terminalId, providerTransactionId: id, kind: refund ? 'REFUND' : 'CHARGE', amountMinor, currency, ilsAmountMinor: currency === 'ILS' ? amountMinor : valued != null && Number.isFinite(valued) ? sign * Math.round(Math.abs(valued) * 100) : null, occurredAt: date, financeBook: 'UNASSIGNED', accountId: row.AccountId ?? null, recurringId: row.RecurringId ?? null, invoiceNumber: row.DocumentNumber == null ? null : String(row.DocumentNumber) };
+    // Cardcom uses zero when a terminal receipt has no account/order identifier.
+    const accountId = row.AccountId != null && row.AccountId > 0 && Number.isSafeInteger(row.AccountId) ? row.AccountId : null;
+    const recurringId = row.RecurringId != null && row.RecurringId > 0 && Number.isSafeInteger(row.RecurringId) ? row.RecurringId : null;
+    return { provider: 'CARDCOM', terminalId, providerTransactionId: id, kind: refund ? 'REFUND' : 'CHARGE', amountMinor, currency, ilsAmountMinor: currency === 'ILS' ? amountMinor : valued != null && Number.isFinite(valued) ? sign * Math.round(Math.abs(valued) * 100) : null, occurredAt: date, financeBook: 'UNASSIGNED', accountId, recurringId, invoiceNumber: row.DocumentNumber == null ? null : String(row.DocumentNumber) };
 }
 interface AgreementLink {
     id: string;
