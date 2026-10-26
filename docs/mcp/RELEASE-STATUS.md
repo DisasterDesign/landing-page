@@ -45,16 +45,37 @@ origin/main3bd19f8 is the merge of the already included88fa1d3 debtor fixes,
 with no source-tree difference from that baseline. Other local edits remain
 untouched.
 
-Auth0 Dashboard is logged out. Chrome tab '🔐 Fuzion MCP setup' is open at the
-supported manage.auth0.com login and marked for handoff. **Elad must sign into
-his actual account.** No credentials have been entered/copied and no signup,
-terms, tenant, client or grant was created. This is a login prerequisite, not
-an unresolved approval for the already approved proposal. If the supported
-flow presents new terms, a paid plan or materially broader tenant settings,
-return that exact decision instead of silently accepting it.
+The clean source at `060e1f47b4b2e338c0d66936671dacaa9ff8e63f` was deployed
+through the existing Vercel project on 2026-10-26 at 21:21 UTC. Deployment
+`dpl_EYb6DAFquuYGnar3hrVtQP7FFaB6` is Ready and aliased to
+`https://www.fuzionwebz.com`. Read-only checks verified a published blog page
+returns 200 with article markup in the server HTML. The deployed
+`https://www.fuzionwebz.com/api/mcp` returns **503 Service unavailable** with
+no-store because MCP configuration remains disabled/unset. This is a deployed
+disabled route, **not an active MCP connection**. No production grant/schema
+migration or business-data mutation was performed.
+
+Elad signed into Auth0 using its supported user flow and authorized ordinary
+signup completion. Business profile (Fuzion Webz, 1–49, Israel) was submitted.
+Auth0's continuation callback failed with an invalid-state error; opening its
+linked Dashboard recovered the authenticated account and displayed first-tenant
+setup. There is no tenant yet. The current screen has a generated name, US
+region, and Create Account; no payment or additional agreement was visible.
+The profile notice references Auth0's Privacy Policy and international data
+processing. Public signup advertised Free / no credit card; actual tenant plan
+and any trial conditions remain unverified until a tenant exists.
+
+Automatic approval review **denied** the attempt to create the proposed
+`fuzion-webz-mcp.us.auth0.com` tenant: permanent name/data-region settings require
+concrete action-time confirmation. A fresh read verified the generated name
+was unchanged and no tenant was created. The reviewer mentioned Australia;
+the actual page suffix and selected styling indicate US. No retry or alternate
+creation route was used. Ask Elad one focused question approving the exact
+name and **US** region. The Chrome Welcome tab is marked for handoff.
+No credentials, clients, OAuth grants, paid plans or new terms were created or
+accepted by the agent. The prior exact three-scope approval remains valid.
 
 The parent owns the PERSONAL Work plugin and final successful dot tool call.
-No connection is complete until actual provider OAuth, production read-only
-parity and that parent call succeed. A deployed disabled route is not an active
-or connected MCP endpoint. See subsequent verified deployment notes before
-naming any live endpoint or deployed commit.
+Actual provider OAuth, production read-only parity, local Codex configuration
+and the parent dot tool call remain **NOT RUN**. Complete these after the
+concrete tenant prerequisite; do not claim connected before that acceptance.

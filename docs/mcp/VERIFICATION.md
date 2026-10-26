@@ -1,6 +1,6 @@
 # MCP verification — 2026-10-26
 
-> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 user login is still required.
+> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 login is complete; exact tenant-name/US-region approval is the current prerequisite.
 
 
 Local isolated branch based on committed finance/debtor fixes `88fa1d3`.

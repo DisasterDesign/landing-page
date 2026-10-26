@@ -1,13 +1,13 @@
 # Dependency and Auth0 release review — 2026-10-26
 
-> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 user login is still required.
+> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 login is complete; exact tenant-name/US-region approval is the current prerequisite.
 
 
 Follow-up to implementation commit `04a4288`; persistent access approval remains
 **pending**. No deployment, provider/account creation, grant, credential,
 security-setting change, paid plan or Terms acceptance occurred.
 
-## Scoped fixes
+## Initial scoped fixes (followed by blog/editor fixes)
 
 | Package | Before | Final | Reason |
 | --- | --- | --- | --- |
@@ -36,7 +36,7 @@ for Next, NextAuth/Auth core/adapter, Zod, source-map-js, ProseMirror, the MCP S
 or jose in the returned audit. This is not a claim that the entire app is
 vulnerability-free.
 
-## Actual exposure and residual findings
+## Historical exposure and residual findings (superseded)
 
 | Package / advisory group | Evidence in this checkout | Assessment |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ assumption) with paste/render interaction checks. No database/auth migration is
 required. This work does not silently accept that residual risk for deployment.
 The account/access approval and production verification gates remain independent.
 
-## Verification of final stack
+## Historical dependency-stage verification
 
 The complete 629-test suite, both guarded synthetic Postgres integrations and
 real-loopback MCP auth tests are rerun against the final lock. The final results
@@ -71,7 +71,7 @@ parity, local Codex setup and Work dot call remain NOT RUN. A real production
 login/editor visual session was not used for this dependency-only change.
 No raw npm audit/log data or environment credentials are committed.
 
-## Advisory inventory
+## Historical advisory inventory (before final blog/editor fixes)
 
 IDs below are the exact npm-registry advisory inventory read on 2026-10-26,
 linked to reviewed primary advisories. 'Fixed' means the final installed package

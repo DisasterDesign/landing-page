@@ -1,6 +1,6 @@
 # Fuzion read-only MCP — implementation and approval gate
 
-> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 user login is still required.
+> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 login is complete; exact tenant-name/US-region approval is the current prerequisite.
 
 
 Status: implemented and locally tested, **disabled, not deployed, not connected**.
