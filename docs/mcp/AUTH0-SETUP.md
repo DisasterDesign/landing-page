@@ -1,5 +1,8 @@
 # Auth0 setup proposal and action-time boundaries
 
+> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 user login is still required.
+
+
 **Approval PENDING. Nothing in this checklist has been provisioned.**
 The parent has already presented the approval question; do not ask it again
 or interpret elapsed time as consent. No live MCP endpoint is verified.

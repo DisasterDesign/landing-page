@@ -314,3 +314,22 @@ Auth0 Free is a published option, but account/tenant/plan entitlements remain
 unverified after a read-only dashboard visit reached login. No provisioning,
 credentials, terms, grants, security settings or production data changed.
 See docs/mcp/DEPENDENCY-REVIEW.md and docs/mcp/AUTH0-SETUP.md.
+
+### 2026-10-26 — Close blog/editor release blockers before personal MCP setup
+
+**Status:** Locally verified release candidate; exact Auth0 proposal/publication
+approved, provider user login and final dot acceptance still required.
+
+Sanitize stored blog HTML on the server with a maintained explicit allowlist
+before SSR/client serialization, replacing the raw-first hydration sanitizer.
+Escape tag openers in blog JSON-LD. Retain existing article/editor layout and
+formatting; no business/blog data is rewritten. Use matching patched Tiptap3.30.5
+packages/peers and declare the existing Markdown maintenance-script dependency
+explicitly instead of relying on editor transitives. Existing Vercel Node24
+already supports sanitize-html2.18.1; no runtime migration is introduced.
+
+633 tests pass including four security regressions and real browser synthetic
+render/typing/bold checks. Production audit has0 critical/0 high; residual
+moderates are classified in release notes. User credentials and new explicit
+terms still require the supported flow; approval is not treated as permission
+for an unspecified tenant, paid plan or broader access.

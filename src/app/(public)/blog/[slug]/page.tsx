@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { sanitizeBlogHtml, jsonForHtmlScript } from "@/lib/blog/html";
 import { resolveSlugRedirect } from "@/lib/blog/slug-aliases";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import BlogPostClient from "./BlogPostClient";
@@ -149,13 +150,13 @@ export default async function BlogPostPage({ params }: Props) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonForHtmlScript(jsonLd) }}
       />
       <BlogPostClient
         post={{
           title: post.title,
           slug: post.slug,
-          content: post.content,
+          content: sanitizeBlogHtml(post.content),
           excerpt: post.excerpt,
           coverImage: post.coverImage,
           category: post.category,

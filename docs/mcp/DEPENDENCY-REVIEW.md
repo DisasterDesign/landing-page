@@ -1,5 +1,8 @@
 # Dependency and Auth0 release review — 2026-10-26
 
+> Current status: Elad approved the exact proposal at21:00UTC. Historical pending-approval/dependency notes below are superseded by [RELEASE-STATUS.md](RELEASE-STATUS.md); Auth0 user login is still required.
+
+
 Follow-up to implementation commit `04a4288`; persistent access approval remains
 **pending**. No deployment, provider/account creation, grant, credential,
 security-setting change, paid plan or Terms acceptance occurred.
