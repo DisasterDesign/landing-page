@@ -293,7 +293,26 @@ enum BlogPostStatus {
   ARCHIVED
 }
 
+// No secrets/tokens are stored. Provision only after explicit user approval.
+model McpAccessGrant {
+  id        String @id @default(cuid())
+  issuer    String
+  subject   String
+  clientId  String
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes    String[]
+  notBefore DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([issuer, subject, clientId])
+  @@index([userId])
+}
+
 model User {
+  mcpGrants McpAccessGrant[]
   id                 String   @id @default(cuid())
   email              String   @unique
   /// Optional login handle for admin-provisioned users (e.g. sellers) who

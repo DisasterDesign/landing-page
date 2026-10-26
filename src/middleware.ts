@@ -37,6 +37,10 @@ export default auth((req) => {
     }
   }
 
+  // MCP authenticates every request with OAuth + a fresh persisted app-user grant.
+  // Never accept browser cookies as an MCP credential.
+  if (pathname === "/api/mcp") return NextResponse.next();
+
   // Allow public auth routes
   if (pathname.startsWith("/api/auth")) {
     return NextResponse.next();

@@ -13,17 +13,19 @@ export function reportLens(viewer: Viewer, requested: string | null) {
         throw new ViewerAuthorizationError('Forbidden', 403);
     return lens;
 }
-export async function buildFinanceReport(viewer: Viewer, lens: string) {
+export async function buildFinanceReport(viewer: Viewer, lens: string, period?: { from: Date; to: Date }) {
+    reportLens(viewer, lens);
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const start = period?.from ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Math.min(period?.to.getTime() ?? Infinity, now.getTime() + 1));
     const [clients, expenseRows, pending, receipts, sync, unassignedTransactions, expensePayments] = await Promise.all([
         prisma.client.findMany({ where: { AND: [financeClientScope(viewer), { archivedAt: null, status: 'בוצע' }] }, include: { _count: { select: { products: true } }, products: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' } }, agreements: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' }, select: { id: true, kind: true, financeBook: true } } }, orderBy: { name: 'asc' } }),
         prisma.expense.findMany({ where: viewer.isOwner ? {} : { OR: [{ financeBook: 'SHARED' }, { financeBook: 'PRIVATE', sharedBasisPoints: { gt: 0 } }] }, include: { client: { select: { id: true, name: true, number: true } }, paidBy: { select: { isOwner: true } } }, orderBy: [{ active: 'desc' }, { createdAt: 'desc' }] }),
         prisma.clientJob.findMany({ where: { status: 'PENDING', ...(viewer.isOwner ? {} : { financeBook: 'SHARED' as const }) } }),
-        loadReceipts(start, viewer.isOwner ? (lens === 'personal' ? 'PRIVATE' : lens === 'fuzion' ? 'SHARED' : undefined) : 'SHARED'),
+        loadReceipts(start, viewer.isOwner ? (lens === 'personal' ? 'PRIVATE' : lens === 'fuzion' ? 'SHARED' : undefined) : 'SHARED', end),
         prisma.financeSyncState.findUnique({ where: { key: 'cardcom:transactions' } }),
         viewer.isOwner ? prisma.financeTransaction.findMany({ where: { financeBook: 'UNASSIGNED' }, take: 100, orderBy: { occurredAt: 'desc' } }) : Promise.resolve([]),
-        prisma.financeExpensePayment.findMany({where:{paidAt:{gte:start,lte:now},...(viewer.isOwner?{}:{OR:[{financeBook:'SHARED' as const},{financeBook:'PRIVATE' as const,sharedBasisPoints:{gt:0}}]})}}),
+        prisma.financeExpensePayment.findMany({where:{paidAt:{gte:start,lt:end},...(viewer.isOwner?{}:{OR:[{financeBook:'SHARED' as const},{financeBook:'PRIVATE' as const,sharedBasisPoints:{gt:0}}]})}}),
     ]);
     const summaries = { personal: { clientCount: 0, amount: 0, profit: 0, partnerShare: 0, costs: 0 }, fuzion: { clientCount: 0, amount: 0, profit: 0, partnerShare: 0, costs: 0 } };
     const selected = (book: string) => book !== 'UNASSIGNED' && (lens === 'combined' || lens === 'mine' || (lens === 'personal' ? book === 'PRIVATE' : book === 'SHARED'));

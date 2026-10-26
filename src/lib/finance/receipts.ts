@@ -5,14 +5,15 @@ import { deduplicateReceipts, type Receipt } from './transactions';
 import { minor, roundMinor } from './report';
 import type { FinanceBook, Prisma } from '@prisma/client';
 /** Paid money only: never infer receipts from client totals or subscription start dates. */
-export async function loadReceipts(from: Date, book?: FinanceBook): Promise<Receipt[]> {
+export async function loadReceipts(from: Date, book?: FinanceBook, to?: Date): Promise<Receipt[]> {
     const terminalId = String(getCardcomConfig()?.terminal ?? 'legacy');
     const scoped = book ? { financeBook: book } : {};
+    const occurredDuring = { gte: from, ...(to ? { lt: to } : {}) };
     const [ledger, charges, quotes, jobs] = await Promise.all([
-        prisma.financeTransaction.findMany({ where: { occurredAt: { gte: from }, ...scoped }, orderBy: { occurredAt: 'asc' } }),
-        prisma.agreementCharge.findMany({ where: { success: true, agreement: scoped, OR: [{ cardcomChargeDate: { gte: from } }, { cardcomChargeDate: null, chargedAt: { gte: from } }] }, include: { agreement: { select: { id: true, kind: true, financeBook: true, clientId: true, vatExempt: true, cardcomVerifiedTransactionId: true } } } }),
-        prisma.agreement.findMany({ where: { paymentStatus: 'COMPLETED', paidAt: { gte: from }, ...scoped }, select: { id: true, kind: true, financeBook: true, clientId: true, paidAmount: true, paidAt: true, vatExempt: true, cardcomVerifiedTransactionId: true, cardcomDealId: true } }),
-        prisma.clientJob.findMany({ where: { status: 'PAID', paidAt: { gte: from }, ...scoped }, include: { client: { select: { vatExempt: true } } } }),
+        prisma.financeTransaction.findMany({ where: { occurredAt: occurredDuring, ...scoped }, orderBy: { occurredAt: 'asc' } }),
+        prisma.agreementCharge.findMany({ where: { success: true, agreement: scoped, OR: [{ cardcomChargeDate: occurredDuring }, { cardcomChargeDate: null, chargedAt: occurredDuring }] }, include: { agreement: { select: { id: true, kind: true, financeBook: true, clientId: true, vatExempt: true, cardcomVerifiedTransactionId: true } } } }),
+        prisma.agreement.findMany({ where: { paymentStatus: 'COMPLETED', paidAt: occurredDuring, ...scoped }, select: { id: true, kind: true, financeBook: true, clientId: true, paidAmount: true, paidAt: true, vatExempt: true, cardcomVerifiedTransactionId: true, cardcomDealId: true } }),
+        prisma.clientJob.findMany({ where: { status: 'PAID', paidAt: occurredDuring, ...scoped }, include: { client: { select: { vatExempt: true } } } }),
     ]);
     // A historical ledger receipt suppresses fallback rows even when its authoritative date/book lies outside this view.
     const providerIds = [...charges.flatMap(c => c.cardcomDealId ? [c.cardcomDealId] : []), ...quotes.flatMap(q => q.cardcomVerifiedTransactionId ? [q.cardcomVerifiedTransactionId] : q.cardcomDealId ? [q.cardcomDealId] : [])];
@@ -43,7 +44,7 @@ export async function loadReceipts(from: Date, book?: FinanceBook): Promise<Rece
             f.gross = j.amount;
         result.push({ provider: 'MANUAL', terminalId: 'manual', providerTransactionId: j.id, kind: j.amount < 0 ? 'REFUND' : 'CHARGE', amountMinor: minor(f.gross), currency: 'ILS', ilsAmountMinor: minor(f.gross), occurredAt: j.paidAt!, financeBook: j.financeBook, clientId: j.clientId, vatExempt: j.client.vatExempt, feeApplies: j.cardcomFee, source: 'job' });
     }
-    return deduplicateReceipts(result);
+    return deduplicateReceipts(result).filter(r => !to || r.occurredAt < to);
 }
 export function receiptTotals(rows: Receipt[]) {
     let gross = 0, vat = 0, fee = 0, unvaluedCount = 0, count = 0;

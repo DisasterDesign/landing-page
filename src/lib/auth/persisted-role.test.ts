@@ -248,7 +248,7 @@ test("finance and billing repair routes guard persisted ADMIN before sensitive w
     [
       "../../app/api/finance/debtors/route.ts",
       "GET",
-      "prisma.agreementCharge.findMany",
+      "loadDebtorsReport(viewer)",
     ],
     [
       "../../app/api/finance/debtors/refresh/route.ts",

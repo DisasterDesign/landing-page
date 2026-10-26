@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { generateKeyPair, SignJWT, jwtVerify } from 'jose';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { authenticateMcp } from './auth';
+import { createMcpHandler } from './server';
+const url=process.env.MCP_TEST_DATABASE_URL;
+test('synthetic Postgres: actual app grant/user revocation, report parity and strict DB write boundary through official MCP client',{skip:!url},async()=>{
+ const parsed=new URL(url!);assert.equal(parsed.hostname,'127.0.0.1');assert.equal(parsed.port,'55448');assert.equal(parsed.pathname,'/finance_test');
+ process.env.DATABASE_URL=url;process.env.DIRECT_URL=url;
+ const {prisma}=await import('../prisma');const {mcpData}=await import('./data');const {buildFinanceReport}=await import('../finance/report-data');
+ const prefix='mcp-integration-';const id=prefix+'owner';const now=Math.floor(Date.now()/1000);let readPhase=false;const actions:string[]=[];
+ prisma.$use(async(params,next)=>{if(readPhase){actions.push(`${params.model}.${params.action}`);assert.ok(['findMany','findUnique','count','aggregate','groupBy'].includes(params.action),`MCP must never ${params.model}.${params.action}`);}return next(params);});
+ const cleanup=async()=>{await prisma.mcpAccessGrant.deleteMany({where:{userId:id}});await prisma.financeTransaction.deleteMany({where:{providerTransactionId:{startsWith:prefix}}});await prisma.client.deleteMany({where:{id:{startsWith:prefix}}});await prisma.user.deleteMany({where:{id}});};
+ await cleanup();
+ const {privateKey,publicKey}=await generateKeyPair('RS256');
+ const config={issuer:'https://synthetic.example.invalid/',audience:'https://app.example.invalid/api/mcp',jwksUri:'https://synthetic.example.invalid/keys'};
+ const client=new Client({name:'database-test',version:'1'});
+ try{
+  await prisma.user.create({data:{id,name:'Synthetic owner',email:'mcp-synthetic@example.invalid',passwordHash:'SYNTHETIC_NOT_A_LOGIN',isOwner:true,role:'ADMIN'}});
+  await prisma.mcpAccessGrant.create({data:{issuer:config.issuer,subject:'synthetic-subject',clientId:'synthetic-client',userId:id,scopes:['finance:read','clients:read','debtors:read'],notBefore:new Date((now-2)*1000),expiresAt:new Date((now+3600)*1000)}});
+  await prisma.client.create({data:{id:prefix+'client',name:'MCP Mixed synthetic',status:'בוצע',partner:'personal',cardcomAccountIds:[],products:{create:[{name:'SHARED_PRODUCT',financeBook:'SHARED',monthlyAmount:118,status:'בוצע'},{name:'PRIVATE_SECRET',financeBook:'PRIVATE',monthlyAmount:1180,status:'בוצע'}]}}});
+  const at=new Date();await prisma.financeTransaction.createMany({data:[{provider:'CARDCOM',terminalId:'legacy',providerTransactionId:prefix+'shared',kind:'CHARGE',amountMinor:11800,currency:'ILS',ilsAmountMinor:11800,occurredAt:at,financeBook:'SHARED'},{provider:'CARDCOM',terminalId:'legacy',providerTransactionId:prefix+'private',kind:'CHARGE',amountMinor:118000,currency:'ILS',ilsAmountMinor:118000,occurredAt:at,financeBook:'PRIVATE'}]});
+  const token=await new SignJWT({azp:'synthetic-client',scope:'finance:read clients:read debtors:read',userId:'forged-owner',isOwner:true}).setProtectedHeader({alg:'RS256'}).setIssuer(config.issuer).setAudience(config.audience).setSubject('synthetic-subject').setIssuedAt(now).setExpirationTime(now+600).sign(privateKey);
+  const authenticate=(r:Request)=>authenticateMcp(r,config,{verify:t=>jwtVerify(t,publicKey,{issuer:config.issuer,audience:config.audience,algorithms:['RS256']}),loadGrant:(issuer,subject,clientId)=>prisma.mcpAccessGrant.findUnique({where:{issuer_subject_clientId:{issuer,subject,clientId}},include:{user:{select:{id:true,isOwner:true,role:true,revenueSharePct:true,mustChangePassword:true}}}})});
+  const handler=createMcpHandler({resourceUrl:config.audience,issuer:config.issuer,authenticate,data:mcpData});
+  readPhase=true;
+  await client.connect(new StreamableHTTPClientTransport(new URL(config.audience),{requestInit:{headers:{Authorization:`Bearer ${token}`}},fetch:async(input,init)=>handler(new Request(input,init))}));
+  const direct=await buildFinanceReport({userId:id,isOwner:true,role:'ADMIN',revenueSharePct:null},'combined');
+  const result=await client.callTool({name:'finance_summary',arguments:{}});const content=result.content as {type:string;text:string}[];const value=JSON.parse(content[0].text);
+  assert.equal(value.collectedCash.gross,direct.actual.gross);assert.deepEqual(value.recurringMonthly.books,direct.books);
+  readPhase=false;await prisma.user.update({where:{id},data:{isOwner:false}});readPhase=true;
+  assert.equal((await client.listTools()).tools.some(t=>t.name==='debtors_report'),false);
+  const shared=await client.callTool({name:'finance_summary',arguments:{}});assert.equal(JSON.stringify(shared).includes('personal'),false);
+  const search=await client.callTool({name:'search_clients',arguments:{query:'MCP Mixed'}});assert.equal(JSON.stringify(search).includes('PRIVATE_SECRET'),false);
+  assert.ok(actions.some(a=>a==='McpAccessGrant.findUnique'));assert.ok(actions.some(a=>a==='FinanceTransaction.findMany'));
+  readPhase=false;await prisma.mcpAccessGrant.updateMany({where:{userId:id},data:{revokedAt:new Date()}});readPhase=true;
+  await assert.rejects(()=>client.listTools());
+ }finally{readPhase=false;await client.close();await cleanup();await prisma.$disconnect();}
+});
