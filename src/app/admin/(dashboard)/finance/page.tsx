@@ -85,6 +85,7 @@ interface FinancePayload {
     { total: number; fixed: number; variable: number; count: number }
   >;
   perClient: ClientPnl[];
+  unassignedExpenseCount?: number;
   unknownAmounts: { id: string; name: string; vendor: string; notes: string | null }[];
   expenses: ExpenseRow[];
 }
@@ -356,6 +357,7 @@ export default function FinancePage() {
       </label>}
       {loadError && <p role="alert" className="text-sm text-amber-300">העדכון נכשל. {data ? "מוצגים הנתונים האחרונים שהתקבלו." : "אין נתונים זמינים כרגע."}</p>}
       {data?.sync && (data.sync.stale === true || data.sync.status !== "SUCCESS") && <p className="text-sm text-amber-300">התקבולים טרם סונכרנו במלואם. סנכרון מוצלח אחרון: {data.sync.lastSuccessAt ? new Date(data.sync.lastSuccessAt).toLocaleString("he-IL") : "טרם הושלם"}</p>}
+      {(data?.unassignedExpenseCount ?? 0) > 0 && <p className="text-sm text-amber-300 mb-3">{data?.unassignedExpenseCount} הוצאות פעילות ממתינות לשיוך ואינן נכללות ברווח. יש להשלים את השיוך כדי לקבל תמונה מלאה.</p>}
       {data?.actual && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card label="התקבל בפועל החודש (ברוטו)" value={data.actual.gross} />
         <Card label="תקבולים פחות מע״מ ועמלת סליקה משוערת" value={data.actual.profit} />

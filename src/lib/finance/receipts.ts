@@ -54,7 +54,7 @@ export function receiptTotals(rows: Receipt[]) {
         }
         const a = r.ilsAmountMinor;
         gross += a;
-        vat += r.vatExempt ? 0 : roundMinor(a * 18 / 118);
+        vat += r.vatIlsMinor ?? (r.vatExempt ? 0 : roundMinor(a * 18 / 118));
         fee += r.feeApplies === false ? 0 : roundMinor(a * .02);
         count++;
     }

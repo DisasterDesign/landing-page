@@ -8,6 +8,8 @@ export interface Receipt {
     amountMinor: number;
     currency: string;
     ilsAmountMinor: number | null;
+    /** Signed VAT evidence from the original document, in ILS minor units. */
+    vatIlsMinor?: number | null;
     occurredAt: Date;
     financeBook: string;
     clientId?: string | null;

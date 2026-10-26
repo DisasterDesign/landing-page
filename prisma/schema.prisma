@@ -1370,6 +1370,8 @@ model FinanceTransaction {
   amountMinor           Int
   currency              String
   ilsAmountMinor        Int?
+  // Signed VAT from the original receipt/document, in ILS minor units.
+  vatIlsMinor           Int?
   occurredAt            DateTime
   financeBook           FinanceBook @default(UNASSIGNED)
   clientId              String?
