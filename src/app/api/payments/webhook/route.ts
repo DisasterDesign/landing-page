@@ -14,7 +14,6 @@ import { withVat } from "@/lib/vat";
 import { applyPaymentToProduct } from "@/lib/client-products";
 import { notifyFinanceAdmins, notifyOwner } from "@/lib/notifications";
 import { recurringChargeNeedsAttention } from "@/lib/payments/recurring-notifications";
-import { sendPaymentReceivedEmail } from "@/lib/email";
 import {
   applyPaymentFailure,
   applyPaymentSuccess,
@@ -27,8 +26,7 @@ export const maxDuration = 60;
 
 /**
  * Cardcom server-to-server callback. Must respond 200 quickly so Cardcom
- * doesn't retry. Heavy work is kept minimal (one DB transaction + one
- * notify fan-out).
+ * doesn't retry. Heavy work is kept minimal; routine successful payments stay silent.
  *
  * Cardcom does not sign first-charge callbacks. The callback identifies only
  * the stored LowProfile attempt; every payment fact is pulled back from
@@ -269,21 +267,9 @@ async function handleFirstCharge(payload: CardcomWebhookPayload): Promise<void> 
   );
 
   // Retries still repair canonical WON/event/commission truth above, but do
-  // not repeat revenue, email, admin fan-out or recurring-order creation.
+  // not repeat revenue or recurring-order creation. Successful payments are
+  // visible in finance; only actionable lifecycle/setup exceptions notify.
   if (!lifecycle.paymentRecorded) return;
-
-  notifyFinanceAdmins({
-    type: "AGREEMENT_SIGNED",
-    title: `תשלום התקבל — ${agreement.customerName}`,
-    body: `סכום: ${paidAmount} ₪${invoiceNumber ? ` · חשבונית #${invoiceNumber}` : ""}`,
-  }, agreement.financeBook).catch((e) => console.error("notify admins after payment failed:", e));
-
-  sendPaymentReceivedEmail({
-    customerName: agreement.customerName,
-    amount: paidAmount,
-    invoiceNumber: invoiceNumber ?? undefined,
-    agreementTier: agreement.tier,
-  }).catch((e) => console.error("email after payment failed:", e));
 
   // Register the monthly recurring schedule with Cardcom via the
   // Name-to-Value API (RecurringPayment.aspx) using the LowProfile GUID.

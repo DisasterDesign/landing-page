@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
+import { confirmDanger } from "@/components/ui/ConfirmSheet";
+import { createDebtorMutationGuard, debtorRowKey, hasDebtorSnapshot, moveDebtor, type DebtorLists, type DismissedDebtor } from "@/lib/debtor-dismissal";
 
 interface ProblemCharge {
   id: string;
@@ -23,19 +25,6 @@ interface ProblemCharge {
     cardcomNextBillDate: string | null;
     client: { id: string; name: string; number: number } | null;
   };
-}
-
-interface TerminalDebtor {
-  name: string;
-  idNumber: string | null;
-  amount: number;
-  attempts: number;
-  lastAttempt: string;
-  responseCode: number;
-  reason: string;
-  /** Set when a payment landed after the last failed attempt — debt closed. */
-  settledAt?: string;
-  settledAmount?: number;
 }
 
 interface InactiveOrder {
@@ -73,9 +62,10 @@ const fmtNum = (n: number) =>
 export default function DebtorsPage() {
   const [problemCharges, setProblemCharges] = useState<ProblemCharge[]>([]);
   const [inactiveOrders, setInactiveOrders] = useState<InactiveOrder[]>([]);
-  const [terminalDebtors, setTerminalDebtors] = useState<TerminalDebtor[]>([]);
-  const [settledDebtors, setSettledDebtors] = useState<TerminalDebtor[]>([]);
-  const [dismissedDebtors, setDismissedDebtors] = useState<TerminalDebtor[]>([]);
+  const [debtorLists, setDebtorLists] = useState<DebtorLists>({ terminalDebtors: [], settledDebtors: [], dismissedDebtors: [] });
+  const { terminalDebtors, settledDebtors, dismissedDebtors } = debtorLists;
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
+  const [mutations] = useState(() => createDebtorMutationGuard(setPendingKeys));
   const [showDismissed, setShowDismissed] = useState(false);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,34 +73,36 @@ export default function DebtorsPage() {
   const autoRefreshed = useRef(false);
 
   const refreshFromCardcom = useCallback(async (silent = false) => {
+    const revision = mutations.snapshot();
     setRefreshing(true);
     try {
       const res = await fetch("/api/finance/debtors/refresh", { method: "POST" });
       if (!res.ok) throw new Error();
       const json = await res.json();
-      setTerminalDebtors(json.terminalDebtors ?? []);
-      setSettledDebtors(json.settledDebtors ?? []);
-      setDismissedDebtors(json.dismissedDebtors ?? []);
-      setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+      if (mutations.canCommit(revision)) {
+        setDebtorLists({ terminalDebtors: json.terminalDebtors ?? [], settledDebtors: json.settledDebtors ?? [], dismissedDebtors: json.dismissedDebtors ?? [] });
+        setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+      }
       if (!silent) toast.success("עודכן מול קארדקום");
     } catch {
       if (!silent) toast.error("שגיאה ברענון מול קארדקום");
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [mutations]);
 
   const fetchData = useCallback(async () => {
+    const revision = mutations.snapshot();
     try {
       const res = await fetch("/api/finance/debtors");
       if (!res.ok) throw new Error();
       const json = await res.json();
       setProblemCharges(json.problemCharges ?? []);
       setInactiveOrders(json.inactiveOrders ?? []);
-      setTerminalDebtors(json.terminalDebtors ?? []);
-      setSettledDebtors(json.settledDebtors ?? []);
-      setDismissedDebtors(json.dismissedDebtors ?? []);
-      setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+      if (mutations.canCommit(revision)) {
+        setDebtorLists({ terminalDebtors: json.terminalDebtors ?? [], settledDebtors: json.settledDebtors ?? [], dismissedDebtors: json.dismissedDebtors ?? [] });
+        setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
+      }
 
       // Self-updating: a snapshot older than an hour silently re-pulls from
       // Cardcom on entry, so the screen shows the debt as it is NOW rather
@@ -125,44 +117,51 @@ export default function DebtorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [refreshFromCardcom]);
+  }, [refreshFromCardcom, mutations]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const setDebtorDismissed = async (d: TerminalDebtor, dismissed: boolean) => {
-    // Optimistic move between the two lists; the server call just persists.
-    if (dismissed) {
-      setTerminalDebtors((prev) => prev.filter((x) => x !== d));
-      setDismissedDebtors((prev) => [...prev, d]);
-    } else {
-      setDismissedDebtors((prev) => prev.filter((x) => x !== d));
-      // A restored debtor whose debt was already paid belongs in the settled
-      // list, not back among the open debts.
-      if (d.settledAt) {
-        setSettledDebtors((prev) =>
-          [...prev, d].sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? ""))
-        );
-      } else {
-        setTerminalDebtors((prev) =>
-          [...prev, d].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
-        );
-      }
-    }
+  const setDebtorDismissed = async (d: DismissedDebtor, dismissed: boolean): Promise<boolean> => {
+    let savedDebtor = d;
     try {
-      const res = await fetch("/api/finance/debtors/dismiss", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: d.idNumber || d.name, name: d.name, dismissed }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success(dismissed ? "הוסתר — לא יתריע יותר" : "שוחזר לרשימה", {
-        duration: 2000,
+      return await mutations.run(debtorRowKey(d), async () => {
+        if (dismissed && !await confirmDanger({
+          title: `להסתיר את ${d.name}?`,
+          message: "החייב יועבר לרשימת המוסתרים וההתראות עליו ייפסקו. ההסתרה לא מוחקת את החוב ולא משנה חיובים בקארדקום. אפשר לשחזר בכל עת.",
+          confirmLabel: "הסתר והפסק התראות",
+          cancelLabel: "השאר ברשימה",
+          dangerous: false,
+        })) return false;
+        const res = await fetch("/api/finance/debtors/dismiss", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: debtorRowKey(d), dismissed }),
+        });
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        // A sweep may have settled this row while the page was open.
+        savedDebtor = json.debtor ?? d;
+      }, () => {
+        setDebtorLists((prev) => moveDebtor(prev, savedDebtor, dismissed));
+        if (dismissed) {
+          toast((t) => (
+            <div dir="rtl" className="flex items-center gap-3">
+              <span>{d.name} הוסתר. החוב לא נמחק.</span>
+              <button
+                className="font-bold text-cyan underline whitespace-nowrap"
+                onClick={() => void setDebtorDismissed(savedDebtor, false).then((saved) => { if (saved) toast.dismiss(t.id); })}
+              >
+                בטל הסתרה
+              </button>
+            </div>
+          ), { duration: 10_000 });
+        } else toast.success(hasDebtorSnapshot(savedDebtor) ? "שוחזר לרשימה" : "ההסתרה הוסרה; אין נתון עדכני בחלון הסריקה");
       });
     } catch {
-      toast.error("שגיאה בשמירה");
-      fetchData();
+      toast.error("השמירה נכשלה. הרשימה לא השתנתה — אפשר לנסות שוב.");
+      return false;
     }
   };
 
@@ -175,7 +174,7 @@ export default function DebtorsPage() {
   }
 
   const clean =
-    problemCharges.length === 0 && inactiveOrders.length === 0 && terminalDebtors.length === 0;
+    problemCharges.length === 0 && inactiveOrders.length === 0 && terminalDebtors.length === 0 && dismissedDebtors.length === 0;
   const totalDebt = terminalDebtors.reduce((s, d) => s + d.amount, 0);
 
   return (
@@ -191,7 +190,7 @@ export default function DebtorsPage() {
           </div>
           <button
             onClick={() => refreshFromCardcom()}
-            disabled={refreshing}
+            disabled={refreshing || pendingKeys.length > 0}
             className="flex items-center gap-2 px-4 py-2 border border-gray-700 hover:border-cyan text-gray-300 hover:text-cyan rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
           >
             <svg
@@ -210,6 +209,64 @@ export default function DebtorsPage() {
             {refreshing ? "מרענן מול קארדקום..." : "רענן מול קארדקום"}
           </button>
         </div>
+
+        {dismissedDebtors.length > 0 && (
+          <section className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-amber-300">חייבים מוסתרים ({dismissedDebtors.length})</h2>
+                <p className="text-sm text-gray-300 mt-1">הסתרה מפסיקה התראות בלבד. היא לא מעידה שהחוב שולם. אפשר לשחזר כל חייב בנפרד.</p>
+              </div>
+              <button
+                onClick={() => setShowDismissed((v) => !v)}
+                aria-expanded={showDismissed}
+                aria-controls="dismissed-debtors"
+                className="px-4 py-2 rounded-lg bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 font-medium text-sm"
+              >
+                {showDismissed ? "סגור רשימת מוסתרים" : "הצג מוסתרים ושחזור"}
+              </button>
+            </div>
+            {showDismissed && (
+              <div id="dismissed-debtors" className="mt-4 overflow-x-auto rounded-lg border border-gray-700">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-800 text-right text-gray-300">
+                      <th className="px-3 py-2 font-medium">שם בכרטיס</th>
+                      <th className="px-3 py-2 font-medium">נתון אחרון בחלון הסריקה</th>
+                      <th className="px-3 py-2 font-medium">פעולה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dismissedDebtors.map((d) => (
+                      <tr key={debtorRowKey(d)} className="border-t border-gray-800">
+                        <td className="px-3 py-3 text-white">
+                          {d.name}
+                          {d.idNumber ? <span className="text-gray-400 text-xs mr-2">({d.idNumber})</span> : null}
+                        </td>
+                        <td className="px-3 py-3 text-gray-300">
+                          {hasDebtorSnapshot(d) ? (
+                            d.settledAt
+                              ? `נסגר בתשלום ב-${fmtDate(d.settledAt)}`
+                              : `חוב ₪${fmtNum(d.amount)} · ניסיון אחרון ${fmtDate(d.lastAttempt)}`
+                          ) : "אין נתון עדכני בחלון הסריקה"}
+                        </td>
+                        <td className="px-3 py-3">
+                          <button
+                            onClick={() => void setDebtorDismissed(d, false)}
+                            disabled={pendingKeys.includes(debtorRowKey(d))}
+                            className="px-3 py-2 rounded-lg border border-cyan/40 text-cyan hover:bg-cyan/10 disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {pendingKeys.includes(debtorRowKey(d)) ? "שומר..." : "שחזר לרשימה"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
         {clean ? (
           <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-8 text-center">
@@ -260,14 +317,12 @@ export default function DebtorsPage() {
                       </td>
                       <td className="px-2 py-2">
                         <button
-                          onClick={() => setDebtorDismissed(d, true)}
-                          className="text-gray-600 hover:text-gray-300 p-1.5 rounded hover:bg-gray-700/50 transition-colors"
-                          title="לא רלוונטי — הסתר והפסק להתריע"
-                          aria-label={`הסתר את ${d.name}`}
+                          onClick={() => void setDebtorDismissed(d, true)}
+                          disabled={pendingKeys.includes(debtorRowKey(d))}
+                          className="text-sm text-gray-300 hover:text-amber-300 px-3 py-2 rounded-lg border border-gray-700 hover:border-amber-500/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+                          aria-label={`הסתר את ${d.name} והפסק התראות`}
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
+                          {pendingKeys.includes(debtorRowKey(d)) ? "שומר..." : "הסתר חייב"}
                         </button>
                       </td>
                     </tr>
@@ -322,42 +377,6 @@ export default function DebtorsPage() {
           </section>
         )}
 
-        {dismissedDebtors.length > 0 && (
-          <section className="mb-8">
-            <button
-              onClick={() => setShowDismissed((v) => !v)}
-              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              {showDismissed ? "▾" : "◂"} מוסתרים — סומנו כלא רלוונטיים ({dismissedDebtors.length})
-            </button>
-            {showDismissed ? (
-              <div className="mt-2 overflow-x-auto rounded-lg border border-gray-800">
-                <table className="w-full text-sm opacity-60">
-                  <tbody>
-                    {dismissedDebtors.map((d) => (
-                      <tr key={`${d.idNumber ?? d.name}`} className="border-b border-gray-800/60">
-                        <td className="px-3 py-2 text-gray-400">
-                          {d.name}
-                          {d.idNumber ? <span className="text-gray-600 text-xs mr-2">({d.idNumber})</span> : null}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-gray-500">{fmtNum(d.amount)}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{fmtDate(d.lastAttempt)}</td>
-                        <td className="px-2 py-2 text-left">
-                          <button
-                            onClick={() => setDebtorDismissed(d, false)}
-                            className="text-xs text-gray-500 hover:text-cyan px-2 py-1 rounded hover:bg-gray-800 transition-colors"
-                          >
-                            שחזר
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </section>
-        )}
 
         {inactiveOrders.length > 0 && (
           <section className="mb-8">

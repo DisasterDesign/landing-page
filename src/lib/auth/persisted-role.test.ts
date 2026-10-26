@@ -263,7 +263,7 @@ test("finance and billing repair routes guard persisted ADMIN before sensitive w
     [
       "../../app/api/finance/debtors/dismiss/route.ts",
       "POST",
-      "getDismissedDebtors",
+      "prisma.$transaction(",
     ],
     [
       "../../app/api/agreements/retry-recurring/route.ts",
