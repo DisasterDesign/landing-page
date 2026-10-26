@@ -42,7 +42,7 @@ export function prepareCardcomLedgerReceipts(input: {
     fromDate: Date;
     toDate: Date;
 }) {
-    const identities = new Map<string, { accountId: number; recurringId: number | null }>();
+    const identities = new Map<string, { accountId: number; recurringIds: Set<number> }>();
     for (const [accountId, history] of input.histories) {
         for (const h of history) {
             if (h.Status !== 'SUCCESSFUL' || !h.TranzactionId)
@@ -51,7 +51,8 @@ export function prepareCardcomLedgerReceipts(input: {
             const old = identities.get(key);
             if (old && old.accountId !== accountId)
                 throw new Error('Conflicting exact provider transaction mapping');
-            identities.set(key, { accountId, recurringId: old && old.recurringId !== h.RecurringId ? null : h.RecurringId });
+            if (old) old.recurringIds.add(h.RecurringId);
+            else identities.set(key, { accountId, recurringIds: new Set([h.RecurringId]) });
         }
     }
     const normalized = input.transactions.map(t => normalizeCardcomTransaction(t, input.terminalId)).filter(t => t !== null);
@@ -59,12 +60,24 @@ export function prepareCardcomLedgerReceipts(input: {
         const identity = identities.get(receipt.providerTransactionId);
         if (identity) {
             receipt.accountId = identity.accountId;
-            receipt.recurringId = identity.recurringId;
+            receipt.recurringId = identity.recurringIds.size === 1 ? [...identity.recurringIds][0] : null;
         }
-        // One settlement can cover several orders. Its full amount cannot be
-        // attributed to any one order, even if an unrelated account agreement exists.
-        if (identity?.recurringId === null) {
-            return { ...receipt, financeBook: 'UNASSIGNED', clientId: null, agreementId: null, clientProductId: null };
+        // Every constituent order needs exact evidence, verified settlement evidence,
+        // or an explicit owner account override before resolving a unanimous book.
+        if (identity && identity.recurringIds.size > 1) {
+            const verifiedSettlement = input.agreements.some(agreement => agreement.cardcomVerifiedTransactionId === receipt.providerTransactionId || agreement.cardcomDealId === receipt.providerTransactionId);
+            const ownerAccountOverride = input.overrides?.has(identity.accountId) ?? false;
+            const resolutions = [...identity.recurringIds].map(recurringId => {
+                const exactOrder = input.agreements.some(agreement => agreement.cardcomAccountId === identity.accountId && agreement.cardcomRecurringId === recurringId);
+                if (!exactOrder && !verifiedSettlement && !ownerAccountOverride) return null;
+                return resolveTransactionBook({ ...receipt, recurringId }, input.agreements, input.clients, input.overrides);
+            });
+            const first = resolutions[0];
+            if (!first || first.financeBook === 'UNASSIGNED' || resolutions.some(row => !row || row.financeBook !== first.financeBook)) {
+                return { ...receipt, financeBook: 'UNASSIGNED', clientId: null, agreementId: null, clientProductId: null };
+            }
+            const commonLink = (key: 'clientId' | 'agreementId' | 'clientProductId') => resolutions.every(row => row?.[key] === first[key]) ? first[key] : null;
+            return { ...receipt, financeBook: first.financeBook, clientId: commonLink('clientId'), agreementId: commonLink('agreementId'), clientProductId: commonLink('clientProductId') };
         }
         return { ...receipt, ...resolveTransactionBook(receipt, input.agreements, input.clients, input.overrides) };
     });
