@@ -9,7 +9,7 @@ import { partitionDebtors, type DebtorLists } from "@/lib/debtor-dismissal";
  * transactions of the last 45 days into one row per debtor (collection
  * retries fire several times a week and each attempt bills the ACCUMULATED
  * debt, so the newest attempt per debtor is the current truth), diffs against
- * the previous snapshot, and alerts only on a new debtor or grown debt.
+ * the last scheduled alert baseline, and alerts only on a new debtor or grown debt.
  *
  * Failures alone can only ever ADD debtors, so the sweep also pulls the
  * SUCCESSFUL transactions of the same window and marks a debtor settled once
@@ -34,6 +34,8 @@ export interface DebtorSnapshotEntry {
 }
 
 export const DEBTORS_SNAPSHOT_KEY = "cardcom_debtors_snapshot";
+// A quiet report refresh must not acknowledge new/grown debt for the cron.
+export const DEBTORS_ALERT_BASELINE_KEY = "cardcom_debtors_alert_baseline";
 // key → { name, dismissedAt }. A dismissed debtor stays in the snapshot (it
 // is still the truth at Cardcom) but is hidden from the main list and never
 // alerts — for debt rows Elad has ruled irrelevant (old test cards, customers
@@ -72,6 +74,8 @@ export interface TerminalDebtorSweepDependencies {
   listFailedTransactions: typeof listFailedTransactions;
   listSuccessfulTransactions: typeof listSuccessfulTransactions;
   loadSnapshot(): Promise<Record<string, DebtorSnapshotEntry>>;
+  ensureAlertBaseline(initial: Record<string, DebtorSnapshotEntry>): Promise<Record<string, DebtorSnapshotEntry>>;
+  saveAlertBaseline(snapshot: Record<string, DebtorSnapshotEntry>): Promise<void>;
   loadDismissed: typeof getDismissedDebtors;
   saveSnapshot(snapshot: Record<string, DebtorSnapshotEntry>): Promise<void>;
   notifyOwner: typeof notifyOwner;
@@ -83,6 +87,23 @@ const sweepDependencies: TerminalDebtorSweepDependencies = {
   async loadSnapshot() {
     const row = await prisma.keyValue.findUnique({ where: { key: DEBTORS_SNAPSHOT_KEY } });
     return (row?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
+  },
+  async ensureAlertBaseline(initial) {
+    // Create only: a late quiet scan must never replace a baseline already
+    // initialized or advanced by another scan. Return the winning row.
+    const row = await prisma.keyValue.upsert({
+      where: { key: DEBTORS_ALERT_BASELINE_KEY },
+      create: { key: DEBTORS_ALERT_BASELINE_KEY, value: initial as object },
+      update: {},
+    });
+    return (row.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
+  },
+  async saveAlertBaseline(snapshot) {
+    await prisma.keyValue.upsert({
+      where: { key: DEBTORS_ALERT_BASELINE_KEY },
+      create: { key: DEBTORS_ALERT_BASELINE_KEY, value: snapshot as object },
+      update: { value: snapshot as object },
+    });
   },
   loadDismissed: getDismissedDebtors,
   async saveSnapshot(snapshot) {
@@ -159,7 +180,10 @@ export async function sweepTerminalFailures(
   summary.debtors = byDebtor.size - settledCount;
   summary.settled = settledCount;
 
-  const prev = await dependencies.loadSnapshot();
+  // On first use, retain the PRE-refresh report as the migration baseline.
+  // Quiet scans can initialize it, but only scheduled scans acknowledge debt.
+  const reportBeforeRefresh = await dependencies.loadSnapshot();
+  const prev = await dependencies.ensureAlertBaseline(reportBeforeRefresh);
   const dismissed = await dependencies.loadDismissed();
 
   for (const [key, d] of byDebtor) {
@@ -191,6 +215,7 @@ export async function sweepTerminalFailures(
 
   const snapshot = Object.fromEntries(byDebtor);
   await dependencies.saveSnapshot(snapshot);
+  if (options.notify !== false) await dependencies.saveAlertBaseline(snapshot);
 
   return snapshot;
 }
