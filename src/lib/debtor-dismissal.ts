@@ -1,4 +1,5 @@
 import type { DebtorSnapshotEntry } from "./cardcom-debtors";
+import { isVerifiedSettlement } from "./cardcom-debtor-evidence";
 
 export type DismissedDebtors = Record<string, { name: string; dismissedAt: string }>;
 export interface HistoricalDismissedDebtor {
@@ -50,8 +51,8 @@ export function partitionDebtors(snapshot: Record<string, DebtorSnapshotEntry>, 
     .filter(([key]) => !Object.hasOwn(snapshot, key))
     .map(([key, value]) => ({ key, name: value.name, idNumber: null, snapshotMissing: true }));
   return {
-    terminalDebtors: visible.filter((d) => !d.settledAt),
-    settledDebtors: visible.filter((d) => d.settledAt).sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? "")),
+    terminalDebtors: visible.filter((d) => !isVerifiedSettlement(d)),
+    settledDebtors: visible.filter(isVerifiedSettlement).sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? "")),
     dismissedDebtors: [...all.filter(hidden), ...history],
   };
 }
@@ -65,7 +66,7 @@ export function moveDebtor(lists: DebtorLists, debtor: DismissedDebtor, dismisse
     dismissedDebtors: lists.dismissedDebtors.filter((d) => debtorRowKey(d) !== key),
   };
   if (dismissed) result.dismissedDebtors.push(debtor);
-  else if (hasDebtorSnapshot(debtor) && debtor.settledAt) result.settledDebtors.push(debtor);
+  else if (hasDebtorSnapshot(debtor) && isVerifiedSettlement(debtor)) result.settledDebtors.push(debtor);
   else if (hasDebtorSnapshot(debtor)) result.terminalDebtors.push(debtor);
   result.terminalDebtors.sort((a, b) => b.amount - a.amount);
   result.settledDebtors.sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? ""));

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sweepTerminalFailures, type DebtorSnapshotEntry, type TerminalDebtorSweepDependencies } from "./cardcom-debtors";
+import type { DebtorSnapshotEntry, TerminalDebtorSweepDependencies } from "./cardcom-debtors";
+import * as debtorEvidence from "./cardcom-debtor-evidence";
 import type { FailedTransaction } from "./cardcom";
 import { loadRoute } from "./payments/route-harness";
 import { partitionDebtors } from "./debtor-dismissal";
+
+const { sweepTerminalFailures } = loadRoute<typeof import("./cardcom-debtors")>(new URL("./cardcom-debtors.ts", import.meta.url), {
+  "@/lib/prisma": { prisma: {} }, "@/lib/cardcom": {}, "@/lib/notifications": {},
+  "@/lib/debtor-dismissal": { partitionDebtors }, "./cardcom-debtor-evidence": debtorEvidence,
+});
 
 const now = new Date("2026-10-26T12:00:00Z");
 const failed: FailedTransaction = { TranzactionId: 1, Amount: 120, CreateDate: "2026-10-25T10:00:00Z", CardOwnerName: "Test payer", CardOwnerIdentityNumber: "payer-1", ResponseCode: 4, Description: "Declined", DealType: "Debit" };
@@ -61,7 +67,7 @@ test("scheduled retries and existing hidden debtors stay silent without changing
   assert.deepEqual(unchanged.ownerAlerts, []);
 });
 
-test("settlement still requires a debit after the latest failure; refunds cannot close debt", async () => {
+test("later debits remain payment evidence and refunds cannot become settlement evidence", async () => {
   for (const payment of [
     { ...failed, TranzactionId: 2, CreateDate: "2026-10-26T10:00:00Z", ResponseCode: 0 },
     { ...failed, TranzactionId: 2, CreateDate: "2026-10-24T10:00:00Z", ResponseCode: 0 },
@@ -70,9 +76,10 @@ test("settlement still requires a debit after the latest failure; refunds cannot
     const env = environment({ successes: [payment] });
     const summary = { debtors: 0, newDebtorAlerts: 0, settled: 0 };
     const snapshot = await sweepTerminalFailures(now, summary, { notify: false }, env.dependencies);
-    const paid = payment.CreateDate === "2026-10-26T10:00:00Z" && payment.DealType === "Debit";
-    assert.equal(snapshot["payer-1"].settledAt, paid ? "2026-10-26T10:00:00Z" : undefined);
-    assert.equal(summary.debtors, paid ? 0 : 1);
+    const laterDebit = payment.CreateDate === "2026-10-26T10:00:00Z" && payment.DealType === "Debit";
+    assert.equal(snapshot["payer-1"].settledAt, undefined);
+    assert.equal(snapshot["payer-1"].laterPayment?.at, laterDebit ? payment.CreateDate : undefined);
+    assert.equal(summary.debtors, 1);
   }
 });
 
@@ -117,7 +124,7 @@ test("first quiet refresh seeds alert history from the pre-refresh report and ne
   assert.equal(env.ownerAlerts.length, 0);
 });
 
-test("quiet then scheduled scans keep dismissed and newly settled debt silent", async () => {
+test("quiet then scheduled scans keep dismissed debt silent but unmatched payment never hides an alert", async () => {
   const hidden = { "payer-1": { name: "Test payer", dismissedAt: "2026-01-01" }, old: { name: "Historical", dismissedAt: "2025-01-01" } };
   const hiddenEnv = environment({ dismissed: hidden });
   const settledEnv = environment({ successes: [{ ...failed, TranzactionId: 2, CreateDate: "2026-10-26T10:00:00Z", ResponseCode: 0 }] });
@@ -125,8 +132,8 @@ test("quiet then scheduled scans keep dismissed and newly settled debt silent", 
     await sweepTerminalFailures(now, { debtors: 0, newDebtorAlerts: 0 }, { notify: false }, env.dependencies);
     const scheduled = { debtors: 0, newDebtorAlerts: 0 };
     await sweepTerminalFailures(now, scheduled, undefined, env.dependencies);
-    assert.equal(scheduled.newDebtorAlerts, 0);
-    assert.equal(env.ownerAlerts.length, 0);
+    assert.equal(scheduled.newDebtorAlerts, env === hiddenEnv ? 0 : 1);
+    assert.equal(env.ownerAlerts.length, env === hiddenEnv ? 0 : 1);
     assert.equal(env.baseline()?.["payer-1"].amount, 120);
   }
   assert.deepEqual(hidden, { "payer-1": { name: "Test payer", dismissedAt: "2026-01-01" }, old: { name: "Historical", dismissedAt: "2025-01-01" } });
@@ -149,6 +156,7 @@ test("a late quiet initialization cannot replace the baseline acknowledged by an
     "@/lib/cardcom": { listFailedTransactions: async () => [failed], listSuccessfulTransactions: async () => [] },
     "@/lib/notifications": { notifyOwner: async (alert: unknown) => { ownerAlerts.push(alert); } },
     "@/lib/debtor-dismissal": { partitionDebtors },
+    "./cardcom-debtor-evidence": debtorEvidence,
     "@/lib/prisma": { prisma: { keyValue: {
       async findUnique({ where }: { where: { key: string } }) {
         return rows.has(where.key) ? { value: structuredClone(rows.get(where.key)) } : null;

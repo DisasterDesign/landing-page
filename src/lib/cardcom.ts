@@ -907,6 +907,8 @@ export async function getRecurringPaymentState(accountId: number): Promise<Recur
 
 /** A failed transaction from the terminal-wide sweep (ListTransactions). */
 export interface FailedTransaction {
+  DocumentType?: number | string;
+  IsRefund?: boolean;
   TranzactionId: number;
   AccountId?: number;
   RecurringId?: number;

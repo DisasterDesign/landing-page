@@ -118,3 +118,66 @@ test('an explicit whole-account owner override can classify consolidated orders 
         { financeBook: 'SHARED', clientId: null, agreementId: null, clientProductId: null });
     assert.equal(receipt.recurringId, null);
 });
+
+test('covered preparation requires original document VAT only for new receipts', () => {
+    const transactions = [{ ...transaction, DocumentNumber: 710001, DocumentType: 'TaxInvoiceAndReceipt' }];
+    const documents = [{ Terminal_Number: 1000, Invoice_Number: 710001, InvoiceType: 1, CoinID: 1, TotalIncludeVAT: 90, TotalIncludeVATNIS: 90, VATOnlyNIS: 0, IsNegetive: false }];
+    const withDocuments = { ...input, terminalId: '1000', transactions, documents };
+    assert.equal(subject.prepareCardcomLedgerReceipts(withDocuments)[0].vatIlsMinor, 0);
+    assert.throws(() => subject.prepareCardcomLedgerReceipts({ ...withDocuments, documents: [] }), /document.*incomplete/i);
+    const historical = subject.prepareCardcomLedgerReceipts({ ...withDocuments, documents: [], existingReceipts: [{ providerTransactionId: '800001', kind: 'CHARGE' }] });
+    assert.equal(historical.length, 1);
+    assert.equal(historical[0].vatIlsMinor, undefined);
+});
+
+test('one original document cannot supply VAT to multiple provider receipts', () => {
+    const documents = [{ Terminal_Number: 1000, Invoice_Number: 710001, InvoiceType: 1, CoinID: 1, TotalIncludeVAT: 90, TotalIncludeVATNIS: 90, VATOnlyNIS: 0, IsNegetive: false }];
+    assert.throws(() => subject.prepareCardcomLedgerReceipts({ ...input, terminalId: '1000', transactions: [transaction, { ...transaction, TranzactionId: 800002 }].map(row => ({ ...row, DocumentNumber: 710001, DocumentType: 'TaxInvoiceAndReceipt' })), documents }), /document.*incomplete/i);
+});
+
+test('sync creates only fully evidenced receipts and never rewrites historical VAT FX links or amounts', async (t) => {
+    const cfg = ['CARDCOM_TERMINAL', 'CARDCOM_API_NAME', 'CARDCOM_API_PASSWORD'] as const;
+    const previous = cfg.map(key => process.env[key]);
+    cfg.forEach((key, i) => { process.env[key] = ['1000', 'synthetic-api', 'synthetic-password'][i]; });
+    const old = { providerTransactionId: '800001', kind: 'CHARGE', vatIlsMinor: 913, ilsAmountMinor: 9000, clientId: 'historic-client', amountMinor: 3000, currency: 'USD' };
+    let saved: Record<string, unknown>[] = [];
+    const db = {
+        client: { findMany: async () => [] },
+        agreement: { findMany: async () => [] },
+        financeSyncState: { findUnique: async () => null },
+        financeTransaction: {
+            findMany: async () => [old],
+            upsert: async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+                if (args.create.providerTransactionId === old.providerTransactionId) Object.assign(old, args.update);
+                saved.push(args);
+                return {};
+            },
+        },
+    };
+    let documents: unknown[] = [{ Terminal_Number: 1000, Invoice_Number: 710002, InvoiceType: 1, CoinID: 1, TotalIncludeVAT: 90, TotalIncludeVATNIS: 90, VATOnlyNIS: 0, IsNegetive: false }];
+    t.mock.method(globalThis, 'fetch', async (url: string) => {
+        if (url.endsWith('/Transactions/ListTransactions')) return Response.json({ ResponseCode: 0, Tranzactions: [{ ...transaction, DocumentNumber: 710001 }, { ...transaction, TranzactionId: 800002, DocumentNumber: 710002, DocumentType: 'TaxInvoiceAndReceipt' }] });
+        if (url.endsWith('/Documents/GetReport')) return Response.json({ ResponseCode: 0, Documents: documents, Page: 1, Count: documents.length });
+        throw new Error('Unexpected external boundary');
+    });
+    try {
+        const result = await subject.syncCardcomLedger(from, to, {}, db as never);
+        assert.equal(result.transactions, 2);
+        const creates = saved.map(row => row.create as Record<string, unknown>);
+        assert.equal(creates.find(row => row.providerTransactionId === '800002')?.vatIlsMinor, 0);
+        assert.deepEqual(old, { providerTransactionId: '800001', kind: 'CHARGE', vatIlsMinor: 913, ilsAmountMinor: 9000, clientId: 'historic-client', amountMinor: 3000, currency: 'USD' });
+        for (const row of saved) assert.deepEqual(row.update, {});
+        saved = [];
+        documents = [];
+        await assert.rejects(() => subject.syncCardcomLedger(from, to, {}, db as never), /document.*incomplete/i);
+        assert.equal(saved.length, 0);
+    } finally {
+        cfg.forEach((key, i) => { if (previous[i] == null) delete process.env[key]; else process.env[key] = previous[i]; });
+    }
+});
+
+
+test('conflicting document links for one provider transaction never choose the first VAT snapshot', () => {
+    const documents = [710001, 710002].map(Invoice_Number => ({ Terminal_Number: 1000, Invoice_Number, InvoiceType: 1, CoinID: 1, TotalIncludeVAT: 90, TotalIncludeVATNIS: 90, VATOnlyNIS: 0, IsNegetive: false }));
+    assert.throws(() => subject.prepareCardcomLedgerReceipts({ ...input, terminalId: '1000', transactions: [710001, 710002].map(DocumentNumber => ({ ...transaction, DocumentNumber, DocumentType: 'TaxInvoiceAndReceipt' })), documents }), /document.*incomplete/i);
+});

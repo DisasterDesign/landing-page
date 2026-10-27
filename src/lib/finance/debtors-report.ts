@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import type { PrismaClient } from '@prisma/client';
 import type { Viewer } from '@/lib/auth/viewer';
 import type { DebtorSnapshotEntry } from '@/lib/cardcom-debtors';
+import { inactiveOrderDetails, debtorReportFreshness } from './debtor-report-details';
 import { partitionDebtors, type DismissedDebtors } from '@/lib/debtor-dismissal';
 
 /** Stored report only: no provider, synchronization, notification or write dependencies. */
@@ -49,6 +50,10 @@ export async function loadDebtorsReport(viewer: Viewer, db: Pick<PrismaClient, '
           customerName: true,
           businessName: true,
           monthlyPrice: true,
+          vatExempt: true,
+          clientId: true,
+          cardcomAccountId: true,
+          cardcomRecurringId: true,
           cardcomNextBillDate: true,
           cardcomSyncedAt: true,
           client: { select: { id: true, name: true, number: true, monthlyAmount: true } },
@@ -61,9 +66,18 @@ export async function loadDebtorsReport(viewer: Viewer, db: Pick<PrismaClient, '
       db.keyValue.findUnique({ where: { key: "cardcom_debtors_snapshot" } }),
     ]);
 
+    const clientIds = inactiveOrders.flatMap(o => o.clientId ? [o.clientId] : []);
+    const accountIds = inactiveOrders.flatMap(o => o.cardcomAccountId != null && o.cardcomAccountId > 0 ? [o.cardcomAccountId] : []);
+    const alternatives = clientIds.length || accountIds.length ? await db.agreement.findMany({
+      where: { cardcomIsActive: true, OR: [{ clientId: { in: clientIds } }, { cardcomAccountId: { in: accountIds } }] },
+      select: { id: true, clientId: true, cardcomAccountId: true, cardcomRecurringId: true, cardcomIsActive: true, cardcomSyncedAt: true },
+    }) : [];
+    const now = new Date();
+    const detailedOrders = inactiveOrders.map(order => ({ ...order, ...inactiveOrderDetails(order, alternatives, now) }));
+    const freshness = debtorReportFreshness(snapshotRow?.updatedAt ?? null, inactiveOrders, problemCharges, now);
     const snap = (snapshotRow?.value as Record<string, DebtorSnapshotEntry> | null) ?? {};
     const dismissedRow = await db.keyValue.findUnique({ where: { key: 'cardcom_debtors_dismissed' } });
     const buckets = partitionDebtors(snap, (dismissedRow?.value as DismissedDebtors | null) ?? {});
 
-    return { problemCharges, inactiveOrders, ...buckets, snapshotUpdatedAt: snapshotRow?.updatedAt ?? null };
+    return { problemCharges, inactiveOrders: detailedOrders, ...buckets, freshness, snapshotUpdatedAt: snapshotRow?.updatedAt ?? null };
 }

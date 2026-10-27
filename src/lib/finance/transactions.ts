@@ -1,5 +1,6 @@
 import type { FinanceBook } from '@prisma/client';
 import type { FailedTransaction } from '@/lib/cardcom';
+import { originalCardcomDocumentAmounts, type CardcomDocument } from './document-evidence';
 export interface Receipt {
     provider: string;
     terminalId: string;
@@ -27,14 +28,14 @@ export function deduplicateReceipts<T extends Receipt>(rows: readonly T[]): T[] 
     return rows.filter(row => { const key = JSON.stringify([row.provider, row.terminalId, row.providerTransactionId, row.kind]); if (seen.has(key))
         return false; seen.add(key); return true; });
 }
-export function normalizeCardcomTransaction(row: FailedTransaction, terminalId: string): Receipt | null {
+export function normalizeCardcomTransaction(row: FailedTransaction, terminalId: string, documents?: readonly CardcomDocument[]): Receipt | null {
     if (row.ResponseCode !== 0 || !Number.isFinite(row.Amount))
         return null;
     const id = String(row.TranzactionId ?? '').trim();
     const date = new Date(row.CreateDate);
     if (!id || !Number.isFinite(date.getTime()))
         throw new Error('Verified Cardcom transaction lacks stable identity or date');
-    const refund = row.Amount < 0 || /^(credit|refund|זיכוי)$/i.test(row.DealType ?? '');
+    const refund = row.IsRefund === true || row.Amount < 0 || /^(credit|refund|זיכוי)$/i.test(row.DealType ?? '');
     const currency = row.Currency?.toUpperCase() ?? ({ 1: 'ILS', 2: 'USD', 978: 'EUR', 840: 'USD', 376: 'ILS' }[row.CoinId ?? row.ISOCoinId ?? 0] ?? 'UNKNOWN');
     const sign = refund ? -1 : 1;
     const amountMinor = sign * Math.round(Math.abs(row.Amount) * 100);
@@ -42,7 +43,8 @@ export function normalizeCardcomTransaction(row: FailedTransaction, terminalId: 
     // Cardcom uses zero when a terminal receipt has no account/order identifier.
     const accountId = row.AccountId != null && row.AccountId > 0 && Number.isSafeInteger(row.AccountId) ? row.AccountId : null;
     const recurringId = row.RecurringId != null && row.RecurringId > 0 && Number.isSafeInteger(row.RecurringId) ? row.RecurringId : null;
-    return { provider: 'CARDCOM', terminalId, providerTransactionId: id, kind: refund ? 'REFUND' : 'CHARGE', amountMinor, currency, ilsAmountMinor: currency === 'ILS' ? amountMinor : valued != null && Number.isFinite(valued) ? sign * Math.round(Math.abs(valued) * 100) : null, occurredAt: date, financeBook: 'UNASSIGNED', accountId, recurringId, invoiceNumber: row.DocumentNumber == null ? null : String(row.DocumentNumber) };
+    const receipt: Receipt = { provider: 'CARDCOM', terminalId, providerTransactionId: id, kind: refund ? 'REFUND' : 'CHARGE', amountMinor, currency, ilsAmountMinor: currency === 'ILS' ? amountMinor : valued != null && Number.isFinite(valued) ? sign * Math.round(Math.abs(valued) * 100) : null, occurredAt: date, financeBook: 'UNASSIGNED', accountId, recurringId, invoiceNumber: row.DocumentNumber == null ? null : String(row.DocumentNumber) };
+    return documents === undefined ? receipt : { ...receipt, ...originalCardcomDocumentAmounts(row, receipt, documents) };
 }
 interface AgreementLink {
     id: string;
