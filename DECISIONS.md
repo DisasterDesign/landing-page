@@ -266,3 +266,70 @@ scopes ללקוחות/הסכמים/לידים/משימות. רועי הורד ל
 הסתרת חייב אינה סגירת חוב ואינה משנה את קארדקום. היא מחייבת פעולה מפורשת, זמינה לביטול מיידי ולשחזור מרשימת מוסתרים בולטת. שורות הסתרה היסטוריות מחוץ לחלון הסריקה נשארות ניתנות לשחזור בלי להמציא סכום חוב עדכני. בקשת הסתרה מחייבת boolean מפורש ומפתח מוכר; כתיבה מקבילית שומרת את החלטות ההסתרה הקיימות.
 
 סריקת חייבים רוחבית מוגבלת לבעלים, כי אין שיוך כספי מאומת לכל שורה. התראות חדשות או חוב שגדל בסריקה מתוזמנת מיועדות לבעלים בלבד. רענון יזום של הדוח מעדכן snapshot ללא שליחת התראות. בסיס ההשוואה של הסריקה המתוזמנת נשמר בנפרד ב־KeyValue בשם `cardcom_debtors_alert_baseline`, כדי שרענון שקט לא יבלע התראה עתידית על חייב חדש או חוב שגדל. בהפעלה הראשונה הבסיס מאותחל אטומית מהדוח הקודם בלבד, ללא דריסה של בסיס שכבר קיים; רק סריקה מתוזמנת מקדמת אותו לאחר טיפול בהתראות. אין שינוי בסכימה, במנגנון גבייה, בהסכמים או ביומן התקבולים לצורך רענון הדוח.
+
+## 2026-10-26 — Personal read-only MCP resource server
+
+**Status:** Implemented in isolated branch; external auth choice is proposed,
+not provisioned; deployment and persistent access pending explicit approval.
+
+Use the maintained MCP TypeScript SDK for stateless authenticated Streamable
+HTTP inside the existing Next application. Reuse the current finance report,
+receipt deduplication/VAT/rounding and debtor report partition instead of adding
+parallel financial formulas. Extend the shared report with a bounded cash
+period; recurring run-rate remains a current forecast. Hidden historical debt
+stays unknown/stale when its snapshot is absent. The debtor read loader is
+shared with the existing GET and has no sweep/provider/write dependencies.
+
+Propose managed Auth0 OAuth authorization-code/PKCE rather than inventing an
+OAuth server on top of NextAuth Credentials. Verify signed issuer/audience/
+expiry and bind the verified subject/client to a persisted User through a
+revocable expiring grant; re-read grant/user flags on every request. Owner sees
+private/shared, shared ADMIN sees shared only, and debtor rows/counts/totals are
+owner-only. No actual provider/client/grant is created by this change, and no
+application/database/payment secret is usable as an MCP credential.
+
+The route stays disabled by default. Personal Work plugin setup and a real
+successful call from the parent dot are separate acceptance gates. No public
+plugin or Roy grant. See `docs/mcp/README.md` and `docs/mcp/VERIFICATION.md` for
+configuration proposal, tests, revocation and outstanding deployment/security
+gates. Canonical main changes and the existing finance worktree were preserved.
+
+### 2026-10-26 — MCP release dependency triage
+
+**Status:** Locally implemented/tested; deployment and Auth0 approval pending.
+
+Apply same-major/same-beta-line security releases for the actual framework/auth/
+validation surface: Next16.4.3, NextAuth5.0.0-beta.32/Auth core0.41.3,
+@auth/prisma-adapter2.11.3 and Zod4.6.6. Lock-only compatible patches cover
+source-map-js1.2.2 and the existing same-origin editor paste-XSS in
+ProseMirror1.42.8. Do not migrate middleware/auth architecture or change finance
+formulas. Preserve the original dev-only ESLint config/Hooks7.0.1 behavior with
+an explicit override instead of broad unrelated UI refactors or rule disabling.
+
+Audit entries are classified by actual API/import exposure, not npm's production
+flag alone. No critical entry remains; existing blog/editor conditional highs
+and the pre-hydration raw-HTML trust assumption are documented for a separate
+release-risk decision, not silently accepted or called MCP vulnerabilities.
+Auth0 Free is a published option, but account/tenant/plan entitlements remain
+unverified after a read-only dashboard visit reached login. No provisioning,
+credentials, terms, grants, security settings or production data changed.
+See docs/mcp/DEPENDENCY-REVIEW.md and docs/mcp/AUTH0-SETUP.md.
+
+### 2026-10-26 — Close blog/editor release blockers before personal MCP setup
+
+**Status:** Locally verified release candidate; exact Auth0 proposal/publication
+approved, provider user login and final dot acceptance still required.
+
+Sanitize stored blog HTML on the server with a maintained explicit allowlist
+before SSR/client serialization, replacing the raw-first hydration sanitizer.
+Escape tag openers in blog JSON-LD. Retain existing article/editor layout and
+formatting; no business/blog data is rewritten. Use matching patched Tiptap3.30.5
+packages/peers and declare the existing Markdown maintenance-script dependency
+explicitly instead of relying on editor transitives. Existing Vercel Node24
+already supports sanitize-html2.18.1; no runtime migration is introduced.
+
+633 tests pass including four security regressions and real browser synthetic
+render/typing/bold checks. Production audit has0 critical/0 high; residual
+moderates are classified in release notes. User credentials and new explicit
+terms still require the supported flow; approval is not treated as permission
+for an unspecified tenant, paid plan or broader access.

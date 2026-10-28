@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { financeClientScope } from './access';
 import { monthlyIls, jobFinance } from '@/lib/finance';
 import { major, minor, roundMinor, allocateProfit, sharedExpenseMinor, sanitizeExpense, recordedExpenseTotals } from './report';
+import { auditForecastClient, type ForecastWarning } from './forecast-audit';
 import { loadReceipts, receiptTotals } from './receipts';
 export function reportLens(viewer: Viewer, requested: string | null) {
     const lens = requested ?? (viewer.isOwner ? 'combined' : 'fuzion');
@@ -13,17 +14,19 @@ export function reportLens(viewer: Viewer, requested: string | null) {
         throw new ViewerAuthorizationError('Forbidden', 403);
     return lens;
 }
-export async function buildFinanceReport(viewer: Viewer, lens: string) {
+export async function buildFinanceReport(viewer: Viewer, lens: string, period?: { from: Date; to: Date }) {
+    reportLens(viewer, lens);
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const start = period?.from ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Math.min(period?.to.getTime() ?? Infinity, now.getTime() + 1));
     const [clients, expenseRows, pending, receipts, sync, unassignedTransactions, expensePayments] = await Promise.all([
-        prisma.client.findMany({ where: { AND: [financeClientScope(viewer), { archivedAt: null, status: 'בוצע' }] }, include: { _count: { select: { products: true } }, products: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' } }, agreements: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' }, select: { id: true, kind: true, financeBook: true } } }, orderBy: { name: 'asc' } }),
+        prisma.client.findMany({ where: { AND: [financeClientScope(viewer), { archivedAt: null, status: 'בוצע' }] }, include: { _count: { select: { products: true } }, products: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' } }, agreements: { where: viewer.isOwner ? {} : { financeBook: 'SHARED' }, select: { id: true, kind: true, financeBook: true, cardcomIsActive: true } } }, orderBy: { name: 'asc' } }),
         prisma.expense.findMany({ where: viewer.isOwner ? {} : { OR: [{ financeBook: 'SHARED' }, { financeBook: 'PRIVATE', sharedBasisPoints: { gt: 0 } }] }, include: { client: { select: { id: true, name: true, number: true } }, paidBy: { select: { isOwner: true } } }, orderBy: [{ active: 'desc' }, { createdAt: 'desc' }] }),
         prisma.clientJob.findMany({ where: { status: 'PENDING', ...(viewer.isOwner ? {} : { financeBook: 'SHARED' as const }) } }),
-        loadReceipts(start, viewer.isOwner ? (lens === 'personal' ? 'PRIVATE' : lens === 'fuzion' ? 'SHARED' : undefined) : 'SHARED'),
+        loadReceipts(start, viewer.isOwner ? (lens === 'personal' ? 'PRIVATE' : lens === 'fuzion' ? 'SHARED' : undefined) : 'SHARED', end),
         prisma.financeSyncState.findUnique({ where: { key: 'cardcom:transactions' } }),
         viewer.isOwner ? prisma.financeTransaction.findMany({ where: { financeBook: 'UNASSIGNED' }, take: 100, orderBy: { occurredAt: 'desc' } }) : Promise.resolve([]),
-        prisma.financeExpensePayment.findMany({where:{paidAt:{gte:start,lte:now},...(viewer.isOwner?{}:{OR:[{financeBook:'SHARED' as const},{financeBook:'PRIVATE' as const,sharedBasisPoints:{gt:0}}]})}}),
+        prisma.financeExpensePayment.findMany({where:{paidAt:{gte:start,lt:end},...(viewer.isOwner?{}:{OR:[{financeBook:'SHARED' as const},{financeBook:'PRIVATE' as const,sharedBasisPoints:{gt:0}}]})}}),
     ]);
     const summaries = { personal: { clientCount: 0, amount: 0, profit: 0, partnerShare: 0, costs: 0 }, fuzion: { clientCount: 0, amount: 0, profit: 0, partnerShare: 0, costs: 0 } };
     const selected = (book: string) => book !== 'UNASSIGNED' && (lens === 'combined' || lens === 'mine' || (lens === 'personal' ? book === 'PRIVATE' : book === 'SHARED'));
@@ -64,8 +67,10 @@ export async function buildFinanceReport(viewer: Viewer, lens: string) {
             attributed.set(e.clientId, (attributed.get(e.clientId) ?? 0) + chosen);
     }
     const perClient = [];
+    const forecastWarnings: ForecastWarning[] = [];
     let vatTotal = 0, feeTotal = 0, personalRevenue = 0, sharedRevenue = 0, forecastUnvaluedCount = 0;
     for (const c of clients) {
+        forecastWarnings.push(...auditForecastClient(c, selected, viewer.isOwner));
         // Product snapshots govern mixed clients. Fallback only for rows predating products, never cumulative amount.
         const agreementBooks=new Set(c.agreements.map(a=>a.financeBook));
         const safeLegacy=viewer.isOwner&&agreementBooks.size<=1;
@@ -142,9 +147,9 @@ export async function buildFinanceReport(viewer: Viewer, lens: string) {
     const paidCosts=paymentTotals(visiblePayments);
     const actualSettlement={basis:'RECORDED_PAYMENTS',sharedExpenses:major(paidCosts.sharedCostsMinor),profit:actualAllocation.sharedProfit,royEntitlement:actualAllocation.partnerProfit,partnerPaidShared:major(paidCosts.partnerPaidSharedMinor),transferToRoy:actualAllocation.partnerProfit+major(paidCosts.partnerPaidSharedMinor),incomplete:actualAllocation.incomplete,feeEstimated:true};
     const oneOffOutstanding = pending.filter(p => selected(p.financeBook)).reduce((s, j) => s + jobFinance(j).gross, 0);
-    return { snapshotAt: now.toISOString(), forecastUnvaluedCount, viewer: { isOwner: viewer.isOwner }, forecast: true, lens, books, ...(viewer.isOwner ? { personalProfit: major(allocation.personalProfit) } : {}), myProfit: major(viewer.isOwner ? (lens === 'personal' ? allocation.personalProfit : lens === 'fuzion' ? allocation.sharedProfit - allocation.partnerProfit : allocation.ownerProfit) : allocation.partnerProfit),
+    return { snapshotAt: now.toISOString(), forecastUnvaluedCount, forecastWarnings, viewer: { isOwner: viewer.isOwner }, forecast: true, lens, books, ...(viewer.isOwner ? { personalProfit: major(allocation.personalProfit) } : {}), myProfit: major(viewer.isOwner ? (lens === 'personal' ? allocation.personalProfit : lens === 'fuzion' ? allocation.sharedProfit - allocation.partnerProfit : allocation.ownerProfit) : allocation.partnerProfit),
         bottomLine: { totalMrr, totalVat: major(vatTotal), totalCardcomFee: major(feeTotal), grossProfit, fixedMonthly: major(fixed), variableMonthly: major(variable), totalExpensesMonthly, oneOffIncomeThisMonth, oneOffOutstanding, netProfit: grossProfit - totalExpensesMonthly, partnerShareBeforeExpenses: major(Math.trunc(sharedRevenue / 2)), partnerShareAfterExpenses: major(allocation.partnerProfit), clientCount: perClient.length },
-        actual, actualAllocation, oneOffAllocation, actualSettlement, receipts: actual, ...(viewer.isOwner ? { unassignedTransactions, unassignedExpenseCount:expenseRows.filter(e=>e.active&&e.financeBook==='UNASSIGNED').length } : {}), sync: { status: sync?.status ?? 'NOT_SYNCED', lastSuccessAt: sync?.lastSuccessAt ?? null, stale: !sync?.lastSuccessAt || now.getTime() - sync.lastSuccessAt.getTime() > 36 * 60 * 60 * 1000, ...(viewer.isOwner ? { error: sync?.error ?? null } : {}) },
+        actual, actualAllocation, oneOffAllocation, actualSettlement, receipts: actual, ...(viewer.isOwner ? { unassignedTransactions, unassignedExpenseCount:expenseRows.filter(e=>e.active&&e.financeBook==='UNASSIGNED').length } : {}), sync: { status: sync?.status ?? 'NOT_SYNCED', lastSuccessAt: sync?.lastSuccessAt ?? null, lastAttemptAt: sync?.lastAttemptAt ?? null, complete: sync?.status === 'SUCCESS' && !!sync.lastSuccessAt && now.getTime() - sync.lastSuccessAt.getTime() <= 36 * 60 * 60 * 1000, stale: !sync?.lastSuccessAt || now.getTime() - sync.lastSuccessAt.getTime() > 36 * 60 * 60 * 1000, ...(viewer.isOwner ? { error: sync?.error ?? null } : {}) },
         settlement: { basis:'FORECAST_ONLY', sharedExpenses: major(sharedCosts), ...(viewer.isOwner ? { personalExpenses: major(personalCosts) } : {}), profit: major(allocation.sharedProfit), royEntitlement: major(allocation.partnerProfit), transferToRoy: major(allocation.partnerProfit + partnerPaidShared) },
         byCategory, perClient, unknownAmounts: expenses.filter(e => e.active && e.amount === 0).map(e => ({ id: e.id, name: e.name, vendor: e.vendor, notes: e.notes })), expenses: expenses.filter(e => selected(e.financeBook) || ((lens === 'combined' || lens === 'mine') && viewer.isOwner)) };
 }

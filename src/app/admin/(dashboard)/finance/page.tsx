@@ -57,6 +57,7 @@ interface ClientPnl {
 interface FinancePayload {
   viewer?: { isOwner: boolean };
   forecastUnvaluedCount?: number;
+  forecastWarnings?: { code: string; clientName: string; message: string }[];
   books?: { personal?: { profit: number }; fuzion?: { profit: number } };
   personalProfit?: number;
   myProfit?: number;
@@ -374,6 +375,7 @@ export default function FinancePage() {
       {data?.actualAllocation && <p className="text-xs text-gray-400">תשלומי הוצאות מתועדים בחודש: {data.actualAllocation.recordedPaymentCount ?? "—"}{(data.actualAllocation.unrecordedExpenseCount ?? 0) > 0 && <span className="text-amber-300"> · ל־{data.actualAllocation.unrecordedExpenseCount} הוצאות טרם תועד תשלום; התמונה חלקית.</span>}</p>}
       {(data?.actual?.unvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.actual?.unvaluedCount} תקבולים ללא שווי בשקלים אינם נכללים בסכומים. הדוח חלקי.</p>}
       {(data?.forecastUnvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים אינם נכללים בתחזית. התחזית חלקית.</p>}
+      {(data?.forecastWarnings?.length ?? 0) > 0 && <details className="mb-4 rounded-lg border border-amber-500/30 p-3 text-sm text-amber-200"><summary>פערים ומידע חסר בתחזית ({data?.forecastWarnings?.length})</summary><ul className="mt-2 space-y-2">{data?.forecastWarnings?.map((warning, index) => <li key={`${warning.code}-${index}`}><strong>{warning.clientName}</strong>: {warning.message}</li>)}</ul><p className="mt-2 text-xs">אלה בדיקות של הרשומות השמורות. מחירי Cardcom והוראות חלופיות אינם מאומתים באמצעות התחזית.</p></details>}
       {/* ===== Bottom line ===== */}
       <section className="space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

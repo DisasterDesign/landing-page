@@ -4,7 +4,7 @@ import * as dismissal from "./debtor-dismissal";
 import type { DebtorSnapshotEntry } from "./cardcom-debtors";
 
 const open: DebtorSnapshotEntry = { name: "Test debtor", idNumber: "payer-1", amount: 120, attempts: 2, lastAttempt: "2026-10-25T10:00:00Z", responseCode: 4, reason: "Declined" };
-const paid: DebtorSnapshotEntry = { ...open, settledAt: "2026-10-26T10:00:00Z", settledAmount: 120 };
+const paid: DebtorSnapshotEntry = { ...open, settledAt: "2026-10-26T10:00:00Z", settledAmount: 120, settlementEvidence: "verified" };
 const old = { name: "Historical hidden debtor", dismissedAt: "2025-01-01T00:00:00Z" };
 
 test("dismissal requires an explicit boolean and a current snapshot key", () => {

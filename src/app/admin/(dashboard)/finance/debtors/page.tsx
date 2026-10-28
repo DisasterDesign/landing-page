@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { confirmDanger } from "@/components/ui/ConfirmSheet";
+import { debtorIlsAmount, isVerifiedSettlement } from "@/lib/cardcom-debtor-evidence";
 import { createDebtorMutationGuard, debtorRowKey, hasDebtorSnapshot, moveDebtor, type DebtorLists, type DismissedDebtor } from "@/lib/debtor-dismissal";
 
 interface ProblemCharge {
@@ -34,6 +35,9 @@ interface InactiveOrder {
   monthlyPrice: number;
   cardcomNextBillDate: string | null;
   cardcomSyncedAt: string | null;
+  priceBasis?: 'AGREEMENT_NET' | 'AGREEMENT_VAT_EXEMPT';
+  orderStateStale?: boolean;
+  alternatives?: { status: string; count: number; replacementVerified: false };
   client: { id: string; name: string; number: number; monthlyAmount: number | null } | null;
 }
 
@@ -68,9 +72,9 @@ export default function DebtorsPage() {
   const [mutations] = useState(() => createDebtorMutationGuard(setPendingKeys));
   const [showDismissed, setShowDismissed] = useState(false);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
+  const [reportLoaded, setReportLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const autoRefreshed = useRef(false);
 
   const refreshFromCardcom = useCallback(async (silent = false) => {
     const revision = mutations.snapshot();
@@ -83,7 +87,7 @@ export default function DebtorsPage() {
         setDebtorLists({ terminalDebtors: json.terminalDebtors ?? [], settledDebtors: json.settledDebtors ?? [], dismissedDebtors: json.dismissedDebtors ?? [] });
         setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
       }
-      if (!silent) toast.success("עודכן מול קארדקום");
+      if (!silent) toast.success("עודכנה סריקת הניסיונות; מצבי ההוראות לא סונכרנו בפעולה זו");
     } catch {
       if (!silent) toast.error("שגיאה ברענון מול קארדקום");
     } finally {
@@ -97,6 +101,7 @@ export default function DebtorsPage() {
       const res = await fetch("/api/finance/debtors");
       if (!res.ok) throw new Error();
       const json = await res.json();
+      setReportLoaded(true);
       setProblemCharges(json.problemCharges ?? []);
       setInactiveOrders(json.inactiveOrders ?? []);
       if (mutations.canCommit(revision)) {
@@ -104,20 +109,12 @@ export default function DebtorsPage() {
         setSnapshotUpdatedAt(json.snapshotUpdatedAt ?? null);
       }
 
-      // Self-updating: a snapshot older than an hour silently re-pulls from
-      // Cardcom on entry, so the screen shows the debt as it is NOW rather
-      // than as it was at the 05:30 cron. Once per mount — not per re-render.
-      const updated = json.snapshotUpdatedAt ? new Date(json.snapshotUpdatedAt).getTime() : 0;
-      if (!autoRefreshed.current && Date.now() - updated > 60 * 60 * 1000) {
-        autoRefreshed.current = true;
-        refreshFromCardcom(true);
-      }
     } catch {
       toast.error("שגיאה בטעינת דוח חייבים");
     } finally {
       setLoading(false);
     }
-  }, [refreshFromCardcom, mutations]);
+  }, [mutations]);
 
   useEffect(() => {
     fetchData();
@@ -174,8 +171,9 @@ export default function DebtorsPage() {
   }
 
   const clean =
-    problemCharges.length === 0 && inactiveOrders.length === 0 && terminalDebtors.length === 0 && dismissedDebtors.length === 0;
-  const totalDebt = terminalDebtors.reduce((s, d) => s + d.amount, 0);
+    reportLoaded && snapshotUpdatedAt !== null && problemCharges.length === 0 && inactiveOrders.length === 0 && terminalDebtors.length === 0 && dismissedDebtors.length === 0;
+  const totalDebt = terminalDebtors.reduce((s, d) => s + (debtorIlsAmount(d) ?? 0), 0);
+  const unknownDebtCount = terminalDebtors.filter(d => debtorIlsAmount(d) == null).length;
 
   return (
     <PullToRefresh onRefresh={fetchData}>
@@ -184,8 +182,8 @@ export default function DebtorsPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">דוח חייבים</h1>
             <p className="text-sm text-gray-400 mt-1">
-              מתעדכן אוטומטית: סנכרון יומי (05:30), רענון בכניסה למסך כשהנתונים
-              בני יותר משעה, ועדכוני webhook בזמן אמת.
+              מציג נתונים שמורים מסנכרון ומעדכוני webhook. הכניסה למסך אינה מפעילה רענון.
+              רענון יזום מעדכן את סריקת הניסיונות בלבד; מועד בדיקת כל הוראה מוצג בנפרד.
             </p>
           </div>
           <button
@@ -245,9 +243,9 @@ export default function DebtorsPage() {
                         </td>
                         <td className="px-3 py-3 text-gray-300">
                           {hasDebtorSnapshot(d) ? (
-                            d.settledAt
-                              ? `נסגר בתשלום ב-${fmtDate(d.settledAt)}`
-                              : `חוב ₪${fmtNum(d.amount)} · ניסיון אחרון ${fmtDate(d.lastAttempt)}`
+                            isVerifiedSettlement(d)
+                              ? `תועד תשלום תואם ב-${fmtDate(d.settledAt ?? null)}`
+                              : `ניסיון ${fmtNum(d.amount)} ${d.currency ?? "במטבע לא מתועד"} · ניסיון אחרון ${fmtDate(d.lastAttempt)}`
                           ) : "אין נתון עדכני בחלון הסריקה"}
                         </td>
                         <td className="px-3 py-3">
@@ -271,9 +269,9 @@ export default function DebtorsPage() {
         {clean ? (
           <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-8 text-center">
             <div className="text-3xl mb-2">✅</div>
-            <p className="text-green-400 font-bold">אין חובות פתוחים</p>
+            <p className="text-green-400 font-bold">לא נמצאו חריגים בדוח השמור</p>
             <p className="text-sm text-gray-400 mt-1">
-              כל החיובים עברו וכל הוראות הקבע שקארדקום מכירה פעילות.
+              לא נמצאו חריגים בדוח השמור. חובות מחוץ לחלון הסריקה ומידע שלא נקלט עדיין אינם מאומתים כאן.
             </p>
           </div>
         ) : null}
@@ -281,13 +279,13 @@ export default function DebtorsPage() {
         {terminalDebtors.length > 0 && (
           <section className="mb-8">
             <h2 className="text-lg font-bold text-white mb-1">
-              חובות בגבייה אוטומטית{" "}
+              ניסיונות חיוב לבדיקה{" "}
               <span className="text-sm font-normal text-gray-400">
-                ({terminalDebtors.length} חייבים · ₪{fmtNum(totalDebt)})
+                ({terminalDebtors.length} רשומות · ₪{fmtNum(totalDebt)} בסכומים ידועים{unknownDebtCount ? ` · ${unknownDebtCount} ללא שווי שקלי מאומת` : ""})
               </span>
             </h2>
             <p className="text-xs text-gray-500 mb-3">
-              סריקה רוחבית של כל הטרמינל — כולל הוראות קבע שנוצרו ידנית בדשבורד קארדקום.
+              דוח שמור של ניסיונות שנכשלו בחלון 45 יום. הסכום הוא הניסיון האחרון, ולא יתרת חוב מאומתת. תשלום מאוחר יותר אינו בהכרח סילוק אותו חוב.
               {snapshotUpdatedAt ? ` עודכן ${new Date(snapshotUpdatedAt).toLocaleString("he-IL")}.` : ""}
             </p>
             <div className="overflow-x-auto rounded-lg border border-gray-700">
@@ -295,7 +293,7 @@ export default function DebtorsPage() {
                 <thead>
                   <tr className="bg-gray-800 border-b border-gray-700 text-right text-gray-400">
                     <th className="px-3 py-2.5 font-medium">שם בכרטיס</th>
-                    <th className="px-3 py-2.5 font-medium">חוב מצטבר (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">ניסיון אחרון · מטבע מקור</th>
                     <th className="px-3 py-2.5 font-medium">ניסיונות (45 יום)</th>
                     <th className="px-3 py-2.5 font-medium">ניסיון אחרון</th>
                     <th className="px-3 py-2.5 font-medium">סיבת הדחייה</th>
@@ -309,7 +307,9 @@ export default function DebtorsPage() {
                         {d.name}
                         {d.idNumber ? <span className="text-gray-500 text-xs mr-2">({d.idNumber})</span> : null}
                       </td>
-                      <td className="px-3 py-2 font-mono text-red-400 font-bold">{fmtNum(d.amount)}</td>
+                      <td className="px-3 py-2 font-mono text-red-400 font-bold">{fmtNum(d.amount)} {d.currency ?? "מטבע לא מתועד"}
+                        {(d.laterPayment || d.settledAt) && <span className="block text-xs text-amber-300">תועד תשלום מאוחר יותר; סגירת החוב דורשת אימות.</span>}
+                        {d.coverageStatus === "outside_window" && <span className="block text-xs text-amber-300">מחוץ לחלון הסריקה; יתרה עדכנית אינה ידועה.</span>}</td>
                       <td className="px-3 py-2 font-mono text-gray-300">{d.attempts}</td>
                       <td className="px-3 py-2 text-gray-300">{fmtDate(d.lastAttempt)}</td>
                       <td className="px-3 py-2 text-gray-400 text-xs max-w-[280px]">
@@ -336,21 +336,20 @@ export default function DebtorsPage() {
         {settledDebtors.length > 0 && (
           <section className="mb-8">
             <h2 className="text-lg font-bold text-white mb-1">
-              נסגרו לאחרונה{" "}
+              תשלומים תואמים שנמצאו{" "}
               <span className="text-sm font-normal text-gray-400">
                 ({settledDebtors.length})
               </span>
             </h2>
             <p className="text-xs text-gray-500 mb-3">
-              היו בחוב, ואז נכנס תשלום מוצלח אחרי הניסיון הכושל האחרון. יוצגו כאן עד שהחוב
-              הישן ייצא מחלון 45 הימים.
+              נמצא תשלום תואם בסכום, במטבע ובמזהי ההוראה לאחר הניסיון הכושל האחרון. זהו אימות התאמה בדוח, ולא אישור חשבונאי לכל התחייבויות הלקוח.
             </p>
             <div className="overflow-x-auto rounded-lg border border-gray-800">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-800/60 border-b border-gray-800 text-right text-gray-400">
                     <th className="px-3 py-2.5 font-medium">שם בכרטיס</th>
-                    <th className="px-3 py-2.5 font-medium">שולם (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">תשלום תואם · מטבע מקור</th>
                     <th className="px-3 py-2.5 font-medium">תאריך תשלום</th>
                     <th className="px-3 py-2.5 font-medium">החוב שהיה</th>
                   </tr>
@@ -363,7 +362,7 @@ export default function DebtorsPage() {
                         {d.idNumber ? <span className="text-gray-600 text-xs mr-2">({d.idNumber})</span> : null}
                       </td>
                       <td className="px-3 py-2 font-mono text-green-400 font-bold">
-                        {fmtNum(d.settledAmount ?? d.amount)}
+                        {fmtNum(d.settledAmount ?? d.amount)} {d.currency ?? "מטבע לא מתועד"}
                       </td>
                       <td className="px-3 py-2 text-gray-400">{fmtDate(d.settledAt ?? null)}</td>
                       <td className="px-3 py-2 font-mono text-gray-500 line-through">
@@ -383,7 +382,7 @@ export default function DebtorsPage() {
             <h2 className="text-lg font-bold text-white mb-3">
               הוראות קבע לא פעילות{" "}
               <span className="text-sm font-normal text-gray-400">
-                ({inactiveOrders.length}) — הלקוח בספרים אבל קארדקום לא תחייב אותו
+                ({inactiveOrders.length}) — מצב של הוראה מסוימת; אינו מוכיח חוב או הפסקת גבייה מכל הלקוח
               </span>
             </h2>
             <div className="overflow-x-auto rounded-lg border border-gray-700">
@@ -392,9 +391,9 @@ export default function DebtorsPage() {
                   <tr className="bg-gray-800 border-b border-gray-700 text-right text-gray-400">
                     <th className="px-3 py-2.5 font-medium">לקוח</th>
                     <th className="px-3 py-2.5 font-medium">הסכם ע״ש</th>
-                    <th className="px-3 py-2.5 font-medium">חודשי (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">מחיר הסכם (₪, לפני מע״מ אם חל)</th>
                     <th className="px-3 py-2.5 font-medium">חיוב הבא שתוכנן</th>
-                    <th className="px-3 py-2.5 font-medium">נבדק לאחרונה</th>
+                    <th className="px-3 py-2.5 font-medium">מצב שמור וחלופות</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,7 +414,9 @@ export default function DebtorsPage() {
                       </td>
                       <td className="px-3 py-2 font-mono text-white">{fmtNum(o.monthlyPrice)}</td>
                       <td className="px-3 py-2 text-gray-300">{fmtDate(o.cardcomNextBillDate)}</td>
-                      <td className="px-3 py-2 text-gray-500">{fmtDate(o.cardcomSyncedAt)}</td>
+                      <td className="px-3 py-2 text-gray-500">{fmtDate(o.cardcomSyncedAt)}
+                        {o.orderStateStale && <span className="block text-amber-300 text-xs">מצב ההוראה אינו עדכני.</span>}
+                        <span className="block text-xs">{o.alternatives?.count ? `תועדו ${o.alternatives.count} הוראות פעילות באותו לקוח או חשבון; לא אומת שהן מחליפות הוראה זו.` : "לא אומתה כאן הוראה חלופית. ייתכנו הוראות שנוצרו ידנית."}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -427,7 +428,7 @@ export default function DebtorsPage() {
         {problemCharges.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-white mb-3">
-              חיובים בעייתיים{" "}
+              היסטוריית חיובים בעייתיים — עשויה לחפוף לרשומות למעלה{" "}
               <span className="text-sm font-normal text-gray-400">({problemCharges.length})</span>
             </h2>
             <div className="overflow-x-auto rounded-lg border border-gray-700">
@@ -435,7 +436,7 @@ export default function DebtorsPage() {
                 <thead>
                   <tr className="bg-gray-800 border-b border-gray-700 text-right text-gray-400">
                     <th className="px-3 py-2.5 font-medium">לקוח</th>
-                    <th className="px-3 py-2.5 font-medium">סכום (₪)</th>
+                    <th className="px-3 py-2.5 font-medium">סכום שמור · מטבע לא תועד</th>
                     <th className="px-3 py-2.5 font-medium">סטטוס</th>
                     <th className="px-3 py-2.5 font-medium">קוד דחייה</th>
                     <th className="px-3 py-2.5 font-medium">ניסיונות</th>
