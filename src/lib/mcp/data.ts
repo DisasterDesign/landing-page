@@ -26,9 +26,9 @@ export async function searchClients(viewer:Viewer,input:{query:string;limit:numb
  const rows=await prisma.client.findMany({
   where:{AND:[financeClientScope(viewer),{name:{contains:input.query,mode:'insensitive'}}]},
   orderBy:[{name:'asc'},{id:'asc'}],take:input.limit+1,
-  select:{name:true,archivedAt:true,products:{where:financeProductScope(viewer),take:11,orderBy:{id:'asc'},select:{name:true,status:true,monthlyAmount:true,financeBook:true,archivedAt:true}},agreements:{where:financeAgreementScope(viewer),take:11,orderBy:{id:'asc'},select:{kind:true,paymentStatus:true,cardcomIsActive:true,financeBook:true}}},
+  select:{name:true,archivedAt:true,products:{where:financeProductScope(viewer),take:11,orderBy:{id:'asc'},select:{name:true,status:true,monthlyAmount:true,monthlyOriginalAmount:true,monthlyOriginalCurrency:true,financeBook:true,archivedAt:true}},agreements:{where:financeAgreementScope(viewer),take:11,orderBy:{id:'asc'},select:{kind:true,paymentStatus:true,cardcomIsActive:true,financeBook:true}}},
  });
- return {asOf:new Date().toISOString(),limit:input.limit,truncated:rows.length>input.limit,clients:rows.slice(0,input.limit).map(c=>({name:c.name,archived:!!c.archivedAt,products:c.products.slice(0,10).map(p=>({name:p.name,status:p.status,monthlyGross:p.monthlyAmount,book:p.financeBook,archived:!!p.archivedAt})),agreements:c.agreements.slice(0,10).map(a=>({kind:a.kind,paymentStatus:a.paymentStatus,recurringActive:a.cardcomIsActive,book:a.financeBook})),detailsTruncated:c.products.length>10||c.agreements.length>10}))};
+ return {asOf:new Date().toISOString(),limit:input.limit,truncated:rows.length>input.limit,clients:rows.slice(0,input.limit).map(c=>({name:c.name,archived:!!c.archivedAt,products:c.products.slice(0,10).map(p=>({name:p.name,status:p.status,monthlyGross:p.monthlyAmount,monthlyGrossCurrency:'ILS',originalMonthlyGross:p.monthlyOriginalAmount,originalCurrency:p.monthlyOriginalCurrency,book:p.financeBook,archived:!!p.archivedAt})),agreements:c.agreements.slice(0,10).map(a=>({kind:a.kind,paymentStatus:a.paymentStatus,recurringActive:a.cardcomIsActive,book:a.financeBook})),detailsTruncated:c.products.length>10||c.agreements.length>10}))};
 }
 function debtorDisplayName(d:{name:string;idNumber?:string|null}){
  // The upstream sweep falls back to identity/transaction keys when a name is absent.

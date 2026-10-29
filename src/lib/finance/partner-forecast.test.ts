@@ -11,3 +11,10 @@ test('owner keeps private profit and half shared profit',()=>{
 test('first month partners retain their separate commission model',()=>{
  assert.equal(partnerForecastFigures(false,null,report),null);
 });
+
+test('an unvalued monthly client never promotes cumulative receipts into monthly partner profit', async () => {
+ const api = await import('./partner-forecast') as unknown as { clientMonthlyProfit: (client: { monthlyAmount: number | null; vatExempt: boolean; amount?: number }) => { gross: number; profit: number } };
+ assert.equal(typeof api.clientMonthlyProfit, 'function');
+ assert.deepEqual(api.clientMonthlyProfit({monthlyAmount:null,amount:90000,vatExempt:true}),{gross:0,profit:0});
+ assert.deepEqual(api.clientMonthlyProfit({monthlyAmount:118,amount:90000,vatExempt:false}),{gross:118,profit:97.64});
+});

@@ -4,10 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { buildFinanceReport } from "@/lib/finance/report-data";
-import { partnerForecastFigures } from "@/lib/finance/partner-forecast";
+import { partnerForecastFigures, clientMonthlyProfit } from "@/lib/finance/partner-forecast";
 import type { Viewer } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
-import { CARDCOM_FEE_RATE, VAT_RATE } from "@/lib/finance";
 import { resolveAgreementPartnerId } from "@/lib/leads/agreement-lifecycle";
 
 /**
@@ -81,7 +80,6 @@ export async function GET(request: NextRequest) {
           name: true,
           status: true,
           monthlyAmount: true,
-          amount: true,
           vatExempt: true,
           ownerId: true,
         },
@@ -117,9 +115,7 @@ export async function GET(request: NextRequest) {
 
   /** Monthly profit of one billing client, gross → net of VAT → net of fee. */
   const clientProfit = (client: (typeof clients)[number]) => {
-    const gross = client.monthlyAmount ?? client.amount ?? 0;
-    const vat = client.vatExempt ? 0 : (gross * VAT_RATE) / (100 + VAT_RATE);
-    return { gross, profit: gross - vat - gross * CARDCOM_FEE_RATE };
+    return clientMonthlyProfit(client);
   };
 
   const billing = clients.filter((client) => client.status === "בוצע");

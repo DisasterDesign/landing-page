@@ -53,3 +53,11 @@ test("shared agreement projections redact stored payment credentials and mixed c
  assert.deepEqual(result.client, { id: "c", name: "name" });
  assert.equal(result.signToken, "shared-link");
 });
+
+test("shared unknown valuations stay unknown without leaking private product gaps", async () => {
+ const a = await access();
+ const unvalued = { financeBook: "SHARED", status: "בוצע", monthlyAmount: null };
+ const valued = { financeBook: "SHARED", status: "בוצע", monthlyAmount: 50 };
+ assert.equal(a.redactFinanceClient(roy, { monthlyAmount: 999, products: [unvalued, valued] }).monthlyAmount, null);
+ assert.equal(a.redactFinanceClient(roy, { monthlyAmount: null, products: [{ ...unvalued, financeBook: "PRIVATE" }, valued] }).monthlyAmount, 50);
+});

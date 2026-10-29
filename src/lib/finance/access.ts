@@ -54,7 +54,8 @@ export function redactFinanceClient<T extends Record<string, unknown>>(viewer: V
     if (Array.isArray(result[key])) result[key] = (result[key] as Record<string, unknown>[]).filter(row => row.financeBook === "SHARED");
   }
   const products = (result.products ?? []) as { monthlyAmount?: number | null; status?: string }[];
-  result.monthlyAmount = Math.round(products.filter(p => p.status === "בוצע").reduce((sum, p) => sum + (p.monthlyAmount ?? 0), 0) * 100) / 100;
+  const active = products.filter(p => p.status === "בוצע");
+  result.monthlyAmount = active.some(p => p.monthlyAmount == null) ? null : Math.round(active.reduce((sum, p) => sum + (p.monthlyAmount ?? 0), 0) * 100) / 100;
   return result as T;
 }
 

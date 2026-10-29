@@ -5,8 +5,25 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { syncClientMonthly, parseProductBody, CLIENT_PRODUCT_SELECT } from "@/lib/client-products";
+import { correctProductPrice } from "@/lib/finance/product-price-write";
+import { ProductPriceError } from "@/lib/finance/product-price";
 
 type Ctx = { params: Promise<{ id: string; productId: string }> };
+
+// Price provenance is owner-only, even for a shared product.
+export async function GET(_request: NextRequest, { params }: Ctx) {
+  try {
+    const viewer = await requireAdmin();
+    if (!viewer.isOwner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const { id, productId } = await params;
+    const product = await prisma.clientProduct.findFirst({ where: { id: productId, clientId: id, archivedAt: null }, select: { id: true } });
+    if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const revisions = await prisma.clientProductPriceRevision.findMany({ where: { productId }, orderBy: { version: "desc" }, take: 20 });
+    return NextResponse.json({ revisions });
+  } catch (error) {
+    return viewerErrorResponse(error) ?? NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
 // PATCH - edit one product (name, url, monthly, lane, dates)
 export async function PATCH(request: NextRequest, { params }: Ctx) {
@@ -30,6 +47,14 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     }
 
     const body = await request.json();
+    if ("priceCorrection" in body) {
+      if (!viewer.isOwner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      if (Object.keys(body).length !== 1 || !body.priceCorrection || typeof body.priceCorrection !== "object" || Array.isArray(body.priceCorrection)) {
+        return NextResponse.json({ error: "יש לשלוח תיקון מחיר בנפרד" }, { status: 400 });
+      }
+      const result = await prisma.$transaction(db => correctProductPrice(db, viewer.userId, id, productId, body.priceCorrection), { isolationLevel: "Serializable" });
+      return NextResponse.json(result);
+    }
     const data = parseProductBody(body);
     const financeBook = requireBookSelection(viewer, body.financeBook, existing.financeBook);
     if (existing.paymentDate && "paymentDate" in body && !body.paymentDate) return NextResponse.json({ error: "לא ניתן למחוק תאריך תשלום מרשומה כספית" }, { status: 409 });
@@ -51,22 +76,26 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         if (!linked) return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
     }
-    const product = await prisma.clientProduct.update({
-      where: { id: productId },
-      data,
-      select: CLIENT_PRODUCT_SELECT,
+    const result = await prisma.$transaction(async db => {
+      // Older inline editors cannot turn a corrected USD price into shekels.
+      const changed = await db.clientProduct.updateMany({
+        where: { id: productId, clientId: id, ...( "monthlyAmount" in data ? { monthlyPriceVersion: 0 } : {}) }, data,
+      });
+      if (changed.count !== 1) throw new ProductPriceError("יש לערוך מחיר מתועד דרך תיקון מחיר", 409);
+      const product = await db.clientProduct.findUniqueOrThrow({ where: { id: productId }, select: CLIENT_PRODUCT_SELECT });
+      const monthlyAmount = await syncClientMonthly(id, db);
+      return { product, monthlyAmount: viewer.isOwner ? monthlyAmount : undefined };
     });
-
-    const monthlyAmount = await syncClientMonthly(id);
-
-    return NextResponse.json({ product, monthlyAmount: viewer.isOwner ? monthlyAmount : undefined });
+    return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ProductPriceError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "המחיר השתנה; יש לטעון מחדש" }, { status: 409 });
     const financeError = viewerErrorResponse(error);
     if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    console.error("Error updating client product:", error);
+    console.error("Error updating client product");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

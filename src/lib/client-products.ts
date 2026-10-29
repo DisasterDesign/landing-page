@@ -15,7 +15,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
  * The trade is the usual denormalisation risk — drift. It is contained by
  * routing every product write through here, so there is exactly one writer.
  */
-export async function syncClientMonthly(clientId: string, db: Db = prisma): Promise<number> {
+export async function syncClientMonthly(clientId: string, db: Db = prisma): Promise<number | null> {
   const products = await db.clientProduct.findMany({
     where: { clientId, archivedAt: null },
     select: { monthlyAmount: true, status: true },
@@ -24,9 +24,10 @@ export async function syncClientMonthly(clientId: string, db: Db = prisma): Prom
   // Only products marked "בוצע" bill. This mirrors the client-level rule the
   // partner report has always applied (status "בוצע" filter): a project that
   // has not started paying (ריק) or is mid-setup (חצי) carries its agreed
-  // amount for reference but contributes nothing to MRR until flipped. Without
-  // this, יוני's not-yet-billing admin system was counted as revenue.
-  const total =
+  // amount for reference but contributes nothing to MRR until flipped. An
+  // active unvalued product makes the client ILS rollup unknown, never zero.
+  // Without this, יוני's not-yet-billing admin system was counted as revenue.
+  const total = products.some(p => p.status === "בוצע" && p.monthlyAmount === null) ? null :
     Math.round(
       products
         .filter((p) => p.status === "בוצע")
@@ -68,7 +69,7 @@ export async function applyPaymentToProduct(
   const financeBook = agreement?.financeBook ?? "UNASSIGNED";
   const products = await db.clientProduct.findMany({
     where: { clientId, archivedAt: null },
-    select: { id: true, agreementId: true, startDate: true, financeBook: true },
+    select: { id: true, agreementId: true, startDate: true, financeBook: true, monthlyPriceVersion: true },
   });
 
   const target =
@@ -77,9 +78,9 @@ export async function applyPaymentToProduct(
 
   if (target) {
     await db.clientProduct.updateMany({
-      where: { id: target.id, clientId, archivedAt: null, financeBook, agreementId: target.agreementId },
+      where: { id: target.id, clientId, archivedAt: null, financeBook, agreementId: target.agreementId, monthlyPriceVersion: target.monthlyPriceVersion ?? 0 },
       data: {
-        monthlyAmount: grossMonthly,
+        ...(target.monthlyPriceVersion ? {} : { monthlyAmount: grossMonthly }),
         status: "בוצע",
         agreementId,
         ...(target.startDate ? {} : { startDate: paidAt }),
@@ -113,6 +114,9 @@ export const CLIENT_PRODUCT_SELECT = {
   name: true,
   websiteUrl: true,
   monthlyAmount: true,
+  monthlyOriginalAmount: true,
+  monthlyOriginalCurrency: true,
+  monthlyPriceVersion: true,
   lane: true,
   status: true,
   startDate: true,
