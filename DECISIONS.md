@@ -333,3 +333,12 @@ render/typing/bold checks. Production audit has0 critical/0 high; residual
 moderates are classified in release notes. User credentials and new explicit
 terms still require the supported flow; approval is not treated as permission
 for an unspecified tenant, paid plan or broader access.
+
+
+## 2026-10-29 — Marketing link preview artwork
+
+**Status:** Implemented locally, pending deployment.
+
+The homepage and shared marketing OG renderer use a generated light-background Fuzion banner with a glass brandmark, cyan/magenta refraction and large Hebrew/English lettering. The versioned public JPEG is 1200×630 and approximately 76 KB. The root metadata image handler serves these JPEG bytes directly; Open Graph and Twitter metadata include image dimensions and descriptive alt text. Existing marketing subpage routes reuse the artwork with their page label. Agreement and individual blog article layouts retain their specialized renderers. No dependency or architecture change is required.
+
+The image was generated with the built-in imagegen tool using the existing brandmark as reference; the source prompt is recorded in `docs/brand/social/share-image-prompt.md`.

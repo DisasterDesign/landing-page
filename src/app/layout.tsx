@@ -3,6 +3,13 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
 
+const shareImage = {
+  url: "/images/social/fuzion-webz-share-2026-10.jpg",
+  width: 1200,
+  height: 630,
+  alt: "Fuzion Webz — עיצוב ובניית אתרים",
+};
+
 export const metadata: Metadata = {
   icons: {
     icon: "/fabicon.png",
@@ -26,9 +33,11 @@ export const metadata: Metadata = {
     siteName: "Fuzion Webz",
     title: "Fuzion Webz | סטודיו לעיצוב ובניית אתרים",
     description: "סטודיו בוטיק לעיצוב ובניית אתרים מתקדמים",
+    images: [shareImage],
   },
   twitter: {
     card: "summary_large_image",
+    images: [shareImage],
   },
   robots: {
     index: true,
