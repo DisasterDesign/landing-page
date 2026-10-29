@@ -360,6 +360,7 @@ model User {
   createdLeadFollowUps    LeadFollowUp[]        @relation("LeadFollowUpCreator")
   archivedAgreements      Agreement[] @relation("AgreementArchiver")
   agreementArchiveEvents  AgreementArchiveEvent[]
+  productPriceRevisions   ClientProductPriceRevision[]
   partnerAgreements       Agreement[]           @relation("AgreementPartner")
   creditedAgreements      Agreement[]           @relation("AgreementCreditedSeller")
   commissions             SellerCommission[]    @relation("SellerCommissions")
@@ -978,9 +979,15 @@ model ClientProduct {
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name          String
   websiteUrl    String?
-  // Gross recurring for THIS product. Null = agreed but not billing yet
-  // (e.g. a system that is built but the client has not started paying for).
+  // ILS gross recurring valuation for THIS product. Null = unvalued in ILS;
+  // original-currency price may still be known. Status controls billing.
   monthlyAmount Float?
+  // Original monthly gross; monthlyAmount remains the ILS valuation. Foreign
+  // prices have no ILS valuation until an explicitly sourced FX flow exists.
+  monthlyOriginalAmount Float?
+  monthlyOriginalCurrency String?
+  monthlyPriceVersion Int @default(0)
+  priceRevisions ClientProductPriceRevision[]
   // Strategy lane per PRODUCT, not per client — the bet/floor ratio is
   // meaningless at client level once one client runs both a store and a
   // brochure site. "bet" = e-commerce, "floor" = landing/brochure.
@@ -998,6 +1005,26 @@ model ClientProduct {
 
   @@index([clientId])
   @@index([archivedAt])
+}
+
+// Append-only through the business API; undo appends a compensating revision.
+model ClientProductPriceRevision {
+  id String @id @default(cuid())
+  productId String
+  product ClientProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actorId String
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  version Int
+  action String
+  reason String
+  source String
+  before Json
+  after Json
+  restoredFromId String?
+  occurredAt DateTime @default(now())
+
+  @@unique([productId, version])
+  @@index([productId, occurredAt])
 }
 
 enum JobStatus {

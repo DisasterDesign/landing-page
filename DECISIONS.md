@@ -356,3 +356,15 @@ Only agreement/quote list surfaces gain archive filtering. Private/shared scopes
 The deployment and cleanup boundary is documented in `docs/AGREEMENT_ARCHIVE_RUNBOOK.md`. Production reports and private cleanup configuration stay outside version control.
 
 Verification: 694 tests passed, 2 skipped, including real synthetic PostgreSQL races, rollback and private/shared visibility checks; TypeScript and production build pass. Full lint reports zero errors and 17 existing warnings. Local browser checks confirm synthetic archive/restore, URL persistence and one-time preview. Independent review findings were reproduced and fixed. No production migration, backfill, archive, deployment or MCP/OAuth change was performed.
+
+## 2026-10-29 — Original-currency product price corrections
+
+**Status:** Prepared locally; migration, release and production correction require separate authorization.
+
+`ClientProduct.monthlyAmount` remains a nullable ILS forecast valuation. New original amount/currency fields preserve an approved monthly gross price in USD or ILS. USD prices remain unvalued in ILS until there is an explicitly sourced FX workflow; expense-rate constants and historical receipt rates are not used to value current revenue.
+
+The existing owner product editor accepts a separate versioned price correction. The original price, previous valuation, client rollup before/after, actor, source and reason are stored in a restrictive revision history in the same Serializable transaction as the correction and client rollup. Undo appends a compensating revision, restores the exact previous product price snapshot and recalculates the client rollup; any former rollup drift remains in the audit rather than being reinstated. Existing receipt, agreement, book, VAT and payment evidence are independent. Older inline ILS editors and callbacks cannot overwrite a corrected price.
+
+Unknown active valuations propagate to nullable client rollups and scoped client views. The Clients footer identifies its sum as a row display total; the finance report continues to calculate run-rate from products and reports omitted ILS valuations. Monthly partner figures never substitute cumulative collections for an unknown monthly amount.
+
+The storefront audit primitive assumes another schema and swallows failures; the application's existing restrictive archive-event pattern is used so a failed audit insertion rolls back the price correction. The migration is additive and performs no client backfill. Rollback retains the additive schema and understands corrected prices; disabling the editor does not erase revisions.

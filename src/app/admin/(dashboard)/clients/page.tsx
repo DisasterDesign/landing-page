@@ -9,6 +9,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { parseUrlPaste, type ParsedRow } from "@/lib/import-urls";
 import { confirmDanger } from "@/lib/confirm";
 import { tapMedium } from "@/lib/haptic";
+import ProductPriceEditor from "@/components/admin/ProductPriceEditor";
 
 interface ClientProduct {
   financeBook?: string;
@@ -16,6 +17,9 @@ interface ClientProduct {
   name: string;
   websiteUrl: string | null;
   monthlyAmount: number | null;
+  monthlyOriginalAmount?: number | null;
+  monthlyOriginalCurrency?: string | null;
+  monthlyPriceVersion?: number;
   lane: string | null;
   status: string;
   startDate: string | null;
@@ -324,7 +328,7 @@ export default function ClientsPage() {
 
   // Every product write comes back with the client's recalculated rollup, so
   // the parent row and the footer totals stay honest without a refetch.
-  const applyRollup = (clientId: string, monthlyAmount: number, products?: ClientProduct[]) => {
+  const applyRollup = (clientId: string, monthlyAmount: number | null, products?: ClientProduct[]) => {
     setClients((prev) =>
       prev.map((c) =>
         c.id === clientId ? { ...c, monthlyAmount, products: products ?? c.products } : c
@@ -369,7 +373,7 @@ export default function ClientsPage() {
         body: JSON.stringify({ [field]: value }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number };
+      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number | null };
       setClients((prev) =>
         prev.map((c) =>
           c.id === clientId
@@ -402,7 +406,7 @@ export default function ClientsPage() {
         body: JSON.stringify({ name: "מוצר חדש" }),
       });
       if (!res.ok) throw new Error("Failed to create");
-      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number };
+      const json = (await res.json()) as { product: ClientProduct; monthlyAmount: number | null };
       applyRollup(client.id, json.monthlyAmount, [...client.products, json.product]);
       setExpanded((prev) => new Set(prev).add(client.id));
       toast.success("מוצר נוסף");
@@ -429,7 +433,7 @@ export default function ClientsPage() {
     try {
       const res = await fetch(`/api/clients/${client.id}/products/${product.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
-      const json = (await res.json()) as { monthlyAmount: number };
+      const json = (await res.json()) as { monthlyAmount: number | null };
       applyRollup(
         client.id,
         json.monthlyAmount,
@@ -501,6 +505,7 @@ export default function ClientsPage() {
 
   const totalReceived = clients.reduce((sum, c) => sum + (c.amount ?? 0), 0);
   const totalMonthly = clients.reduce((sum, c) => sum + (c.monthlyAmount ?? 0), 0);
+  const unvaluedMonthly = clients.filter(c => c.monthlyAmount === null).length;
   const totalVat = clients.reduce((sum, c) => sum + computeVat(c), 0);
   const totalCardcom = clients.reduce((sum, c) => sum + computeCardcomFee(c), 0);
   const totalProfit = clients.reduce((sum, c) => sum + computeProfit(c), 0);
@@ -651,6 +656,7 @@ export default function ClientsPage() {
   };
 
   const renderProductCell = (client: Client, product: ClientProduct, field: ProductField) => {
+    if (field === "monthlyAmount") return <ProductPriceEditor clientId={client.id} product={product} isOwner={isOwner} onSaved={fetchClients} />;
     const isEditing = editingProduct?.id === product.id && editingProduct?.field === field;
 
     if (isEditing && (field === "lane" || field === "status")) {
@@ -705,7 +711,7 @@ export default function ClientsPage() {
       return (
         <input
           ref={inputRef}
-          type={field === "monthlyAmount" ? "number" : "text"}
+          type="text"
           step="any"
           value={productValue}
           onChange={(e) => setProductValue(e.target.value)}
@@ -746,24 +752,16 @@ export default function ClientsPage() {
     }
 
     let display: string;
-    if (field === "monthlyAmount") display = formatNum(product.monthlyAmount);
-    else if (field === "lane") display = product.lane ? LANE_LABEL[product.lane] ?? "" : "";
+    if (field === "lane") display = product.lane ? LANE_LABEL[product.lane] ?? "" : "";
     else if (field === "status") display = statusDisplay(product.status);
     else if (field === "startDate" || field === "paymentDate")
       display = product[field] ? new Date(product[field]!).toLocaleDateString("he-IL") : "";
     else display = product[field] ?? "";
 
-    // Unpaid products are visually muted on the money cell so the table reads
-    // like the MRR does: this amount is agreed, not yet billing.
-    const muted = field === "monthlyAmount" && product.status !== "בוצע" && product.monthlyAmount != null;
-
     return (
       <div
         onClick={() => startProductEdit(product, field)}
-        className={`cursor-pointer px-2 py-1 min-h-[28px] text-xs hover:bg-gray-700/50 rounded transition-colors ${
-          muted ? "text-gray-500 line-through decoration-gray-600" : ""
-        }`}
-        title={muted ? "לא נספר ב-MRR — סטטוס המוצר אינו בוצע" : undefined}
+        className="cursor-pointer px-2 py-1 min-h-[28px] text-xs hover:bg-gray-700/50 rounded transition-colors"
       >
         {display || <span className="text-gray-600">-</span>}
       </div>
@@ -920,6 +918,8 @@ export default function ClientsPage() {
                       <div className="px-2 py-1.5 text-white" title="סכום כל המוצרים">
                         {formatNum(client.monthlyAmount)}
                       </div>
+                    ) : products.length === 1 ? (
+                      <ProductPriceEditor clientId={client.id} product={products[0]} isOwner={isOwner} onSaved={fetchClients} />
                     ) : (
                       renderCell(client, "monthlyAmount")
                     )}
@@ -1024,10 +1024,12 @@ export default function ClientsPage() {
           <tfoot>
             <tr className="bg-gray-800/80 border-t border-gray-600 font-medium">
               <td className="px-3 py-2.5" colSpan={4}>
-                <span className="text-gray-400">סה&quot;כ ({clients.length} לקוחות)</span>
+                <span className="text-gray-400">סכום שורות הלקוחות ({clients.length} לקוחות)</span>
+                <div className="text-xs text-gray-500">תצוגת רישומים; תחזית לפי מוצרים בדף כספים</div>
               </td>
               <td className="px-3 py-2.5 font-mono text-white">
                 {formatNum(totalMonthly)}
+                {unvaluedMonthly > 0 && <div className="text-xs text-amber-300">סכום חלקי — {unvaluedMonthly} לקוחות ללא סכום בשקלים</div>}
               </td>
               <td className="px-3 py-2.5 font-mono text-gray-300 bg-gray-700/20">
                 {formatNum(totalVat)}

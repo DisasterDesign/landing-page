@@ -16,7 +16,7 @@ export function auditForecastClient(client: AuditedClient, selected: (book: stri
   const visible = products.filter(p => selected(p.financeBook));
   const warnings: ForecastWarning[] = [];
   if (visible.some(p => p.monthlyAmount == null || !Number.isFinite(p.monthlyAmount))) {
-    warnings.push({ code: 'UNVALUED_PRODUCT', clientName: client.name, message: 'מוצר ללא סכום חודשי ידוע אינו נכלל בתחזית.' });
+    warnings.push({ code: 'UNVALUED_PRODUCT', clientName: client.name, message: 'מוצר ללא סכום חודשי ידוע בשקלים אינו נכלל בתחזית.' });
   }
   // A shared viewer cannot compare a complete client rollup containing private products.
   if (mayCompareFullClient && products.length > 0 && products.every(p => selected(p.financeBook) && p.monthlyAmount != null && Number.isFinite(p.monthlyAmount)) && client.monthlyAmount != null && Number.isFinite(client.monthlyAmount)) {

@@ -121,10 +121,11 @@ export async function PATCH(
       const value =
         body.monthlyAmount !== null && body.monthlyAmount !== "" ? parseFloat(body.monthlyAmount) : null;
       if (products.length === 1) {
-        await prisma.clientProduct.update({
-          where: { id: products[0].id },
+        const updated = await prisma.clientProduct.updateMany({
+          where: { id: products[0].id, monthlyPriceVersion: 0 },
           data: { monthlyAmount: value },
         });
+        if (updated.count !== 1) return NextResponse.json({ error: "יש לערוך מחיר מתועד דרך תיקון מחיר ברמת המוצר" }, { status: 409 });
         rolledMonthly = await syncClientMonthly(id);
       } else {
         updateData.monthlyAmount = value;

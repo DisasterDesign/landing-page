@@ -1,3 +1,12 @@
+import { CARDCOM_FEE_RATE, VAT_RATE } from '@/lib/finance';
+
+/** Unknown monthly valuation cannot fall back to cumulative collected cash. */
+export function clientMonthlyProfit(client: { monthlyAmount: number | null; vatExempt: boolean }) {
+ const gross = client.monthlyAmount ?? 0;
+ const vat = client.vatExempt ? 0 : gross * VAT_RATE / (100 + VAT_RATE);
+ return { gross, profit: gross - vat - gross * CARDCOM_FEE_RATE };
+}
+
 interface Forecast {
  bottomLine:{totalMrr:number;netProfit:number};
  books:{personal?:{amount:number;profit:number;count:number};fuzion:{amount:number;profit:number;count:number}};
