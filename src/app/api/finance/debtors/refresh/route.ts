@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
 import { sweepTerminalFailures, bucketDebtors } from "@/lib/cardcom-debtors";
 
 export const maxDuration = 60;
@@ -7,15 +7,15 @@ export const maxDuration = 60;
 /**
  * On-demand run of the terminal-wide debt sweep — same code the 05:30 cron
  * runs, triggered from the debtors screen so the numbers are live when Elad
- * is actually looking at them. New-debtor/grown-debt notifications fire here
- * too; the snapshot diff keeps repeats silent either way.
+ * is actually looking at them. This read refresh is quiet: actionable alerts are
+ * reserved for the scheduled sweep.
  */
 export async function POST() {
   try {
-    await requireAdmin();
+    await requireOwner();
 
     const summary = { debtors: 0, newDebtorAlerts: 0, settled: 0 };
-    const snapshot = await sweepTerminalFailures(new Date(), summary);
+    const snapshot = await sweepTerminalFailures(new Date(), summary, { notify: false });
     const buckets = await bucketDebtors(snapshot);
 
     return NextResponse.json({

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import RevenueChart from "@/components/admin/RevenueChart";
 import { success as hapticSuccess } from "@/lib/haptic";
+import { createTaskRefreshGuard, startVisibleRefresh } from "@/lib/admin/dashboard-refresh";
 
 interface DashboardStats {
   activeTasks: number;
@@ -20,6 +21,13 @@ interface MyTask {
 }
 
 interface BusinessKpis {
+  isOwner: boolean;
+  personalProfit: number | null;
+  myProfit: number;
+  received: number | null;
+  unvaluedCount: number;
+  syncStale: boolean;
+  forecastUnvaluedCount: number;
   /** Fuzion only. The 100-client goal is a partnership goal — counting Elad's
    *  private retainers here would make the progress bar describe nothing. */
   fuzionClients: number;
@@ -31,8 +39,6 @@ interface BusinessKpis {
   /** settlement.transferToRoy — profit after shared expenses, halved, plus
    *  reimbursement for what Roy paid. Null until the API ships it. */
   settlementTransfer: number | null;
-  openLeads: number;
-  sellerPending: number;
 }
 
 const CLIENT_GOAL = 100; // strategy.md target by Aug 2026
@@ -46,11 +52,17 @@ export default function AdminDashboardPage() {
     newMessages: 0,
   });
   const [kpis, setKpis] = useState<BusinessKpis | null>(null);
+  const [financeStale, setFinanceStale] = useState(false);
+  const [openLeads, setOpenLeads] = useState(0);
+  const [sellerPending, setSellerPending] = useState(0);
   const [myTasks, setMyTasks] = useState<MyTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<Set<string>>(new Set());
+  const taskRefreshGuard = useRef(createTaskRefreshGuard());
+  const dashboardRefresh = useRef<ReturnType<typeof startVisibleRefresh> | null>(null);
 
   const markDone = async (task: MyTask) => {
+    const finishMutation = taskRefreshGuard.current.begin();
     hapticSuccess();
     setCompleting((prev) => new Set(prev).add(task.id));
     setMyTasks((prev) => prev.filter((t) => t.id !== task.id));
@@ -76,6 +88,8 @@ export default function AdminDashboardPage() {
         activeTasks: prev.activeTasks + 1,
       }));
     } finally {
+      finishMutation();
+      dashboardRefresh.current?.refresh();
       setCompleting((prev) => {
         const next = new Set(prev);
         next.delete(task.id);
@@ -85,52 +99,78 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    async function fetchAll() {
-      try {
-        const [statsRes, tasksRes, reportRes, leadsRes, sellersRes] = await Promise.all([
-          fetch("/api/dashboard/stats"),
-          fetch("/api/dashboard/my-tasks"),
-          fetch("/api/partner-report", { cache: "no-store" }),
-          fetch("/api/leads", { cache: "no-store" }),
-          fetch("/api/sellers/commissions", { cache: "no-store" }),
-        ]);
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStats({
+    const guard = taskRefreshGuard.current;
+    const poller = startVisibleRefresh(async (signal) => {
+      const taskSnapshot = guard.snapshot();
+      const read = async (path: string) => {
+        const res = await fetch(path, { cache: "no-store", signal });
+        if (!res.ok) throw new Error(`${path}: ${res.status}`);
+        return res.json();
+      };
+      const results = await Promise.allSettled([
+        read("/api/dashboard/stats"),
+        read("/api/dashboard/my-tasks"),
+        read("/api/partner-report"),
+        read("/api/leads"),
+        read("/api/sellers/commissions"),
+      ]);
+      if (signal.aborted) return;
+      const [statsRes, tasksRes, reportRes, leadsRes, sellersRes] = results;
+      // A snapshot taken before/during a task PATCH must not undo markDone.
+      const canUpdateTasks = guard.canCommit(taskSnapshot);
+      if (statsRes.status === "fulfilled") {
+        const data = statsRes.value;
+        setStats((prev) => ({
+          ...prev,
+          ...(canUpdateTasks ? {
             activeTasks: data.tasks?.TODO ?? 0,
             myOpen: data.myOpenTasks ?? 0,
             dueThisWeek: data.tasksDueThisWeek ?? 0,
-            newMessages: data.unreadContacts ?? 0,
-          });
-        }
-        if (tasksRes.ok) {
-          const data = await tasksRes.json();
-          setMyTasks(data.tasks || []);
-        }
-        // Business KPIs — single source of truth is the partner report.
-        const report = reportRes.ok ? await reportRes.json() : null;
-        const leads = leadsRes.ok ? await leadsRes.json() : null;
-        const sellers = sellersRes.ok ? await sellersRes.json() : null;
-        if (report) {
-          setKpis({
-            fuzionClients: report.books?.fuzion?.count ?? report.count ?? 0,
-            personalClients: report.books?.personal?.count ?? 0,
-            mrr: report.totals?.amount ?? 0,
-            personalMrr: report.books?.personal?.amount ?? 0,
-            monthlyProfit: report.totals?.profit ?? 0,
-            partnerShare: report.totals?.partnerShare ?? 0,
-            settlementTransfer: report.settlement?.transferToRoy ?? null,
-            openLeads: leads?.stats?.openCount ?? 0,
-            sellerPending: sellers?.totalPending ?? 0,
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load dashboard:", err);
-      } finally {
-        setLoading(false);
+          } : {}),
+          newMessages: data.unreadContacts ?? 0,
+        }));
       }
-    }
-    fetchAll();
+      if (tasksRes.status === "fulfilled" && canUpdateTasks) {
+        setMyTasks(tasksRes.value.tasks || []);
+      }
+      // Business KPIs — single source of truth is the partner report.
+      if (reportRes.status === "fulfilled") {
+        const report = reportRes.value;
+        setFinanceStale(false);
+        setKpis({
+          isOwner: report.viewer?.isOwner === true,
+          personalProfit: report.personalProfit ?? null,
+          myProfit: report.myProfit ?? report.totals?.partnerShare ?? 0,
+          received: report.actual?.gross ?? null,
+          unvaluedCount: report.actual?.unvaluedCount ?? 0,
+          forecastUnvaluedCount: report.forecastUnvaluedCount ?? 0,
+          syncStale: report.sync?.stale === true || (report.sync?.status != null && report.sync.status !== "SUCCESS"),
+          fuzionClients: report.books?.fuzion?.count ?? report.count ?? 0,
+          personalClients: report.books?.personal?.count ?? 0,
+          mrr: report.totals?.amount ?? 0,
+          personalMrr: report.books?.personal?.amount ?? 0,
+          monthlyProfit: report.totals?.profit ?? 0,
+          partnerShare: report.totals?.partnerShare ?? 0,
+          settlementTransfer: report.settlement?.transferToRoy ?? null,
+        });
+      }
+      if (reportRes.status === "rejected") setFinanceStale(true);
+      if (leadsRes.status === "fulfilled") {
+        setOpenLeads(leadsRes.value.stats?.openCount ?? 0);
+      }
+      if (sellersRes.status === "fulfilled") {
+        setSellerPending(sellersRes.value.totalPending ?? 0);
+      }
+      for (const result of results) {
+        if (result.status === "rejected") console.error("Failed to load dashboard:", result.reason);
+      }
+      setLoading(false);
+    });
+    dashboardRefresh.current = poller;
+    return () => {
+      poller.stop();
+      dashboardRefresh.current = null;
+    };
   }, []);
 
   const statCards = [
@@ -215,31 +255,37 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {financeStale && <p role="alert" className="text-sm text-amber-300">נתוני הפיננסים לא עודכנו. {kpis ? "מוצגת תמונת המצב האחרונה." : "אין תמונת מצב זמינה כרגע."}</p>}
       {/* Business KPI row */}
       {kpis && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiCard
-            label="MRR (חודשי)"
+            label="תחזית MRR חודשית"
             value={`₪${fmt(kpis.mrr)}`}
             accent
             sub={
-              kpis.personalMrr > 0
+              kpis.isOwner && kpis.personalMrr > 0
                 ? `₪${fmt(kpis.mrr - kpis.personalMrr)} פיוז'ן · ₪${fmt(kpis.personalMrr)} אישי`
                 : undefined
             }
           />
-          <KpiCard label="רווח חודשי" value={`₪${fmt(kpis.monthlyProfit)}`} />
+          <KpiCard label="הרווח החודשי הצפוי שלי" value={`₪${fmt(kpis.myProfit)}`} />
+          {kpis.isOwner && <KpiCard label="רווח אישי צפוי — שלי בלבד" value={kpis.personalProfit == null ? "—" : `₪${fmt(kpis.personalProfit)}`} />}
+          <KpiCard label="התקבל בפועל החודש" value={kpis.received == null ? "לא זמין" : `₪${fmt(kpis.received)}`} />
           <KpiCard
             label="העברה לרועי (אחרי הוצאות)"
             value={`₪${fmt(kpis.settlementTransfer ?? kpis.partnerShare)}`}
             href="/admin/partner-report"
           />
           <KpiCard label="לקוחות פעילים" value={fmt(kpis.fuzionClients)} />
-          <KpiCard label="לידים פתוחים" value={fmt(kpis.openLeads)} href="/admin/leads" />
-          <KpiCard label="עמלות ממתינות" value={`₪${fmt(kpis.sellerPending)}`} href="/admin/partners" />
+          <KpiCard label="לידים פתוחים" value={fmt(openLeads)} href="/admin/leads" />
+          <KpiCard label="עמלות ממתינות" value={`₪${fmt(sellerPending)}`} href="/admin/partners" />
         </div>
       )}
 
+      {kpis && kpis.forecastUnvaluedCount > 0 && <p className="text-sm text-amber-300">{kpis.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים — התחזית חלקית.</p>}
+      {kpis?.syncStale && <p className="text-sm text-amber-300">סנכרון התקבולים אינו מלא. הסכומים שהתקבלו בפועל עשויים להיות חלקיים.</p>}
+      {kpis && kpis.unvaluedCount > 0 && <p className="text-sm text-amber-300">{kpis.unvaluedCount} תקבולים ללא שווי בשקלים — סכומי התקבולים חלקיים.</p>}
       {/* Task ops stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => (

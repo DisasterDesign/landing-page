@@ -12,11 +12,13 @@ import {
   cardcomRecurringHistoryProviderDealId,
   recordVerifiedRecurringCharge,
 } from "@/lib/cardcom-recurring-charge";
-import { notifyAllAdmins, notifyOwner } from "@/lib/notifications";
+import { notifyFinanceAdmins, notifyOwner } from "@/lib/notifications";
 import { findUnlinkedOrders, summariseUnlinked } from "@/lib/cardcom/unlinked";
+import { syncCardcomLedger } from "@/lib/finance/sync";
+import type { FinanceBook } from "@prisma/client";
 import { listSuccessfulTransactions } from "@/lib/cardcom";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * Daily reconciliation against Cardcom — the pull half of the debtors report.
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
     where: { cardcomAccountId: { not: null } },
     select: {
       id: true,
+      financeBook: true,
       customerName: true,
       cardcomAccountId: true,
       cardcomRecurringId: true,
@@ -66,14 +69,19 @@ export async function GET(req: NextRequest) {
     errors: [] as string[],
   };
 
+  await prisma.financeSyncState.upsert({where:{key:"cardcom:transactions"},create:{key:"cardcom:transactions",status:"RUNNING",lastAttemptAt:now},update:{status:"RUNNING",lastAttemptAt:now,error:null}});
+  let ledger:Awaited<ReturnType<typeof syncCardcomLedger>>|null=null;
+  try{ledger=await syncCardcomLedger(fromDate,now);
+   if(ledger.unknown>0) await notifyOwner({type:"AGREEMENT_SIGNED",title:"תנועות סליקה דורשות שיוך",body:`${ledger.unknown} תנועות בחלון הסנכרון ללא שיוך כספי מאומת.`,url:"/admin/finance"});
+  }catch(error){summary.errors.push(`ledger: ${error instanceof Error?error.message:String(error)}`);}
+
   for (const a of agreements) {
     try {
       // ---- live order state --------------------------------------------
       const states = await getRecurringPaymentState(a.cardcomAccountId!);
       const state =
         states.find((s) => s.RecurringId === a.cardcomRecurringId) ??
-        states.find((s) => s.ReturnValue === a.id) ??
-        states[0];
+        states.find((s) => s.ReturnValue === a.id);
 
       if (state) {
         const wasActive = a.cardcomIsActive;
@@ -88,24 +96,25 @@ export async function GET(req: NextRequest) {
         // Notify once, on the transition — not every day the order stays off.
         if (state.IsActive === false && wasActive !== false) {
           summary.deactivations++;
-          await notifyAllAdmins({
+          await notifyFinanceAdmins({
             type: "AGREEMENT_SIGNED",
             title: `⚠️ הוראת קבע לא פעילה — ${a.customerName}`,
             body: `קארדקום מדווחת שההוראה כבויה (חיובים שבוצעו: ${state.NumOfPaymentsAlreadyCharged ?? "?"}). הלקוח ${a.client?.name ?? ""} לא יחויב עד שתטופל.`,
             url: "/admin/finance/debtors",
-          });
+          }, a.financeBook);
         }
       }
 
       // ---- charge history ----------------------------------------------
-      const history = await getRecurringPaymentHistory({
+      const history = ledger?.histories.get(a.cardcomAccountId!) ?? await getRecurringPaymentHistory({
         accountId: a.cardcomAccountId!,
         fromDate,
         toDate: now,
       });
 
       for (const row of history) {
-        await syncHistoryRow(a.id, a.customerName, row, summary);
+        if (a.cardcomRecurringId !== null && row.RecurringId !== a.cardcomRecurringId) continue;
+        await syncHistoryRow(a.id, a.customerName, a.financeBook, row, summary);
       }
     } catch (e) {
       summary.errors.push(`${a.customerName}: ${e instanceof Error ? e.message : String(e)}`);
@@ -133,6 +142,13 @@ export async function GET(req: NextRequest) {
     summary.errors.push(`unlinked sweep: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  const error=summary.errors.join("; ")||null;
+  const previousCoverage=await prisma.financeSyncState.findUnique({where:{key:"cardcom:transactions"}});
+  const contiguous=previousCoverage?.coveredFrom&&previousCoverage.coveredTo&&previousCoverage.coveredTo>=fromDate&&previousCoverage.coveredFrom<=now;
+  const coveredFrom=contiguous&&previousCoverage.coveredFrom!<fromDate?previousCoverage.coveredFrom!:fromDate;
+  const coveredTo=contiguous&&previousCoverage.coveredTo!>now?previousCoverage.coveredTo!:now;
+
+  await prisma.financeSyncState.update({where:{key:"cardcom:transactions"},data:error?{status:"FAILED",error}:{status:"SUCCESS",error:null,lastSuccessAt:now,coveredFrom,coveredTo,metadata:{transactions:ledger?.transactions??0,unknown:ledger?.unknown??0}}});
   return NextResponse.json(summary);
 }
 
@@ -141,6 +157,7 @@ const FAILURE_STATUSES = new Set(["DEBTAUTOBILLING", "LOSTDEBT", "ONHOLD"]);
 async function syncHistoryRow(
   agreementId: string,
   customerName: string,
+  financeBook: FinanceBook,
   row: RecurringHistoryRow,
   summary: { chargesCreated: number; chargesUpdated: number; failuresNotified: number }
 ) {
@@ -194,12 +211,12 @@ async function syncHistoryRow(
   // job exists to guarantee.
   if (result.reviewRequired) {
     summary.failuresNotified++;
-    await notifyAllAdmins({
+    await notifyFinanceAdmins({
       type: "AGREEMENT_SIGNED",
       title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
       body: `עסקה ${dealId} אומתה מול Cardcom, אך מקור רישום ההכנסה ההיסטורי אינו חד-משמעי.`,
       url: "/admin/finance/debtors",
-    }).catch((e) => console.error("[cardcom-reconcile] review notify failed:", e));
+    }, financeBook).catch((e) => console.error("[cardcom-reconcile] review notify failed:", e));
     return;
   }
   if (
@@ -208,12 +225,12 @@ async function syncHistoryRow(
       result.previousStatus !== row.Status)
   ) {
     summary.failuresNotified++;
-    await notifyAllAdmins({
+    await notifyFinanceAdmins({
       type: "AGREEMENT_SIGNED",
       title: `🚨 חיוב שלא הצליח התגלה בקארדקום — ${customerName}`,
       body: `סטטוס: ${row.Status} · קוד דחייה ${row.ResposeCode ?? "?"} · ₪${result.amount} (התגלה ב-reconciliation, לא הגיע webhook)`,
       url: "/admin/finance/debtors",
-    }).catch((e) => console.error("[cardcom-reconcile] failure notify failed:", e));
+    }, financeBook).catch((e) => console.error("[cardcom-reconcile] failure notify failed:", e));
   }
   // A charge the sweep merely confirms as collected is not news — see
   // src/lib/payments/recurring-notifications.ts.

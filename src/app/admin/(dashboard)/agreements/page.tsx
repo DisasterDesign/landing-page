@@ -1,10 +1,12 @@
 "use client";
 
+import AgreementArchiveControls, { useAgreementArchiveView } from "@/components/admin/AgreementArchiveControls";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { DEFAULT_OWNERSHIP_MONTHS, MAX_OWNERSHIP_MONTHS, MIN_OWNERSHIP_MONTHS } from "@/lib/agreements/ownership";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import FinanceBookSelect, { useFinanceOwner, type SelectableFinanceBook } from "@/components/admin/FinanceBookSelect";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import PullToRefresh from "@/components/ui/PullToRefresh";
@@ -21,6 +23,7 @@ type PaymentStatus = "PENDING" | "SENT" | "COMPLETED" | "FAILED" | "CANCELLED";
 interface Agreement {
   id: string;
   updatedAt: string;
+  archivedAt?: string | null;
   leadId?: string | null;
   tier: Tier | null;
   monthlyPrice: number;
@@ -102,6 +105,7 @@ interface ProductLite {
   name: string;
   monthlyAmount: number | null;
   agreementId: string | null;
+  financeBook?: string;
 }
 
 // A distinct contact identity under one paying client — each past agreement
@@ -128,6 +132,9 @@ interface ClientLite {
 }
 
 export default function AgreementsPage() {
+  const isOwner = useFinanceOwner();
+  const [financeBook, setFinanceBook] = useState<SelectableFinanceBook>("PRIVATE");
+  const { view: archiveView, setView: setArchiveView } = useAgreementArchiveView();
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -192,19 +199,23 @@ export default function AgreementsPage() {
   // called after `await fetch(...)` because the original user gesture is gone.
   const [linkModal, setLinkModal] = useState<{ url: string; title: string } | null>(null);
 
+  const archiveListRequest = useRef(0);
   const fetchList = useCallback(async () => {
+    const requestId = ++archiveListRequest.current;
     try {
-      const res = await fetch("/api/agreements");
+      const res = await fetch(`/api/agreements?archive=${archiveView}`, { cache: "no-store" });
       if (!res.ok) throw new Error();
       const json = await res.json();
-      setAgreements(json.data || []);
-      setCanCorrectName(json.canCorrectBusinessName === true);
+      if (requestId === archiveListRequest.current) {
+        setAgreements(json.data || []);
+        setCanCorrectName(json.canCorrectBusinessName === true);
+      }
     } catch {
       toast.error("שגיאה בטעינת הסכמים");
     } finally {
-      setLoading(false);
+      if (requestId === archiveListRequest.current) setLoading(false);
     }
-  }, []);
+  }, [archiveView]);
 
   const fetchClients = useCallback(async () => {
     try {
@@ -362,6 +373,7 @@ export default function AgreementsPage() {
   }, [agreements, focusAgreementId, loading, router]);
 
   const resetForm = () => {
+    setFinanceBook("PRIVATE");
     setTierChoice("ADVANCED");
     setMonthlyPrice(String(TIER_PRICE.ADVANCED));
     setOneTimeFee("");
@@ -451,6 +463,8 @@ export default function AgreementsPage() {
     // almost always mean a NEW project is being sold. Both stay overridable.
     const prods = c.products ?? [];
     setProductChoice(prods.length === 1 ? prods[0].id : "new");
+    const productBook = prods.length === 1 ? prods[0].financeBook : undefined;
+    if (productBook === "PRIVATE" || productBook === "SHARED") setFinanceBook(productBook);
 
     const profiles = contactProfilesFor(id);
     if (profiles.length > 1) {
@@ -547,6 +561,7 @@ export default function AgreementsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isOwner ? { financeBook } : {}),
           tier: tierChoice === "CUSTOM" ? null : tierChoice,
           additionalServices,
           monthlyPrice: monthly,
@@ -753,6 +768,8 @@ export default function AgreementsPage() {
         </button>
       </div>
 
+      <AgreementArchiveControls kind="SUBSCRIPTION" isOwner={isOwner} view={archiveView} onViewChange={setArchiveView} onChanged={fetchList} />
+
       {/* Mobile card list */}
       <div className="md:hidden space-y-3">
         {agreements.length === 0 ? (
@@ -785,7 +802,7 @@ export default function AgreementsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}{a.archivedAt ? " · בארכיון" : ""}</Badge>
                 <Badge variant={PAYMENT_VARIANT[a.paymentStatus]}>
                   {PAYMENT_LABEL[a.paymentStatus]}
                 </Badge>
@@ -919,7 +936,7 @@ export default function AgreementsPage() {
                   <td className="px-3 py-2.5 font-mono text-white">{a.monthlyPrice} ₪</td>
                   <td className="px-3 py-2.5 font-mono text-gray-300">{a.oneTimeFee ? `${a.oneTimeFee} ₪` : "—"}</td>
                   <td className="px-3 py-2.5">
-                    <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                    <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}{a.archivedAt ? " · בארכיון" : ""}</Badge>
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-col items-start gap-0.5">
@@ -1060,6 +1077,7 @@ export default function AgreementsPage() {
       {/* Create modal */}
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="הסכם חדש">
         <form onSubmit={handleCreate} className="space-y-4" dir="rtl">
+          {isOwner && <FinanceBookSelect value={financeBook} onChange={setFinanceBook} />}
           <div>
             <label className="block text-sm text-gray-400 mb-2">סוג ההסכם *</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
@@ -1280,7 +1298,11 @@ export default function AgreementsPage() {
               <label className="block text-sm text-gray-400 mb-1">שיוך למוצר</label>
               <select
                 value={productChoice}
-                onChange={(e) => setProductChoice(e.target.value)}
+                onChange={(e) => {
+                  setProductChoice(e.target.value);
+                  const book = clientsList.find((client) => client.id === clientId)?.products?.find((product) => product.id === e.target.value)?.financeBook;
+                  if (book === "PRIVATE" || book === "SHARED") setFinanceBook(book);
+                }}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-white outline-none focus:border-pink"
               >
                 <option value="new">➕ מוצר חדש</option>
@@ -1445,7 +1467,7 @@ export default function AgreementsPage() {
       >
         {viewing && (
           <>
-          {canCorrectName && ["DRAFT", "SENT"].includes(viewing.status) && !viewing.signedAt && <button onClick={openCorrection} className="mb-4 text-cyan underline">תיקון שם העסק</button>}
+          {canCorrectName && !viewing.archivedAt && ["DRAFT", "SENT"].includes(viewing.status) && !viewing.signedAt && <button onClick={openCorrection} className="mb-4 text-cyan underline">תיקון שם העסק</button>}
           <iframe
             srcDoc={viewing.content}
             sandbox=""

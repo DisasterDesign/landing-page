@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useFinanceOwner } from "@/components/admin/FinanceBookSelect";
+import { startVisibleRefresh } from "@/lib/admin/dashboard-refresh";
 import {
   BarChart,
   Bar,
@@ -13,6 +15,7 @@ import {
 } from "recharts";
 
 interface ClientProduct {
+  financeBook?: string;
   name: string;
   monthlyAmount: number | null;
   status: string;
@@ -51,6 +54,7 @@ interface MonthlyReceipt {
   revenue: number;
   expenses: number;
   profit: number;
+  unvaluedCount?: number;
 }
 
 // The receipts view gets VAT and the Cardcom fee applied server-side
@@ -129,6 +133,13 @@ function CustomTooltip({
 }
 
 export default function RevenueChart() {
+  const isOwner = useFinanceOwner();
+  const [book, setBook] = useState("");
+  const [receiptsReady, setReceiptsReady] = useState(false);
+  const [clientsReady, setClientsReady] = useState(false);
+  const [receiptsError, setReceiptsError] = useState(false);
+  const [clientsError, setClientsError] = useState(false);
+  const [syncStale, setSyncStale] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [receipts, setReceipts] = useState<MonthlyReceipt[]>([]);
   const [trackedFrom, setTrackedFrom] = useState<string | null>(null);
@@ -141,39 +152,43 @@ export default function RevenueChart() {
   const [viewMode, setViewMode] = useState<"received" | "newMrr">("received");
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/clients");
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setClients(data.data ?? []);
-      } catch (err) {
-        console.error("Failed to fetch clients:", err);
-      } finally {
-        setLoading(false);
+    const poller = startVisibleRefresh(async (signal) => {
+      const read = async (path: string) => {
+        const res = await fetch(path, { cache: "no-store", signal });
+        if (!res.ok) throw new Error(`${path}: ${res.status}`);
+        return res.json();
+      };
+      const results = await Promise.allSettled([
+        read("/api/clients"),
+        read(`/api/revenue/monthly?months=${windowMonths}${book ? `&book=${book}` : ""}`),
+      ]);
+      if (signal.aborted) return;
+      const [clientsRes, receiptsRes] = results;
+      if (clientsRes.status === "fulfilled") {
+        if (Array.isArray(clientsRes.value.data)) {
+          setClients(clientsRes.value.data);
+          setClientsReady(true);
+          setClientsError(false);
+        } else setClientsError(true);
       }
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/revenue/monthly?months=${windowMonths}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error();
-        const payload = (await res.json()) as {
-          data: MonthlyReceipt[];
-          trackedFrom: string | null;
-        };
-        setReceipts(payload.data ?? []);
-        setTrackedFrom(payload.trackedFrom ?? null);
-      } catch (err) {
-        console.error("Failed to fetch monthly receipts:", err);
-        setReceipts([]);
+      if (receiptsRes.status === "fulfilled") {
+        if (Array.isArray(receiptsRes.value.data)) {
+          setReceipts(receiptsRes.value.data);
+          setTrackedFrom(receiptsRes.value.trackedFrom ?? null);
+          setSyncStale(receiptsRes.value.partial === true || receiptsRes.value.coverage?.status !== "SUCCESS");
+          setReceiptsReady(true);
+          setReceiptsError(false);
+        } else setReceiptsError(true);
       }
-    })();
-  }, [windowMonths]);
+      if (clientsRes.status === "rejected") setClientsError(true);
+      if (receiptsRes.status === "rejected") setReceiptsError(true);
+      for (const result of results) {
+        if (result.status === "rejected") console.error("Failed to load revenue chart:", result.reason);
+      }
+      setLoading(false);
+    });
+    return () => poller.stop();
+  }, [windowMonths, book]);
 
   const monthlyData: MonthData[] = useMemo(() => {
     const today0 = new Date();
@@ -223,6 +238,8 @@ export default function RevenueChart() {
     // pre-migration data still lands somewhere sensible.
     for (const c of clients) {
       for (const p of c.products ?? []) {
+        if (book === "personal" && p.financeBook !== "PRIVATE") continue;
+        if (book === "fuzion" && p.financeBook !== "SHARED") continue;
         if (p.status !== "בוצע") continue; // not billing → not new MRR
         const dateStr = p.startDate ?? c.startDate ?? p.createdAt ?? c.createdAt;
         const d = new Date(dateStr);
@@ -248,7 +265,7 @@ export default function RevenueChart() {
         isCurrent: key === currentKey,
       };
     });
-  }, [clients, receipts, windowMonths, viewMode]);
+  }, [clients, receipts, windowMonths, viewMode, book]);
 
   // Summary stats from the visible window
   const stats = useMemo(() => {
@@ -287,7 +304,11 @@ export default function RevenueChart() {
     );
   }
 
-  const hasAnyRevenue = monthlyData.some((m) => m.revenue > 0);
+  const hasData = viewMode === "received" ? receiptsReady : clientsReady;
+  const refreshFailed = viewMode === "received" ? receiptsError : clientsError;
+  const unvaluedCount = receipts.reduce((sum, month) => sum + (month.unvaluedCount ?? 0), 0);
+  const unvaluedProducts = clients.flatMap((client) => client.products ?? []).filter((product) => product.status === "בוצע" && product.monthlyAmount == null && (book === "personal" ? product.financeBook === "PRIVATE" : book === "fuzion" ? product.financeBook === "SHARED" : true)).length;
+  const hasAnyRevenue = monthlyData.some((m) => m.revenue !== 0);
 
   return (
     <div dir="rtl" className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
@@ -298,13 +319,16 @@ export default function RevenueChart() {
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {viewMode === "received"
-              ? `כסף שהתקבל בפועל — חיובי מנוי + עבודות ששולמו, לפי חודש התשלום${
+              ? `כסף שהתקבל בפועל — לאחר מע״מ, עמלת סליקה משוערת והוצאות ששולמו ותועדו${
                   trackedFrom ? ` (מתועד מ-${monthLabel(trackedFrom)})` : ""
                 }`
               : "סכום חודשי של מוצרים שנכנסו לתשלום באותו חודש"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+        {isOwner && <select aria-label="ספר הכנסות" value={book} onChange={(event) => { setBook(event.target.value); setReceiptsReady(false); }} className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-white">
+          <option value="">הכול</option><option value="personal">שלי בלבד</option><option value="fuzion">השותפות</option>
+        </select>}
         <div className="flex bg-gray-800 rounded-xl p-1 text-xs">
           {([["received", "תקבולים"], ["newMrr", "MRR חדש"]] as const).map(([mode, label]) => (
             <button
@@ -336,7 +360,11 @@ export default function RevenueChart() {
         </div>
       </div>
 
+      {(refreshFailed || (viewMode === "received" && syncStale)) && <p role="alert" className="text-sm text-amber-300 mb-4">{refreshFailed ? "טעינת הנתונים נכשלה." : "הסנכרון אינו מכסה את כל התקופה. חודשים חסרים אינם מעידים על אפס הכנסה."} {hasData ? "מוצגים הנתונים האחרונים שהתקבלו." : "הסכומים אינם זמינים כרגע."}</p>}
+      {viewMode === "received" && unvaluedCount > 0 && <p className="text-sm text-amber-300 mb-4">{unvaluedCount} תקבולים ללא שווי בשקלים אינם נכללים. הסכומים חלקיים.</p>}
+      {viewMode === "newMrr" && unvaluedProducts > 0 && <p className="text-sm text-amber-300 mb-4">{unvaluedProducts} מוצרים ללא סכום חודשי בשקלים אינם נכללים. התחזית חלקית.</p>}
       {/* Summary cards */}
+      {hasData && <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <SummaryCard
           label="סה״כ בחלון"
@@ -347,7 +375,7 @@ export default function RevenueChart() {
           value={`${formatCurrency(stats.avgMonthly)} ₪`}
         />
         <SummaryCard
-          label="רווח נקי"
+          label={viewMode === "received" ? "לאחר הוצאות שתועדו" : "רווח צפוי"}
           value={`${formatCurrency(stats.totalProfit)} ₪`}
           valueColor={stats.totalProfit >= 0 ? "text-green-400" : "text-red-400"}
         />
@@ -403,10 +431,12 @@ export default function RevenueChart() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <p className="text-sm">אין הכנסות בחלון הזמן הזה</p>
-          <p className="text-xs">הוסף לקוחות עם תאריך התחלה ב-{windowMonths} החודשים האחרונים</p>
+          <p className="text-xs">{viewMode === "received" ? "לא נמצאו תקבולים מתועדים בתקופה הזאת" : "לא נוספו מוצרים מחויבים בתקופה הזאת"}</p>
         </div>
       )}
 
+      </>}
+      {!hasData && <p className="text-sm text-gray-400 py-10 text-center">{refreshFailed ? "אין נתונים זמינים להצגה" : "טוען נתונים לתצוגה שנבחרה…"}</p>}
       <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm bg-gray-900" />

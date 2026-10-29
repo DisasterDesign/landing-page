@@ -1,10 +1,9 @@
+import { financeClientScope, financeProductScope, financeAgreementScope, redactFinanceClient } from "@/lib/finance/access";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  PersistedRoleAuthorizationError,
-  requirePersistedUserRole,
-} from "@/lib/auth/persisted-role";
+import { PersistedRoleAuthorizationError, requirePersistedUserRole } from "@/lib/auth/persisted-role";
 import { CLIENT_PRODUCT_SELECT, syncClientMonthly } from "@/lib/client-products";
 import { decideClientDeletion } from "@/lib/clients/deletion";
 
@@ -18,15 +17,20 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleClient = await prisma.client.findFirst({ where: { id, ...financeClientScope(viewer) }, select: { id: true } });
+    if (!visibleClient) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const client = await prisma.client.findUnique({
       where: { id },
       include: {
         agreements: {
+          where: financeAgreementScope(viewer),
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
+            financeBook: true,
             tier: true,
             monthlyPrice: true,
             oneTimeFee: true,
@@ -39,14 +43,14 @@ export async function GET(
             signToken: true,
           },
         },
-        clientNotes: {
+        clientNotes: viewer.isOwner ? {
           orderBy: { createdAt: "desc" },
           include: {
             author: { select: { id: true, name: true, avatarUrl: true } },
           },
-        },
+        } : false,
         products: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, ...financeProductScope(viewer) },
           select: CLIENT_PRODUCT_SELECT,
           orderBy: { createdAt: "asc" },
         },
@@ -57,8 +61,10 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json(client);
+    return NextResponse.json(redactFinanceClient(viewer, client));
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -80,9 +86,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleClient = await prisma.client.findFirst({ where: { id, ...financeClientScope(viewer) }, select: { id: true } });
+    if (!visibleClient) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const body = await request.json();
+    if (!viewer.isOwner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const updateData: Record<string, unknown> = {};
     if ("name" in body) updateData.name = body.name;
@@ -111,10 +121,11 @@ export async function PATCH(
       const value =
         body.monthlyAmount !== null && body.monthlyAmount !== "" ? parseFloat(body.monthlyAmount) : null;
       if (products.length === 1) {
-        await prisma.clientProduct.update({
-          where: { id: products[0].id },
+        const updated = await prisma.clientProduct.updateMany({
+          where: { id: products[0].id, monthlyPriceVersion: 0 },
           data: { monthlyAmount: value },
         });
+        if (updated.count !== 1) return NextResponse.json({ error: "יש לערוך מחיר מתועד דרך תיקון מחיר ברמת המוצר" }, { status: 409 });
         rolledMonthly = await syncClientMonthly(id);
       } else {
         updateData.monthlyAmount = value;
@@ -158,6 +169,8 @@ export async function PATCH(
       rolledMonthly !== null ? { ...client, monthlyAmount: rolledMonthly } : client
     );
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -179,8 +192,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
+    const viewer = await requireAdmin();
 
     const { id } = await params;
+    const visibleClient = await prisma.client.findFirst({ where: { id, ...financeClientScope(viewer) }, select: { id: true } });
+    if (!visibleClient) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (!viewer.isOwner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // A client with any financial trace is ARCHIVED, never deleted. This
     // route hard-deleted סולל בונה in Aug 2026 and onDelete: Cascade took
@@ -221,6 +239,8 @@ export async function DELETE(
     await prisma.client.delete({ where: { id } });
     return NextResponse.json({ success: true, action: "deleted" });
   } catch (error) {
+    const financeError = viewerErrorResponse(error);
+    if (financeError) return financeError;
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

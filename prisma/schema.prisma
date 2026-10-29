@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum FinanceBook {
+  PRIVATE
+  SHARED
+  UNASSIGNED
+}
+
 enum Role {
   ADMIN
   MEMBER
@@ -287,7 +293,26 @@ enum BlogPostStatus {
   ARCHIVED
 }
 
+// No secrets/tokens are stored. Provision only after explicit user approval.
+model McpAccessGrant {
+  id        String @id @default(cuid())
+  issuer    String
+  subject   String
+  clientId  String
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes    String[]
+  notBefore DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([issuer, subject, clientId])
+  @@index([userId])
+}
+
 model User {
+  mcpGrants McpAccessGrant[]
   id                 String   @id @default(cuid())
   email              String   @unique
   /// Optional login handle for admin-provisioned users (e.g. sellers) who
@@ -333,6 +358,9 @@ model User {
   leadInteractions        LeadInteraction[]
   ownedLeadFollowUps      LeadFollowUp[]        @relation("LeadFollowUpOwner")
   createdLeadFollowUps    LeadFollowUp[]        @relation("LeadFollowUpCreator")
+  archivedAgreements      Agreement[] @relation("AgreementArchiver")
+  agreementArchiveEvents  AgreementArchiveEvent[]
+  productPriceRevisions   ClientProductPriceRevision[]
   partnerAgreements       Agreement[]           @relation("AgreementPartner")
   creditedAgreements      Agreement[]           @relation("AgreementCreditedSeller")
   commissions             SellerCommission[]    @relation("SellerCommissions")
@@ -944,14 +972,22 @@ model Client {
 // monthlyAmount is now a denormalised mirror of SUM(products.monthlyAmount)
 // kept in sync so legacy readers and the Cardcom webhook keep working.
 model ClientProduct {
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id            String    @id @default(cuid())
   clientId      String
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name          String
   websiteUrl    String?
-  // Gross recurring for THIS product. Null = agreed but not billing yet
-  // (e.g. a system that is built but the client has not started paying for).
+  // ILS gross recurring valuation for THIS product. Null = unvalued in ILS;
+  // original-currency price may still be known. Status controls billing.
   monthlyAmount Float?
+  // Original monthly gross; monthlyAmount remains the ILS valuation. Foreign
+  // prices have no ILS valuation until an explicitly sourced FX flow exists.
+  monthlyOriginalAmount Float?
+  monthlyOriginalCurrency String?
+  monthlyPriceVersion Int @default(0)
+  priceRevisions ClientProductPriceRevision[]
   // Strategy lane per PRODUCT, not per client — the bet/floor ratio is
   // meaningless at client level once one client runs both a store and a
   // brochure site. "bet" = e-commerce, "floor" = landing/brochure.
@@ -971,6 +1007,26 @@ model ClientProduct {
   @@index([archivedAt])
 }
 
+// Append-only through the business API; undo appends a compensating revision.
+model ClientProductPriceRevision {
+  id String @id @default(cuid())
+  productId String
+  product ClientProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actorId String
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  version Int
+  action String
+  reason String
+  source String
+  before Json
+  after Json
+  restoredFromId String?
+  occurredAt DateTime @default(now())
+
+  @@unique([productId, version])
+  @@index([productId, occurredAt])
+}
+
 enum JobStatus {
   PENDING // billed / closed, awaiting payment
   PAID
@@ -983,6 +1039,8 @@ enum JobStatus {
 // days after the end of the month the job closed). Income lands in the month
 // `paidAt` falls in — see src/lib/finance.ts jobFinance().
 model ClientJob {
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id               String    @id @default(cuid())
   clientId         String
   client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -1026,6 +1084,12 @@ enum ExpenseFrequency {
 // Hetzner server). `amount` is in the ORIGINAL billing currency — ILS
 // normalization happens at read time via src/lib/finance.ts rates.
 model Expense {
+  /// Partnership allocation, 0..10000 basis points. Null uses financeBook.
+  sharedBasisPoints Int?
+  /// Optional resource-level attribution, validated by the financial service.
+  clientProductId String?
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id        String           @id @default(cuid())
   name      String
   vendor    String
@@ -1063,6 +1127,14 @@ model ClientNote {
 }
 
 model Agreement {
+  archivedAt       DateTime?
+  archivedById     String?
+  archivedBy       User? @relation("AgreementArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
+  archiveReason    String?
+  archiveVersion   Int @default(0)
+  archiveEvents    AgreementArchiveEvent[]
+  /// Immutable attribution snapshot; never inferred from the typing user.
+  financeBook FinanceBook @default(UNASSIGNED)
   id                 String          @id @default(cuid())
   tier               AgreementTier? // base tier (required for new agreements; nullable for legacy rows)
   kind               AgreementKind  @default(SUBSCRIPTION)
@@ -1159,6 +1231,7 @@ model Agreement {
 
   charges AgreementCharge[]
 
+  @@index([archivedAt, kind])
   @@index([status])
   @@index([clientId])
   @@index([leadId])
@@ -1169,6 +1242,22 @@ model Agreement {
   @@index([partnerId])
   @@index([creditedSellerId])
   @@index([createdBy])
+}
+
+// Visibility-only audit. Financial and lead event histories remain independent.
+model AgreementArchiveEvent {
+  id          String @id @default(cuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  actorId     String
+  actor       User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action      String
+  reason      String
+  occurredAt  DateTime @default(now())
+  version     Int
+
+  @@unique([agreementId, version])
+  @@index([agreementId, occurredAt])
 }
 
 model AgreementCharge {
@@ -1339,4 +1428,65 @@ model KeyValue {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+
+// Provider cash evidence also covers legacy clients without an app agreement.
+// Scalar links intentionally preserve the transaction when a business record is archived.
+model FinanceTransaction {
+  id                    String      @id @default(cuid())
+  provider              String
+  terminalId            String
+  providerTransactionId String
+  kind                  String      @default("CHARGE")
+  amountMinor           Int
+  currency              String
+  ilsAmountMinor        Int?
+  // Signed VAT from the original receipt/document, in ILS minor units.
+  vatIlsMinor           Int?
+  occurredAt            DateTime
+  financeBook           FinanceBook @default(UNASSIGNED)
+  clientId              String?
+  clientProductId       String?
+  agreementId           String?
+  invoiceNumber         String?
+  accountId             Int?
+  recurringId           Int?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@unique([provider, terminalId, providerTransactionId, kind])
+  @@index([financeBook, occurredAt])
+  @@index([clientId, occurredAt])
+}
+
+model FinanceSyncState {
+  key           String   @id
+  status        String
+  lastAttemptAt DateTime
+  lastSuccessAt DateTime?
+  coveredFrom   DateTime?
+  coveredTo     DateTime?
+  error         String?
+  metadata      Json?
+}
+
+// Immutable evidence of money paid, distinct from recurring expense forecasts.
+model FinanceExpensePayment {
+  id String @id @default(cuid())
+  expenseId String
+  paymentKey String @unique
+  amountIlsMinor Int
+  paidAt DateTime
+  financeBook FinanceBook @default(UNASSIGNED)
+  sharedBasisPoints Int?
+  clientId String?
+  clientProductId String?
+  paidById String
+  frequency ExpenseFrequency @default(ONE_TIME)
+  reference String?
+  source String @default("MANUAL")
+  createdAt DateTime @default(now())
+  @@index([financeBook, paidAt])
+  @@index([expenseId, paidAt])
 }

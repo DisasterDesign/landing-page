@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { financeAgreementScope, requireBookSelection, requireUnpaidBookChange } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import { updateOneTimeQuoteSchema } from "@/lib/validations";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { planQuoteEdit } from "@/lib/agreements/quote-edit";
 import { updateAgreementDraftFields } from "@/lib/leads/agreement-lifecycle";
 import { LeadDomainError } from "@/lib/leads/errors";
@@ -26,7 +27,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const viewer = await requireOwner();
+    const viewer = await requireAdmin();
     const { id } = await params;
 
     const body = await request.json();
@@ -38,11 +39,14 @@ export async function PATCH(
       );
     }
 
-    const existing = await prisma.agreement.findUnique({
-      where: { id },
+    const existing = await prisma.agreement.findFirst({
+      where: { id, ...financeAgreementScope(viewer) },
       select: {
         updatedAt: true,
         kind: true,
+        financeBook: true,
+        paidAt: true,
+        _count: { select: { charges: true } },
         status: true,
         projectTitle: true,
         customerName: true,
@@ -57,6 +61,11 @@ export async function PATCH(
       },
     });
 
+    const financeBook = existing ? requireBookSelection(viewer, body.financeBook, existing.financeBook) : undefined;
+    if (existing && financeBook) {
+      const receipts = await prisma.financeTransaction.count({ where: { agreementId: id } });
+      requireUnpaidBookChange(existing.financeBook, financeBook, Boolean(existing.paidAt) || existing._count.charges > 0 || receipts > 0);
+    }
     const plan = planQuoteEdit(existing, parsed.data);
     if (plan.kind === "refuse") {
       return NextResponse.json({ error: plan.error }, { status: plan.status });
@@ -74,7 +83,7 @@ export async function PATCH(
       expectedUpdatedAt: existing?.updatedAt.toISOString(),
       agreementId: id,
       actor: { userId: viewer.userId, role: "ADMIN" },
-      data: { ...plan.data, content, documentVersion: AGREEMENT_DOCUMENT_VERSION },
+      data: { ...plan.data, financeBook, content, documentVersion: AGREEMENT_DOCUMENT_VERSION },
     });
 
     return NextResponse.json({

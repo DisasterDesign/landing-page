@@ -1,3 +1,4 @@
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -40,6 +41,7 @@ export async function POST(
   }
   try {
     const { id } = await params;
+    await requireFinanceLeadAccess(session.user.id, id);
     const { reason, ...details } = parsed.data;
     const lead = await updateLeadContactDetails({
       leadId: id,

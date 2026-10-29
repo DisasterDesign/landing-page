@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -16,6 +18,7 @@ export async function GET(
     }
 
     const { id } = await params;
+    await requireFinanceTaskAccess(await getViewer(), id);
 
     const task = await prisma.task.findUnique({
       where: { id },
@@ -42,6 +45,7 @@ export async function GET(
 
     return NextResponse.json(task);
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error fetching task:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -61,6 +65,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    await requireFinanceTaskAccess(await getViewer(), id);
     const body = await request.json();
     const parsed = updateTaskSchema.safeParse(body);
 
@@ -117,6 +122,7 @@ export async function PATCH(
 
     return NextResponse.json(task);
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error updating task:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -136,9 +142,11 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    await requireFinanceTaskAccess(await getViewer(), id);
     await prisma.task.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error deleting task:", error);
     return NextResponse.json(
       { error: "Internal server error" },

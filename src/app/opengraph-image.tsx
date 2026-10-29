@@ -1,9 +1,12 @@
-import { renderOgImage, OG_IMAGE_SIZE, OG_IMAGE_CONTENT_TYPE, OG_IMAGE_ALT } from "@/lib/og-image";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { OG_IMAGE_SIZE, OG_IMAGE_ALT, OG_MARKETING_IMAGE_PATH } from "@/lib/og-image";
 
 export const alt = OG_IMAGE_ALT;
 export const size = OG_IMAGE_SIZE;
-export const contentType = OG_IMAGE_CONTENT_TYPE;
+export const contentType = "image/jpeg";
 
-export default function Image() {
-  return renderOgImage();
+export default async function Image() {
+  const image = await readFile(join(process.cwd(), "public", OG_MARKETING_IMAGE_PATH));
+  return new Response(image, { headers: { "Content-Type": contentType } });
 }

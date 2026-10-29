@@ -1,8 +1,10 @@
+import { archiveVisibilityWhere, archiveProtectedIds } from "@/lib/agreements/archive-visibility";
 import { NextRequest, NextResponse } from "next/server";
 
+import { financeAgreementScope, requireBookSelection } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import { createOneTimeQuoteSchema } from "@/lib/validations";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { quoteJobInput, quoteBodyHtml, scopeFromBodyHtml } from "@/lib/agreements/one-time";
 import { jobFinance, expectedPaymentDate } from "@/lib/finance";
 import { createStandaloneAgreement } from "@/lib/leads/agreement-lifecycle";
@@ -20,16 +22,18 @@ import {
  * docs/superpowers/specs/2026-08-10-one-time-project-quotes-design.md
  */
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireOwner();
+    const viewer = await requireAdmin();
 
     const quotes = await prisma.agreement.findMany({
-      where: { kind: "ONE_TIME" },
+      where: { kind: "ONE_TIME", AND: [financeAgreementScope(viewer), await archiveVisibilityWhere(prisma, request.nextUrl.searchParams.get("archive"), financeAgreementScope(viewer))] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
+        archivedAt: true,
         projectTitle: true,
+        financeBook: true,
         customerName: true,
         businessName: true,
         phone: true,
@@ -51,6 +55,7 @@ export async function GET() {
       },
     });
 
+    const protectedIds = new Set(await archiveProtectedIds(prisma, financeAgreementScope(viewer), quotes.map(q => q.id)));
     const now = new Date();
     const rows = quotes.map((q) => {
       const base = quoteJobInput(q);
@@ -58,6 +63,7 @@ export async function GET() {
       const expected = expectedPaymentDate(base.closedAt, base.paymentTermsDays);
       return {
         ...base,
+        financeBook: q.financeBook,
         ...money,
         closedAt: base.closedAt.toISOString(),
         paidAt: base.paidAt ? base.paidAt.toISOString() : null,
@@ -67,6 +73,8 @@ export async function GET() {
         overdue: false,
         notes: null,
         agreementStatus: q.status,
+        archiveProtected: protectedIds.has(q.id),
+        archivedAt: q.archivedAt?.toISOString() ?? null,
         paymentStatus: q.paymentStatus,
         signToken: q.signToken,
         phone: q.phone,
@@ -96,7 +104,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const viewer = await requireOwner();
+    const viewer = await requireAdmin();
 
     const body = await request.json();
     const parsed = createOneTimeQuoteSchema.safeParse(body);
@@ -107,6 +115,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const q = parsed.data;
+    const financeBook = requireBookSelection(viewer, body.financeBook, viewer.isOwner ? "PRIVATE" : "SHARED");
 
     // The sign page renders `agreement.content`, and renderAgreement only runs
     // again at signing — so a draft created with an empty content field shows
@@ -142,6 +151,7 @@ export async function POST(request: NextRequest) {
       actor: { userId: viewer.userId, role: "ADMIN" },
       agreement: {
         kind: q.kind,
+        financeBook,
         projectTitle: q.projectTitle,
         // Zero monthly is what keeps BillGold out: the recurring gate in the
         // payment webhook requires monthlyPrice > 0.

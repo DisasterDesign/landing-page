@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { financeTaskScope } from "@/lib/finance/task-access";
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 import type { NotificationType } from "@prisma/client";
@@ -83,10 +85,24 @@ function persistedNotificationInput(
   };
 }
 
+async function notificationRecipientCanRead(input: CreateNotificationInput): Promise<boolean> {
+  if (!input.leadId && !input.taskId) return true;
+  const recipient = await prisma.user.findUnique({ where: { id: input.recipientId }, select: { id: true, isOwner: true, role: true, revenueSharePct: true } });
+  if (!recipient) return false;
+  if (recipient.isOwner) return true;
+  if (input.leadId && await prisma.agreement.count({ where: { leadId: input.leadId, financeBook: { not: "SHARED" } } }) > 0) return false;
+  if (input.taskId) {
+    const scope = await financeTaskScope({ userId: recipient.id, isOwner: recipient.isOwner, role: recipient.role, revenueSharePct: recipient.revenueSharePct });
+    return Boolean(await prisma.task.findFirst({ where: { AND: [{ id: input.taskId }, scope] }, select: { id: true } }));
+  }
+  return true;
+}
+
 export async function sendNotificationPush(
   input: CreateNotificationInput,
 ): Promise<void> {
   try {
+    if (!(await notificationRecipientCanRead(input))) return;
     await sendPushToUser(input.recipientId, {
       title: input.title,
       body: input.body,
@@ -161,9 +177,9 @@ export async function createNotification(
   actorId?: string
 ): Promise<void> {
   if (actorId && input.recipientId === actorId) return;
-
   let created = false;
   try {
+    if (!(await notificationRecipientCanRead(input))) return;
     ({ created } = await createNotificationOnce(input));
   } catch (err) {
     console.error("Failed to create notification:", err);
@@ -235,4 +251,16 @@ export async function notifyAllSellers(
       createNotification({ ...input, recipientId: s.id }, actorId),
     ),
   );
+}
+
+/** Fail closed: unmatched activity, PRIVATE and UNASSIGNED only reach persisted owners. */
+export async function notifyFinanceAdmins(
+ input: Omit<CreateNotificationInput, "recipientId">,
+ financeBook: unknown,
+ actorId?: string,
+): Promise<void> {
+ const shared = financeBook === "SHARED";
+ const recipients = await prisma.user.findMany({ where: shared ? { role: "ADMIN" } : { isOwner: true }, select: { id: true } });
+ const eventKey = input.dedupeKey ?? randomUUID();
+ await Promise.all(recipients.map(recipient => createNotification({ ...input, recipientId: recipient.id, dedupeKey: `finance:${shared ? "SHARED" : "OWNER"}:${recipient.id}:${eventKey}` }, actorId)));
 }

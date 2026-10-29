@@ -823,6 +823,7 @@ async function cardcomGetWithBody<T>(path: string, payload: object): Promise<T> 
         });
       }
     );
+    req.setTimeout(15_000, () => req.destroy(new CardcomError(`Cardcom ${path} read timed out`)));
     req.on("error", (e) => reject(new CardcomError(`Cardcom ${path} request failed: ${String(e)}`)));
     req.write(body);
     req.end();
@@ -906,7 +907,17 @@ export async function getRecurringPaymentState(accountId: number): Promise<Recur
 
 /** A failed transaction from the terminal-wide sweep (ListTransactions). */
 export interface FailedTransaction {
+  DocumentType?: number | string;
+  IsRefund?: boolean;
   TranzactionId: number;
+  AccountId?: number;
+  RecurringId?: number;
+  CoinId?: number;
+  ISOCoinId?: number;
+  Currency?: string;
+  AmountILS?: number;
+  AmountInILS?: number;
+  DocumentNumber?: number | string;
   Amount: number;
   CreateDate: string;
   CardOwnerName?: string;
@@ -944,6 +955,7 @@ export async function listTransactionsByStatus(input: {
   for (let page = 1; page <= MAX_PAGES; page++) {
     const res = await fetch(`${CARDCOM_BASE}/Transactions/ListTransactions`, {
       method: "POST",
+      signal: AbortSignal.timeout(15_000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ApiName: cfg.apiName,
@@ -968,9 +980,9 @@ export async function listTransactionsByStatus(input: {
     }
     const rows = json.Tranzactions ?? [];
     all.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) return all;
   }
-  return all;
+  throw new CardcomError("ListTransactions exceeded page coverage limit; sync incomplete");
 }
 
 /** Terminal-wide failed transactions — the debt side of the sweep. */

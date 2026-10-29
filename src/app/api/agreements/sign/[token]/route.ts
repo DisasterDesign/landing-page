@@ -6,7 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { signAgreementSchema } from "@/lib/validations";
 import { renderAgreement, AGREEMENT_DOCUMENT_VERSION } from "@/lib/agreement-templates";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyFinanceAdmins } from "@/lib/notifications";
 import { ensurePaymentUrlForAgreement } from "@/lib/payments";
 import { shouldProvisionClient } from "@/lib/agreements/one-time";
 import {
@@ -158,6 +158,7 @@ export async function POST(
         ? null
         : await ensureClientForAgreement(transaction, {
         currentClientId: existing.clientId,
+        financeBook: existing.financeBook,
         customerName,
         businessName,
         idNumber,
@@ -238,11 +239,11 @@ export async function POST(
       : "מותאם אישית";
 
     if (signed.newlySigned) {
-      await notifyAllAdmins({
+      await notifyFinanceAdmins({
         type: "AGREEMENT_SIGNED",
         title: `הסכם נחתם — ${agreement.customerName}`,
         body: `מסלול ${tierLabel} · ${agreement.monthlyPrice.toLocaleString("he-IL")} ₪/חודש`,
-      });
+      }, agreement.financeBook);
     }
 
     // Best-effort: create a Cardcom payment page so the client can pay
@@ -282,6 +283,7 @@ async function resolveHouseOwnerUserId(
 
 async function ensureClientForAgreement(transaction: Prisma.TransactionClient, input: {
   currentClientId: string | null;
+  financeBook: "PRIVATE" | "SHARED" | "UNASSIGNED";
   customerName: string;
   businessName?: string;
   idNumber?: string;
@@ -332,6 +334,7 @@ async function ensureClientForAgreement(transaction: Prisma.TransactionClient, i
       businessName: input.businessName || null,
       idNumber: input.idNumber || null,
       source: "agreement_signed",
+      partner: input.financeBook === "PRIVATE" ? "personal" : "fuzion",
       status: "פעיל",
       ownerId: input.ownerId,
     },

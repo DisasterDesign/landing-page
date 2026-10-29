@@ -3,8 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { buildFinanceReport } from "@/lib/finance/report-data";
+import { partnerForecastFigures, clientMonthlyProfit } from "@/lib/finance/partner-forecast";
+import type { Viewer } from "@/lib/auth/viewer";
 import { prisma } from "@/lib/prisma";
-import { CARDCOM_FEE_RATE, VAT_RATE } from "@/lib/finance";
 import { resolveAgreementPartnerId } from "@/lib/leads/agreement-lifecycle";
 
 /**
@@ -17,7 +19,7 @@ import { resolveAgreementPartnerId } from "@/lib/leads/agreement-lifecycle";
  *
  * The two payout models live side by side:
  * - RECURRING_SHARE (Roy, revenueSharePct = 50): a percentage of the monthly
- *   profit of every billing client he generated. Recurs every month.
+ *   shared-book profit after shared costs, regardless of who generated it.
  * - FIRST_MONTH (Degaron, Elbaz, revenueSharePct = null): the first month's
  *   price of each deal, once, when the payment clears. Counted here in the
  *   month the commission row was created.
@@ -39,8 +41,9 @@ function monthBounds(month: string | null): { start: Date; end: Date; key: strin
 }
 
 export async function GET(request: NextRequest) {
+  let viewer: Viewer;
   try {
-    await requireOwner();
+    viewer = await requireOwner();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -77,7 +80,6 @@ export async function GET(request: NextRequest) {
           name: true,
           status: true,
           monthlyAmount: true,
-          amount: true,
           vatExempt: true,
           ownerId: true,
         },
@@ -109,11 +111,11 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
+  const report = await buildFinanceReport(viewer, "combined");
+
   /** Monthly profit of one billing client, gross → net of VAT → net of fee. */
   const clientProfit = (client: (typeof clients)[number]) => {
-    const gross = client.monthlyAmount ?? client.amount ?? 0;
-    const vat = client.vatExempt ? 0 : (gross * VAT_RATE) / (100 + VAT_RATE);
-    return { gross, profit: gross - vat - gross * CARDCOM_FEE_RATE };
+    return clientMonthlyProfit(client);
   };
 
   const billing = clients.filter((client) => client.status === "בוצע");
@@ -133,8 +135,10 @@ export async function GET(request: NextRequest) {
       profit += figures.profit;
     }
     const firstMonth = commissions.filter((row) => row.sellerId === id);
-    const firstMonthTotal = firstMonth.reduce((sum, row) => sum + row.amount, 0);
-    const recurringPayout = sharePct != null ? profit * (sharePct / 100) : 0;
+    const figures = partnerForecastFigures(isOwnerRow, sharePct, report);
+    if(figures){ gross=figures.gross; profit=figures.profit; }
+    const firstMonthTotal = sharePct != null ? 0 : firstMonth.reduce((sum, row) => sum + row.amount, 0);
+    const recurringPayout = sharePct != null ? figures!.payout : 0;
     return {
       id,
       name,
@@ -145,7 +149,7 @@ export async function GET(request: NextRequest) {
           ? ("RECURRING_SHARE" as const)
           : ("FIRST_MONTH" as const),
       sharePct,
-      clientCount: own.length,
+      clientCount: figures?.clientCount ?? own.length,
       monthlyGross: round(gross),
       monthlyProfit: round(profit),
       // What leaves the business to this partner for the selected month.
@@ -174,12 +178,8 @@ export async function GET(request: NextRequest) {
     : null;
 
   // The owner keeps whatever the business earns minus the partner payouts.
-  const businessProfit = round(
-    billing.reduce((sum, client) => sum + clientProfit(client).profit, 0),
-  );
-  const businessGross = round(
-    billing.reduce((sum, client) => sum + clientProfit(client).gross, 0),
-  );
+  const businessProfit = report.bottomLine.netProfit;
+  const businessGross = report.bottomLine.totalMrr;
   const partnerPayouts = round(
     partnerRows.reduce((sum, row) => sum + row.payoutThisMonth, 0),
   );
@@ -188,6 +188,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     month: key,
+    forecast: true,
+    snapshotAt: report.snapshotAt,
     partners: partnerRows,
     owner: ownerRow,
     totals: {

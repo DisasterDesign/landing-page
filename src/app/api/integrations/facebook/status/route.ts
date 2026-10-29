@@ -1,12 +1,14 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { financeLeadScope } from "@/lib/finance/lead-access";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
 import { getMetaConfig } from "@/lib/facebook";
 
 export async function GET() {
   try {
-    const { userId } = await requireAdmin();
+    const viewer = await requireAdmin();
+    const {userId}=viewer;
 
     const oauthConfigured = getMetaConfig() !== null;
 
@@ -25,6 +27,7 @@ export async function GET() {
     const recentLeadCount = await prisma.contactSubmission.count({
       where: {
         source: "FACEBOOK",
+        ...financeLeadScope(viewer),
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
     });

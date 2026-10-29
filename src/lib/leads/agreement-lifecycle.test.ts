@@ -23,6 +23,7 @@ const admin = { userId: "admin-1", role: "ADMIN" as const };
 const integration = { type: "INTEGRATION" as const };
 
 const draft = {
+  financeBook: "SHARED" as const,
   tier: "ADVANCED" as const,
   additionalServices: ["SEO"],
   monthlyPrice: 599,
@@ -163,6 +164,7 @@ function fakeAgreementStore(options: {
         const key = Object.keys(where)[0]!;
         const agreement =
           agreements.find((item) => item[key] === where[key]) ?? null;
+        if (agreement && !("financeBook" in agreement)) agreement.financeBook = "SHARED";
         return agreement && include?.lead
           ? { ...agreement, lead: agreement.leadId ? lead : null }
           : agreement;
@@ -455,12 +457,16 @@ test("payment retry records one payment, won event and frozen commission", async
     verifiedAt: new Date("2026-07-23T10:00:01.000Z"),
     actor: integration,
   };
-  await store.transaction((transaction) =>
+  const first = await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, input),
   );
-  await store.transaction((transaction) =>
+  const retry = await store.transaction((transaction) =>
     applyPaymentSuccess(transaction, input),
   );
+  assert.deepEqual(first.effects, []);
+  assert.deepEqual(retry.effects, []);
+  assert.equal(first.paymentRecorded, true);
+  assert.equal(retry.paymentRecorded, false);
   assert.equal(store.lead.stage, "WON");
   assert.equal(
     store.events.filter((event) => event.type === "PAYMENT_SUCCEEDED").length,
@@ -609,11 +615,13 @@ test("payment keeps frozen credit after reassignment and flags a lost-lead misma
 
   assert.equal(store.lead.stage, "WON");
   assert.equal(store.commissions[0]?.sellerId, "seller-1");
-  assert.ok(
-    result.effects.some(
-      (effect) => effect.input.type === "PAYMENT_MISMATCH",
-    ),
-  );
+  assert.deepEqual(result.effects.map((effect) => ({
+    type: effect.input.type,
+    title: effect.input.title,
+  })), [{
+    type: "PAYMENT_MISMATCH",
+    title: "תשלום התקבל לאחר שהליד סומן כאבוד",
+  }]);
 });
 
 test("reassignment transfers agreement operations without changing frozen seller credit", async () => {
@@ -1479,4 +1487,17 @@ test("payment page persistence is centralized and does not overwrite completed p
     ),
     /paid|completed/i,
   );
+});
+
+test("private paid agreement never creates or notifies a seller commission", async () => {
+  const store = fakeAgreementStore();
+  const agreement = await createAgreementForLead({ leadId: "lead-1", actor: admin, agreement: { ...draft, financeBook: "PRIVATE" } }, { store });
+  agreement.paymentId = "private-lp";
+  const result = await store.transaction(transaction => applyPaymentSuccess(transaction, {
+    agreementId: agreement.id, providerAttemptId: "private-lp", providerReturnValue: agreement.id,
+    providerTransactionId: "private-charge", paidAt: new Date("2026-10-26T10:00:00Z"), paidAmount: 599,
+    verifiedAt: new Date("2026-10-26T10:00:01Z"), actor: integration,
+  }));
+  assert.equal(store.commissions.length, 0);
+  assert.equal(result.effects.some(effect => effect.input.recipientId === seller1.userId), false);
 });

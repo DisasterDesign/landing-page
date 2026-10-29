@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FinanceBookSelect, { type SelectableFinanceBook, FinanceBookBadge } from "@/components/admin/FinanceBookSelect";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -10,8 +11,22 @@ import {
   EUR_TO_ILS,
 } from "@/lib/finance";
 
+interface FinanceSource {
+  key: string;
+  name: string;
+  configured: boolean;
+  kind: string;
+  stale: boolean;
+  state: { status: string; lastSuccessAt: string | null; error?: string | null } | null;
+}
+
 interface ExpenseRow {
   id: string;
+  financeBook?: string;
+  sharedBasisPoints?: number | null;
+  allocationOnly?: boolean;
+  paidById?: string | null;
+  paidBy?: { name?: string };
   name: string;
   vendor: string;
   category: string;
@@ -40,6 +55,16 @@ interface ClientPnl {
 }
 
 interface FinancePayload {
+  viewer?: { isOwner: boolean };
+  forecastUnvaluedCount?: number;
+  forecastWarnings?: { code: string; clientName: string; message: string }[];
+  books?: { personal?: { profit: number }; fuzion?: { profit: number } };
+  personalProfit?: number;
+  myProfit?: number;
+  actualAllocation?: {myProfit:number;recordedPaymentCount?:number;unrecordedExpenseCount?:number;incomplete?:boolean;expenseCoverage?:string};
+  oneOffAllocation?: {myProfit:number};
+  actual?: { gross: number; profit: number; count: number; unvaluedCount: number };
+  sync?: { status?: string; stale?: boolean; lastSuccessAt?: string | null };
   snapshotAt: string;
   bottomLine: {
     totalMrr: number;
@@ -61,11 +86,14 @@ interface FinancePayload {
     { total: number; fixed: number; variable: number; count: number }
   >;
   perClient: ClientPnl[];
+  unassignedExpenseCount?: number;
+  unassignedTransactions?: { id: string }[];
   unknownAmounts: { id: string; name: string; vendor: string; notes: string | null }[];
   expenses: ExpenseRow[];
 }
 
 interface ClientOption {
+  products?: { id: string; name: string; financeBook?: string }[];
   id: string;
   name: string;
   number: number;
@@ -99,28 +127,72 @@ const EMPTY_FORM = {
   currency: "ILS",
   frequency: "MONTHLY",
   clientId: "",
+  clientProductId: "",
+  financeBook: "SHARED" as SelectableFinanceBook,
+  mixed: false,
+  sharedPercent: "100",
   notes: "",
 };
 
 export default function FinancePage() {
+  const requestGeneration = useRef(0);
   const [data, setData] = useState<FinancePayload | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const [book, setBook] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const isOwner = data?.viewer?.isOwner === true;
+  const [paymentExpense, setPaymentExpense] = useState<ExpenseRow | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ paymentKey: "", amountIls: "", paidDate: "", reference: "" });
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const openPayment = (expense: ExpenseRow) => {
+    const today = new Date();
+    const paidDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setPaymentExpense(expense);
+    setPaymentForm({ paymentKey: crypto.randomUUID(), amountIls: "", paidDate, reference: "" });
+  };
+  const [sources, setSources] = useState<FinanceSource[]>([]);
+  const [sourcesError, setSourcesError] = useState(false);
+  const [refreshingSource, setRefreshingSource] = useState<string | null>(null);
+  const loadSources = useCallback(async () => {
+    try {
+      const response = await fetch("/api/finance/sources", { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      setSources((await response.json()).sources ?? []);
+      setSourcesError(false);
+    } catch { setSourcesError(true); }
+  }, []);
+  useEffect(() => { if (isOwner) void loadSources(); }, [isOwner, loadSources]);
+  const refreshSource = async (key: string) => {
+    setRefreshingSource(key);
+    try {
+      const response = await fetch("/api/finance/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+      if (!response.ok) toast.error("עדכון המקור נכשל. מוצגים הנתונים האחרונים שנשמרו.");
+      await loadSources();
+    } catch { toast.error("לא ניתן לעדכן את המקור כרגע"); }
+    finally { setRefreshingSource(null); }
+  };
 
   const load = useCallback(async () => {
+    const generation = ++requestGeneration.current;
     try {
-      const res = await fetch("/api/finance", { cache: "no-store" });
+      const res = await fetch(`/api/finance${book ? `?book=${book}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error();
-      setData(await res.json());
+      const payload = await res.json();
+      if (generation !== requestGeneration.current) return;
+      setData(payload);
+      setLoadError(false);
     } catch {
+      if (generation !== requestGeneration.current) return;
+      setLoadError(true);
       toast.error("שגיאה בטעינת נתוני הפיננסים");
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) setLoading(false);
     }
-  }, []);
+  }, [book]);
 
   useEffect(() => {
     load();
@@ -133,7 +205,7 @@ export default function FinancePage() {
           const list = (Array.isArray(json) ? json : json.data ?? []) as ClientOption[];
           setClients(
             list
-              .map((c) => ({ id: c.id, name: c.name, number: c.number }))
+              .map((c) => ({ id: c.id, name: c.name, number: c.number, products: c.products }))
               .sort((a, b) => a.name.localeCompare(b.name, "he"))
           );
         }
@@ -150,6 +222,11 @@ export default function FinancePage() {
       toast.error("שם, ספק וסכום תקין — חובה");
       return;
     }
+    const sharedBasisPoints = Math.round(Number(form.sharedPercent) * 100);
+    if (isOwner && form.mixed && (!Number.isFinite(sharedBasisPoints) || sharedBasisPoints < 0 || sharedBasisPoints > 10000)) {
+      toast.error("אחוז משותף חייב להיות בין 0 ל־100");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/expenses", {
@@ -164,6 +241,8 @@ export default function FinancePage() {
           currency: form.currency,
           frequency: form.frequency,
           clientId: form.clientId || null,
+          clientProductId: form.clientProductId || null,
+          ...(isOwner ? { financeBook: form.clientId ? form.financeBook : "SHARED", ...(form.mixed ? { sharedBasisPoints } : {}) } : {}),
           notes: form.notes.trim() || null,
         }),
       });
@@ -205,6 +284,33 @@ export default function FinancePage() {
     }
   };
 
+  const submitPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!paymentExpense) return;
+    const amountIls = Number(paymentForm.amountIls);
+    const paidAt = new Date(`${paymentForm.paidDate}T12:00:00`);
+    if (!Number.isFinite(amountIls) || amountIls <= 0 || Number.isNaN(paidAt.getTime())) {
+      toast.error("הזן סכום ששולם בפועל ותאריך תשלום תקין");
+      return;
+    }
+    setPaymentSaving(true);
+    try {
+      const response = await fetch(`/api/expenses/${paymentExpense.id}/payments`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentKey: paymentForm.paymentKey, amountIls, paidAt: paidAt.toISOString(), reference: paymentForm.reference.trim() || undefined }),
+      });
+      if (!response.ok) {
+        toast.error(response.status === 409 ? "מזהה התשלום כבר נשמר עם פרטים אחרים. בדוק את הרישום לפני ניסיון נוסף." : "רישום התשלום נכשל. בדוק את הסכום והתאריך ונסה שוב.");
+        return;
+      }
+      const result = await response.json();
+      toast.success(result.replay ? "התשלום כבר נרשם — לא נוצר רישום נוסף" : "התשלום נרשם");
+      setPaymentExpense(null);
+      await load();
+    } catch { toast.error("לא התקבלה תשובה. אפשר לנסות שוב באותו טופס ללא רישום כפול."); }
+    finally { setPaymentSaving(false); }
+  };
+
   const bl = data?.bottomLine;
 
   const categoryRows = useMemo(() => {
@@ -235,8 +341,7 @@ export default function FinancePage() {
         <div>
           <h1 className="text-2xl font-bold text-white">פיננסים — הכנסות מול הוצאות</h1>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-2xl">
-            השורה התחתונה של העסק: MRR פחות מע״מ, עמלות סליקה וכל ההוצאות הקבועות
-            והמשתנות. המרת מט״ח משוערת: $1 = ₪{USD_TO_ILS} · €1 = ₪{EUR_TO_ILS} (כולל עמלות המרה).
+            תחזית חודשית לפי מוצרים פעילים, בנפרד מכסף שהתקבל בפועל. רווח משותף לאחר הוצאות מתחלק שווה בשווה. המרת מט״ח משוערת: $1 = ₪{USD_TO_ILS} · €1 = ₪{EUR_TO_ILS} (כולל עמלות המרה).
           </p>
         </div>
         <Link
@@ -247,19 +352,43 @@ export default function FinancePage() {
         </Link>
       </div>
 
+      {isOwner && <label className="flex items-center gap-3 text-sm text-gray-400">תצוגה
+        <select value={book || "combined"} onChange={(event) => setBook(event.target.value)} className={inputCls + " max-w-xs"}>
+          <option value="combined">הכול</option><option value="personal">שלי בלבד</option><option value="fuzion">השותפות</option><option value="mine">החלק שלי</option>
+        </select>
+      </label>}
+      {loadError && <p role="alert" className="text-sm text-amber-300">העדכון נכשל. {data ? "מוצגים הנתונים האחרונים שהתקבלו." : "אין נתונים זמינים כרגע."}</p>}
+      {data?.sync && (data.sync.stale === true || data.sync.status !== "SUCCESS") && <p className="text-sm text-amber-300">התקבולים טרם סונכרנו במלואם. סנכרון מוצלח אחרון: {data.sync.lastSuccessAt ? new Date(data.sync.lastSuccessAt).toLocaleString("he-IL") : "טרם הושלם"}</p>}
+      {data?.viewer?.isOwner && (data.unassignedTransactions?.length ?? 0) > 0 && <p className="text-sm text-amber-300 mb-3">{data.unassignedTransactions?.length} תנועות סליקה ממתינות לשיוך ואינן נכללות בחישוב. יש לבדוק את השיוך כדי להשלים את תמונת התקבולים.</p>}
+      {(data?.unassignedExpenseCount ?? 0) > 0 && <p className="text-sm text-amber-300 mb-3">{data?.unassignedExpenseCount} הוצאות פעילות ממתינות לשיוך ואינן נכללות ברווח. יש להשלים את השיוך כדי לקבל תמונה מלאה.</p>}
+      {data?.actual && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card label="התקבל בפועל החודש (ברוטו)" value={data.actual.gross} />
+        <Card label="תקבולים פחות מע״מ ועמלת סליקה משוערת" value={data.actual.profit} />
+        {isOwner && <Card label="הרווח האישי הצפוי (שלי בלבד)" value={data.personalProfit} />}
+        <Card label="הרווח החודשי הצפוי שלי" value={data.myProfit} highlight />
+      </div>}
+      {data?.actualAllocation && <div className="grid grid-cols-2 gap-3 mt-3">
+        <Card label="החלק שלי מתקבולים לאחר תשלומי הוצאות מתועדים" value={data.actualAllocation.myProfit} />
+        <Card label="החלק שלי מעבודות חד־פעמיות לאחר הוצאות" value={data.oneOffAllocation?.myProfit} />
+      </div>}
+      {data?.actualAllocation && <p className="text-xs text-gray-400">החלוקה כוללת רק הוצאות עם תשלום מתועד בפועל בחודש זה. התחזית החודשית נשארת בנפרד. עמלת הסליקה משוערת.</p>}
+      {data?.actualAllocation && <p className="text-xs text-gray-400">תשלומי הוצאות מתועדים בחודש: {data.actualAllocation.recordedPaymentCount ?? "—"}{(data.actualAllocation.unrecordedExpenseCount ?? 0) > 0 && <span className="text-amber-300"> · ל־{data.actualAllocation.unrecordedExpenseCount} הוצאות טרם תועד תשלום; התמונה חלקית.</span>}</p>}
+      {(data?.actual?.unvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.actual?.unvaluedCount} תקבולים ללא שווי בשקלים אינם נכללים בסכומים. הדוח חלקי.</p>}
+      {(data?.forecastUnvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים אינם נכללים בתחזית. התחזית חלקית.</p>}
+      {(data?.forecastWarnings?.length ?? 0) > 0 && <details className="mb-4 rounded-lg border border-amber-500/30 p-3 text-sm text-amber-200"><summary>פערים ומידע חסר בתחזית ({data?.forecastWarnings?.length})</summary><ul className="mt-2 space-y-2">{data?.forecastWarnings?.map((warning, index) => <li key={`${warning.code}-${index}`}><strong>{warning.clientName}</strong>: {warning.message}</li>)}</ul><p className="mt-2 text-xs">אלה בדיקות של הרשומות השמורות. מחירי Cardcom והוראות חלופיות אינם מאומתים באמצעות התחזית.</p></details>}
       {/* ===== Bottom line ===== */}
       <section className="space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card label={`הכנסות (MRR, ${bl?.clientCount ?? 0} לקוחות)`} value={bl?.totalMrr} />
-          <Card label="מע״מ + עמלת סליקה 2%" value={(bl?.totalVat ?? 0) + (bl?.totalCardcomFee ?? 0)} negative />
+          <Card label={`תחזית הכנסות (MRR, ${bl?.clientCount ?? "—"} לקוחות)`} value={bl?.totalMrr} />
+          <Card label="מע״מ + עמלת סליקה 2%" value={bl ? bl.totalVat + bl.totalCardcomFee : undefined} negative />
           <Card label="הוצאות חודשיות (קבועות + משתנות)" value={bl?.totalExpensesMonthly} negative />
-          <Card label="רווח נקי / חודש" value={bl?.netProfit} highlight />
+          <Card label="רווח נקי צפוי / חודש" value={bl?.netProfit} highlight />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card small label="הוצאות קבועות" value={bl?.fixedMonthly} negative />
           <Card small label="הוצאות משתנות" value={bl?.variableMonthly} negative />
-          <Card small label="חלק שותף לפני הוצאות (המודל הנוכחי)" value={bl?.partnerShareBeforeExpenses} />
-          <Card small label="חלק שותף אחרי הוצאות (התמונה האמיתית)" value={bl?.partnerShareAfterExpenses} highlight />
+          <Card small label="מחצית הרווח המשותף לפני הוצאות" value={bl?.partnerShareBeforeExpenses} />
+          <Card small label="מחצית הרווח המשותף אחרי הוצאות" value={bl?.partnerShareAfterExpenses} highlight />
         </div>
         {((bl?.oneOffIncomeThisMonth ?? 0) > 0 || (bl?.oneOffOutstanding ?? 0) > 0) && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -282,11 +411,22 @@ export default function FinancePage() {
         )}
       </section>
 
+      {isOwner && <section className="bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-3">
+        <h2 className="font-bold text-white">מקורות הוצאות</h2>
+        <p className="text-xs text-gray-500">נתוני שימוש משוערים מוצגים בנפרד מחשבוניות. מקור שלא מחובר דורש הזנת חשבונית ידנית.</p>
+        {sourcesError && <p role="alert" className="text-sm text-amber-300">לא ניתן לטעון את מצב המקורות כרגע.</p>}
+        <div className="grid md:grid-cols-2 gap-3">{sources.map((source) => <div key={source.key} className="border border-gray-800 rounded-xl p-3 space-y-1">
+          <div className="flex items-center justify-between gap-2"><span className="text-sm text-white">{source.name}</span>{source.configured && <button disabled={refreshingSource !== null} onClick={() => refreshSource(source.key)} className="text-xs text-pink disabled:opacity-50">{refreshingSource === source.key ? "מעדכן…" : "עדכן"}</button>}</div>
+          <p className={`text-xs ${(source.stale || (source.state && source.state.status !== "SUCCESS")) ? "text-amber-300" : "text-gray-400"}`}>{!source.configured || source.kind === "MANUAL_INVOICE" ? "לא מחובר — חשבונית ידנית" : source.stale || (source.state && source.state.status !== "SUCCESS") ? "נדרש עדכון — הנתונים האחרונים נשמרו" : "מעודכן"}</p>
+          <p className="text-[11px] text-gray-500">{source.kind === "USAGE" ? "אומדן שימוש" : source.kind === "BILLING_HISTORY" ? "חשבוניות" : "נתוני ספק"} · עדכון מוצלח: {source.state?.lastSuccessAt ? new Date(source.state.lastSuccessAt).toLocaleString("he-IL") : "טרם הושלם"}</p>
+          {source.state?.error && <p className="text-xs text-amber-300">העדכון האחרון נכשל</p>}
+        </div>)}</div>
+      </section>}
       {/* ===== Expense breakdown by category ===== */}
       <section className="bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4">
         <h2 className="text-base font-bold text-white">פירוק הוצאות לפי קטגוריה (₪ / חודש)</h2>
         {categoryRows.length === 0 ? (
-          <p className="text-sm text-gray-500">אין הוצאות פעילות</p>
+          <p className="text-sm text-gray-500">{data ? "אין הוצאות פעילות" : "נתוני ההוצאות אינם זמינים"}</p>
         ) : (
           <div className="space-y-2.5">
             {categoryRows.map((c) => (
@@ -369,6 +509,16 @@ export default function FinancePage() {
         </div>
       </section>
 
+      {paymentExpense && <form onSubmit={submitPayment} className="bg-gray-900 border border-cyan/40 rounded-2xl p-5 space-y-4">
+        <div><h2 className="text-base font-bold text-white">רשום תשלום — {paymentExpense.name}</h2><p className="text-xs text-gray-400 mt-1">תיעוד תשלום שכבר בוצע בפועל. הסכום בשקלים נשמר בנפרד מתחזית ההוצאה.</p></div>
+        <div className="grid md:grid-cols-4 gap-3">
+          <Field label="סכום ששולם בפועל (₪)"><input autoFocus aria-label="סכום ששולם בפועל בשקלים" required type="number" min="0.01" max="21474836.47" step="0.01" value={paymentForm.amountIls} onChange={(event) => setPaymentForm({ ...paymentForm, amountIls: event.target.value })} className={inputCls} /></Field>
+          <Field label="תאריך תשלום"><input aria-label="תאריך תשלום" required type="date" value={paymentForm.paidDate} onChange={(event) => setPaymentForm({ ...paymentForm, paidDate: event.target.value })} className={inputCls} /></Field>
+          <Field label="אסמכתא (אופציונלי)"><input aria-label="אסמכתא לתשלום" maxLength={500} value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} className={inputCls} /></Field>
+          <Field label="שולם על ידי"><p className="text-sm text-gray-300 py-2">{paymentExpense.paidBy?.name ?? (paymentExpense.paidById ? "המשלם הרשום בהוצאה" : "המשתמש שרושם את התשלום")}</p></Field>
+        </div>
+        <div className="flex gap-3"><button type="submit" disabled={paymentSaving} className="bg-cyan/20 text-cyan border border-cyan/40 rounded-xl px-4 py-2 text-sm disabled:opacity-50">{paymentSaving ? "רושם…" : "שמור תשלום"}</button><button type="button" disabled={paymentSaving} onClick={() => setPaymentExpense(null)} className="text-sm text-gray-400">סגור</button></div>
+      </form>}
       {/* ===== Expense management ===== */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -420,13 +570,28 @@ export default function FinancePage() {
               </select>
             </Field>
             <Field label="שיוך ללקוח (אופציונלי)">
-              <select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} className={inputCls}>
+              <select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value, clientProductId: "", financeBook: "SHARED" })} className={inputCls}>
                 <option value="">— תקורה כללית —</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>#{c.number} {c.name}</option>
                 ))}
               </select>
             </Field>
+            {form.clientId && <Field label="מוצר / פרויקט">
+              <select value={form.clientProductId} onChange={(event) => {
+                const product = clients.find((client) => client.id === form.clientId)?.products?.find((item) => item.id === event.target.value);
+                setForm({ ...form, clientProductId: event.target.value, financeBook: product?.financeBook === "PRIVATE" ? "PRIVATE" : "SHARED" });
+              }} className={inputCls}>
+                <option value="">ללא מוצר — בחר שיוך במפורש</option>
+                {clients.find((client) => client.id === form.clientId)?.products?.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+              </select>
+            </Field>}
+            {isOwner && form.clientId && <FinanceBookSelect value={form.financeBook} disabled={!!form.clientProductId} onChange={(financeBook) => setForm({ ...form, financeBook })} />}
+            {isOwner && <div className="space-y-2 text-sm text-gray-300">
+              <label className="flex gap-2"><input type="checkbox" checked={form.mixed} onChange={(event) => setForm({ ...form, mixed: event.target.checked })} />חשבונית מעורבת</label>
+              {form.mixed && <Field label="החלק שמיוחס לשותפות (%)"><input type="number" min="0" max="100" step="0.01" value={form.sharedPercent} onChange={(event) => setForm({ ...form, sharedPercent: event.target.value })} className={inputCls} /></Field>}
+            </div>}
+            {!form.clientId && <p className="text-xs text-gray-500">תקורה כללית משויכת לשותפות.</p>}
             <div className="col-span-2 md:col-span-3">
               <Field label="הערות">
                 <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} />
@@ -457,7 +622,7 @@ export default function FinancePage() {
               {(data?.expenses ?? []).map((e) => (
                 <tr key={e.id} className={`border-b border-gray-800 hover:bg-gray-800/40 ${!e.active ? "opacity-45" : ""}`}>
                   <td className="px-3 py-2">
-                    <div className="text-white">{e.name}</div>
+                    <div className="text-white">{e.name} {isOwner && <FinanceBookBadge book={e.financeBook} />}</div>
                     <div className="text-[11px] text-gray-500">
                       {e.vendor}
                       {e.notes ? ` · ${e.notes}` : ""}
@@ -470,7 +635,7 @@ export default function FinancePage() {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <AmountEditor expense={e} onSave={(amount) => patchExpense(e.id, { amount })} />
+                    <AmountEditor key={`${e.id}:${e.amount}`} expense={e} onSave={(amount) => patchExpense(e.id, { amount })} />
                     <span className="text-[10px] text-gray-500 block">
                       {FREQUENCY_LABELS[e.frequency] ?? e.frequency}
                     </span>
@@ -482,7 +647,8 @@ export default function FinancePage() {
                     {e.client ? `#${e.client.number} ${e.client.name}` : "תקורה כללית"}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {!e.allocationOnly && (e.financeBook === "PRIVATE" || e.financeBook === "SHARED") && (isOwner || (e.financeBook === "SHARED" && (e.sharedBasisPoints == null || e.sharedBasisPoints === 10000))) && <button onClick={() => openPayment(e)} className="text-[11px] px-2 py-1 rounded-lg bg-cyan/10 text-cyan hover:bg-cyan/20">רשום תשלום</button>}
                       <button
                         onClick={() => patchExpense(e.id, { active: !e.active })}
                         className="text-[11px] px-2 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700"
@@ -528,7 +694,6 @@ function AmountEditor({
   onSave: (amount: number) => void;
 }) {
   const [val, setVal] = useState(String(expense.amount));
-  useEffect(() => setVal(String(expense.amount)), [expense.amount]);
   return (
     <span className="font-mono text-gray-200 inline-flex items-center gap-1" dir="ltr">
       {CURRENCY_SIGN[expense.currency] ?? expense.currency}
@@ -572,7 +737,7 @@ function Card({
               : "text-white"
         }`}
       >
-        {negative && v > 0 ? "−" : ""}₪{fmt(Math.abs(v))}
+        {value == null ? "—" : `${negative && v > 0 ? "−" : v < 0 ? "−" : ""}₪${fmt(Math.abs(v))}`}
       </div>
     </div>
   );

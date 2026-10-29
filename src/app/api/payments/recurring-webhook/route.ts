@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyAllAdmins } from "@/lib/notifications";
+import { notifyFinanceAdmins } from "@/lib/notifications";
 import { verifyRecurringWebhookSecret } from "@/lib/cardcom-webhook-auth";
 import { recordVerifiedRecurringCharge } from "@/lib/cardcom-recurring-charge";
 
@@ -98,24 +98,25 @@ export async function POST(req: NextRequest) {
       // best-effort notification, so it must never throw into the catch —
       // that would answer Cardcom with 503 + retry for a charge that
       // actually succeeded. Same `.catch()` discipline as payments/webhook.
+      const financeAgreement = await prisma.agreement.findUnique({ where: { id: result.agreementId }, select: { financeBook: true } });
       if (result.reviewRequired) {
-        await notifyAllAdmins({
+        await notifyFinanceAdmins({
           type: "AGREEMENT_SIGNED",
           title: `⚠️ חיוב חודשי דורש בדיקת הכנסה — ${result.customerName}`,
           body: `עסקה ${dealId} נקלטה, אך לא ניתן להוכיח אם ההכנסה ההיסטורית כבר נרשמה.`,
           url: "/admin/finance/debtors",
-        }).catch((e) => console.error("[recurring-webhook] review notify failed:", e));
+        }, financeAgreement?.financeBook).catch((e) => console.error("[recurring-webhook] review notify failed:", e));
       } else if (
         !result.success &&
         (result.disposition === "created" ||
           result.previousStatus !== status)
       ) {
-        await notifyAllAdmins({
+        await notifyFinanceAdmins({
           type: "AGREEMENT_SIGNED",
           title: `🚨 חיוב חודשי נכשל — ${result.customerName}`,
           body: `סטטוס: ${status ?? "?"} · קוד דחייה ${num(payload.ResposeCode) ?? num(payload.ResponseCode) ?? "?"} · ניסיון ${num(payload.BillingAttempts) ?? "?"} · ₪${result.amount}`,
           url: "/admin/finance/debtors",
-        }).catch((e) => console.error("[recurring-webhook] failure notify failed:", e));
+        }, financeAgreement?.financeBook).catch((e) => console.error("[recurring-webhook] failure notify failed:", e));
       }
       // A charge that simply worked is not news — see
       // src/lib/payments/recurring-notifications.ts. The money is recorded
@@ -136,13 +137,13 @@ export async function POST(req: NextRequest) {
     (returnValue
       ? await prisma.agreement.findUnique({
           where: { id: returnValue },
-          select: { id: true, customerName: true, cardcomIsActive: true },
+          select: { id: true, customerName: true, cardcomIsActive: true, financeBook: true },
         })
       : null) ??
     (recurringId != null
       ? await prisma.agreement.findFirst({
           where: { cardcomRecurringId: recurringId },
-          select: { id: true, customerName: true, cardcomIsActive: true },
+          select: { id: true, customerName: true, cardcomIsActive: true, financeBook: true },
         })
       : null);
 
@@ -161,12 +162,12 @@ export async function POST(req: NextRequest) {
       data: { cardcomIsActive: isActive, cardcomSyncedAt: new Date() },
     });
     if (isActive === false && agreement.cardcomIsActive !== false) {
-      await notifyAllAdmins({
+      await notifyFinanceAdmins({
         type: "AGREEMENT_SIGNED",
         title: `⚠️ הוראת קבע כובתה — ${agreement.customerName}`,
         body: "קארדקום דיווחה שההוראה אינה פעילה. הלקוח לא יחויב עד שתטופל.",
         url: "/admin/finance/debtors",
-      });
+      }, agreement.financeBook);
     }
   }
 

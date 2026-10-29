@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -21,6 +23,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await requireFinanceTaskAccess(await getViewer(), parsed.data.taskId);
     const comment = await prisma.comment.create({
       data: {
         content: parsed.data.content,
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error creating comment:", error);
     return NextResponse.json(
       { error: "Internal server error" },

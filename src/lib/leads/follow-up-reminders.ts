@@ -28,6 +28,7 @@ const prismaFollowUpReminderStore: FollowUpReminderStore = {
     prisma.leadFollowUp.findMany({
       where: {
         status: "SCHEDULED",
+        lead: { OR: [{ agreements: { none: { financeBook: { not: "SHARED" } } } }, { owner: { isOwner: true } }] },
         dueAt: { lte: now },
         reminderSentAt: null,
       },
@@ -71,6 +72,8 @@ export async function dispatchDueFollowUps(
               intentLevel: true,
               stage: true,
               migrationReviewRequired: true,
+              agreements: { select: { financeBook: true } },
+              owner: { select: { isOwner: true } },
             },
           },
         },
@@ -83,6 +86,7 @@ export async function dispatchDueFollowUps(
         !followUp.ownerId ||
         followUp.lead.ownerId !== followUp.ownerId ||
         followUp.lead.migrationReviewRequired ||
+        (followUp.lead.agreements?.some(agreement => agreement.financeBook !== "SHARED") && !followUp.lead.owner?.isOwner) ||
         !followUp.lead.stage ||
         terminalStages.has(followUp.lead.stage)
       ) {

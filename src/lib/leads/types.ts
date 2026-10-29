@@ -166,6 +166,7 @@ export interface LegacyColdInteractionInput {
 }
 
 export interface ValidatedAgreementDraft {
+  financeBook?: "PRIVATE" | "SHARED" | "UNASSIGNED";
   tier: AgreementTier | null;
   additionalServices: string[];
   monthlyPrice: number;

@@ -1,6 +1,9 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { financeTaskScope } from "@/lib/finance/task-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { notificationReadWhere } from "@/lib/notifications/visibility";
 
 export async function GET() {
   try {
@@ -9,9 +12,18 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const viewer = await getViewer();
+    const taskScope = await financeTaskScope(viewer);
+    const leadScope = { agreements: { none: { financeBook: { not: "SHARED" as const } } } };
+    const financeWhere = viewer.isOwner ? {} : { AND: [
+      { OR: [{ taskId: null }, { task: taskScope }] },
+      { OR: [{ leadId: null }, { lead: leadScope }] },
+      { OR: [{ type: { not: "AGREEMENT_SIGNED" as const } }, { dedupeKey: { startsWith: "finance:SHARED:" } }, { leadId: { not: null }, lead: leadScope }] },
+    ] };
+    const readWhere = notificationReadWhere(session.user.id, financeWhere);
     const [notifications, unreadCount] = await Promise.all([
       prisma.notification.findMany({
-        where: { recipientId: session.user.id },
+        where: readWhere,
         orderBy: { createdAt: "desc" },
         take: 30,
         include: {
@@ -19,12 +31,13 @@ export async function GET() {
         },
       }),
       prisma.notification.count({
-        where: { recipientId: session.user.id, readAt: null },
+        where: { AND: [readWhere, { readAt: null }] },
       }),
     ]);
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error fetching notifications:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -47,6 +60,7 @@ export async function POST() {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error marking notifications read:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -68,6 +82,7 @@ export async function DELETE() {
 
     return NextResponse.json({ success: true, deleted: count });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error deleting notifications:", error);
     return NextResponse.json(
       { error: "Internal server error" },

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { auth } from "@/lib/auth";
 import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { markLeadsRead } from "@/lib/leads/lifecycle";
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+    for(const id of ids)await requireFinanceLeadAccess(session.user.id,id);
     const result = await markLeadsRead({
       leadIds: ids,
       isRead: action === "markRead",

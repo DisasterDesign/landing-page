@@ -12,6 +12,7 @@ interface PartnerRow {
   cardcomFee: number;
   profit: number;
   partnerShare: number;
+  eladShare?: number;
   paymentDate: string | null;
 }
 
@@ -21,6 +22,7 @@ interface Totals {
   cardcomFee: number;
   profit: number;
   partnerShare: number;
+  eladShare?: number;
 }
 
 interface Settlement {
@@ -32,6 +34,12 @@ interface Settlement {
 }
 
 interface ReportPayload {
+  viewer?: { isOwner: boolean };
+  personalProfit?: number;
+  forecastUnvaluedCount?: number;
+  myProfit?: number;
+  actual?: { gross: number; unvaluedCount: number };
+  sync?: { stale: boolean; status: string };
   snapshotAt: string;
   rows: PartnerRow[];
   totals: Totals;
@@ -40,7 +48,7 @@ interface ReportPayload {
   /** The 12.8.2026 model: profit = fuzion net revenue − shared expenses, 50/50. */
   settlement?: Settlement;
   expensesByCategory?: Record<string, number>;
-  books?: { fuzion: { profit: number; count: number }; personal: { profit: number; count: number } };
+  books?: { fuzion: { profit: number; count: number }; personal?: { profit: number; count: number } };
 }
 
 const CATEGORY_HE: Record<string, string> = {
@@ -63,6 +71,7 @@ const fmtNum = (n: number | null | undefined) =>
 export default function PartnerReportPage() {
   const [data, setData] = useState<ReportPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,9 +80,10 @@ export default function PartnerReportPage() {
       if (!res.ok) throw new Error();
       const json = (await res.json()) as ReportPayload;
       setData(json);
+      setLoadError(false);
     } catch {
       toast.error("שגיאה בטעינת הדוח");
-      setData(null);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -103,10 +113,7 @@ export default function PartnerReportPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">דוח שותף — תמונת מצב</h1>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-xl">
-            סיכום הכנסות חודשי על לקוחות פעילים בהוראת קבע (סטטוס &quot;בוצע&quot;).
-            רווח = סכום פחות מע&quot;מ פחות עמלת CardCom 2%. כל אחד מהשותפים
-            (אלעד ורועי) מקבל מחצית מהרווח. ל-snapshot חודשי — שמור / צלם
-            בסוף החודש.
+            תחזית חודשית למוצרים פעילים. הרווח המשותף לאחר מע״מ, סליקה והוצאות משותפות מתחלק 50/50. התקבולים בפועל מוצגים בנפרד.
           </p>
         </div>
         {snapshotLabel && (
@@ -116,32 +123,41 @@ export default function PartnerReportPage() {
         )}
       </div>
 
+      {loadError && <p role="alert" className="text-sm text-amber-300">העדכון נכשל. {data ? "מוצגים הנתונים האחרונים." : "אין נתונים זמינים כרגע."}</p>}
+      {data && <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {data.viewer?.isOwner === true && <SummaryCard label="רווח אישי צפוי — שלי בלבד" value={data.personalProfit} />}
+        <SummaryCard label="הרווח החודשי הצפוי שלי" value={data.myProfit} accent />
+        <SummaryCard label="התקבל בפועל החודש (ברוטו)" value={data.actual?.gross} />
+      </div>}
+      {(data?.forecastUnvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים אינם נכללים. התחזית חלקית.</p>}
+      {data?.sync && (data.sync.stale || data.sync.status !== "SUCCESS") && <p className="text-sm text-amber-300">סנכרון התקבולים אינו מלא. סכומי הכסף שהתקבל בפועל עשויים להיות חלקיים.</p>}
+      {(data?.actual?.unvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">יש תקבולים ללא שווי בשקלים. הסכומים חלקיים.</p>}
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           label="לקוחות פעילים"
-          value={data?.count ?? 0}
+          value={data?.count}
           format="int"
         />
         <SummaryCard
           label="ממוצע הכנסה ללקוח"
-          value={averages?.amount ?? 0}
+          value={averages?.amount}
           accent
         />
         <SummaryCard
           label="רווח אחרי עמלות / חודש"
-          value={totals?.profit ?? 0}
+          value={totals?.profit}
           accent
         />
         <SummaryCard
-          label="חלק אלעד (אחרי הוצאות)"
-          value={data?.settlement ? data.settlement.profit / 2 : (totals?.partnerShare ?? 0)}
+          label="מחצית אלעד בשותפות (אחרי הוצאות)"
+          value={data?.settlement ? data.settlement.profit / 2 : totals?.eladShare}
           accent
           highlight
         />
         <SummaryCard
           label="העברה לרועי"
-          value={data?.settlement?.transferToRoy ?? totals?.partnerShare ?? 0}
+          value={data?.settlement?.transferToRoy ?? totals?.partnerShare}
           accent
           highlight
         />
@@ -162,9 +178,7 @@ export default function PartnerReportPage() {
             {data.settlement.transferToRoy !== data.settlement.royEntitlement && (
               <> (חצי רווח + החזר הוצאות ששילם)</>
             )}
-            {". "}הספר האישי — {data.books?.personal.count ?? 0} לקוחות,{" "}
-            <span className="font-mono text-gray-200">₪{fmtNum(data.books?.personal.profit)}</span>{" "}
-            לאלעד בלבד, מחוץ לחישוב.
+            {data.viewer?.isOwner === true && data.books?.personal && <>. הספר האישי — {data.books.personal.count} לקוחות, <span className="font-mono text-gray-200">₪{fmtNum(data.books.personal.profit)}</span> לאלעד בלבד, מחוץ לחישוב.</>}
           </div>
           {data.expensesByCategory && Object.keys(data.expensesByCategory).length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
@@ -184,6 +198,8 @@ export default function PartnerReportPage() {
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-12 text-center text-sm text-gray-500">
           טוען...
         </div>
+      ) : !data ? (
+        <p className="text-sm text-gray-400">הדוח אינו זמין.</p>
       ) : rows.length === 0 ? (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-12 text-center text-sm text-gray-500">
           אין לקוחות פעילים עם סטטוס &quot;בוצע&quot;
@@ -224,7 +240,7 @@ export default function PartnerReportPage() {
                     </td>
                     <td className="px-3 py-2 font-mono bg-pink/10">
                       <span className={r.partnerShare >= 0 ? "text-pink" : "text-red-400"}>
-                        {fmtNum(r.partnerShare)}
+                        {fmtNum(r.eladShare)}
                       </span>
                     </td>
                     <td className="px-3 py-2 font-mono bg-pink/10">
@@ -249,7 +265,7 @@ export default function PartnerReportPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink font-bold">
-                    {fmtNum(totals?.partnerShare)}
+                    {fmtNum(totals?.eladShare)}
                   </td>
                   <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink font-bold">
                     {fmtNum(totals?.partnerShare)}
@@ -267,7 +283,7 @@ export default function PartnerReportPage() {
                       {fmtNum(averages?.profit)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink">{fmtNum(averages?.partnerShare)}</td>
+                  <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink">{fmtNum(averages?.eladShare)}</td>
                   <td className="px-3 py-2.5 font-mono bg-pink/10 text-pink">{fmtNum(averages?.partnerShare)}</td>
                 </tr>
               </tfoot>
@@ -303,7 +319,7 @@ export default function PartnerReportPage() {
                 <div className="grid grid-cols-2 gap-x-3 pt-2 border-t border-gray-800">
                   <div className="bg-pink/10 rounded-lg px-2 py-1.5 text-center">
                     <div className="text-[10px] text-gray-400">חלק אלעד</div>
-                    <div className="font-mono font-bold text-pink text-base">{fmtNum(r.partnerShare)} ₪</div>
+                    <div className="font-mono font-bold text-pink text-base">{fmtNum(r.eladShare)} ₪</div>
                   </div>
                   <div className="bg-pink/10 rounded-lg px-2 py-1.5 text-center">
                     <div className="text-[10px] text-gray-400">חלק רועי</div>
@@ -321,14 +337,14 @@ export default function PartnerReportPage() {
 
 interface SummaryCardProps {
   label: string;
-  value: number;
+  value: number | undefined;
   format?: "currency" | "int";
   accent?: boolean;
   highlight?: boolean;
 }
 
 function SummaryCard({ label, value, format = "currency", accent, highlight }: SummaryCardProps) {
-  const display =
+  const display = value == null ? "—" :
     format === "int"
       ? value.toLocaleString("he-IL", { maximumFractionDigits: 0 })
       : `₪${fmtNum(value)}`;

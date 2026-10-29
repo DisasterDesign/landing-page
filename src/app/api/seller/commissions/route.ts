@@ -1,3 +1,4 @@
+import { financeAgreementScope, financeProductScope } from "@/lib/finance/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
@@ -11,8 +12,10 @@ export async function GET() {
   try {
     const viewer = await getViewer();
 
+    const allowedAgreements = await prisma.agreement.findMany({ where: financeAgreementScope(viewer), select: { id: true } });
+    const agreementIds = allowedAgreements.map(row => row.id);
     const rows = await prisma.sellerCommission.findMany({
-      where: { sellerId: viewer.userId },
+      where: { sellerId: viewer.userId, OR: [{ agreementId: { in: agreementIds } }, { agreementRefId: { in: agreementIds } }] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -51,12 +54,12 @@ export async function GET() {
           status: "בוצע",
           archivedAt: null,
         },
-        select: { monthlyAmount: true, vatExempt: true },
+        select: { vatExempt: true, products: { where: { archivedAt: null, status: "בוצע", ...financeProductScope(viewer) }, select: { monthlyAmount: true } } },
       });
       let gross = 0;
       let profit = 0;
       for (const client of clients) {
-        const amount = client.monthlyAmount ?? 0;
+        const amount = client.products.reduce((sum, product) => sum + (product.monthlyAmount ?? 0), 0);
         gross += amount;
         const net = client.vatExempt ? amount : (amount * 100) / (100 + VAT_RATE);
         profit += net - amount * CARDCOM_FEE_RATE;

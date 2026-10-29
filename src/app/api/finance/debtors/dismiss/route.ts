@@ -1,40 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
-import { DEBTORS_DISMISSED_KEY, getDismissedDebtors } from "@/lib/cardcom-debtors";
+import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { DebtorDismissalError } from "@/lib/debtor-dismissal";
+import { persistDebtorDismissal } from "@/lib/debtor-dismissal-store";
 
-/**
- * Mark a terminal debtor as irrelevant (or restore it). Dismissed debtors
- * stay in the snapshot — the debt is still real at Cardcom — but disappear
- * from the main list and never fire alerts.
- */
+/** Change report visibility only. The debt and Cardcom orders stay untouched. */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
-
-    const body = (await req.json()) as { key?: string; name?: string; dismissed?: boolean };
-    const key = typeof body.key === "string" ? body.key.trim() : "";
-    if (!key) {
-      return NextResponse.json({ error: "key חובה" }, { status: 400 });
+    await requireOwner();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "בקשה לא תקינה" }, { status: 400 });
     }
-
-    const dismissed = await getDismissedDebtors();
-    if (body.dismissed === false) {
-      delete dismissed[key];
-    } else {
-      dismissed[key] = { name: body.name || key, dismissedAt: new Date().toISOString() };
+    // The map is one JSON value: concurrent owners must not replace each
+    // other's hides. Serializable conflicts reload the full map before retry.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await prisma.$transaction(
+          (tx) => persistDebtorDismissal(body, tx.keyValue),
+          { isolationLevel: "Serializable" },
+        );
+        return NextResponse.json({ ok: true, ...result });
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "P2034" && attempt < 2) continue;
+        throw error;
+      }
     }
-
-    await prisma.keyValue.upsert({
-      where: { key: DEBTORS_DISMISSED_KEY },
-      create: { key: DEBTORS_DISMISSED_KEY, value: dismissed as object },
-      update: { value: dismissed as object },
-    });
-
-    return NextResponse.json({ ok: true, dismissedCount: Object.keys(dismissed).length });
+    throw new Error("Dismissal transaction exhausted retries");
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
+    if (error instanceof DebtorDismissalError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error dismissing debtor:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

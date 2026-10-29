@@ -1,6 +1,8 @@
+import { jobPaymentUpdate } from "@/lib/finance/job-write";
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireAdmin, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireBookSelection, requireUnpaidBookChange } from "@/lib/finance/access";
 import { prisma } from "@/lib/prisma";
 import { updateJobSchema } from "@/lib/validations";
 
@@ -9,8 +11,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let viewer;
   try {
-    await requireOwner();
+    viewer = await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
@@ -18,6 +21,8 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  const visibleJob = await prisma.clientJob.findFirst({ where: { id, ...(viewer.isOwner ? {} : { financeBook: "SHARED" as const }) } });
+  if (!visibleJob) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await request.json().catch(() => null);
   const parsed = updateJobSchema.safeParse(body);
   if (!parsed.success) {
@@ -27,8 +32,14 @@ export async function PATCH(
     );
   }
   const d = parsed.data;
+  if ((visibleJob.paidAt || visibleJob.status === "PAID") && ((d.paidAt !== undefined && !d.paidAt) || d.status === "PENDING")) return NextResponse.json({ error: "לא ניתן לבטל תשלום של רשומה כספית; יש לרשום החזר בנפרד" }, { status: 409 });
 
   const data: Record<string, unknown> = {};
+  try {
+    const financeBook = requireBookSelection(viewer, d.financeBook, visibleJob.financeBook);
+    requireUnpaidBookChange(visibleJob.financeBook, financeBook, Boolean(visibleJob.paidAt) || visibleJob.status === "PAID");
+    data.financeBook = financeBook;
+  } catch (error) { return viewerErrorResponse(error) ?? NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
   if (d.title !== undefined) data.title = d.title.trim();
   if (d.amount !== undefined) data.amount = d.amount;
   if (d.vatIncluded !== undefined) data.vatIncluded = d.vatIncluded;
@@ -37,21 +48,15 @@ export async function PATCH(
   if (d.paymentTermsDays !== undefined) data.paymentTermsDays = d.paymentTermsDays;
   if (d.notes !== undefined) data.notes = d.notes?.trim() || null;
 
-  // paidAt and status kept consistent: setting a paidAt marks PAID; clearing
-  // it (or status PENDING) reverts to outstanding.
-  if (d.paidAt !== undefined) {
-    data.paidAt = d.paidAt ? new Date(d.paidAt) : null;
-    data.status = d.paidAt ? "PAID" : "PENDING";
-  }
-  if (d.status !== undefined) {
-    data.status = d.status;
-    if (d.status === "PAID" && d.paidAt === undefined) data.paidAt = new Date();
-    if (d.status === "PENDING") data.paidAt = null;
+  try {
+    Object.assign(data, jobPaymentUpdate(visibleJob, d));
+  } catch (error) {
+    return viewerErrorResponse(error) ?? NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
     const job = await prisma.clientJob.update({
-      where: { id },
+      where: { id, status: visibleJob.status, paidAt: visibleJob.paidAt },
       data,
       include: { client: { select: { id: true, name: true, number: true } } },
     });
@@ -66,14 +71,17 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let viewer;
   try {
-    await requireOwner();
+    viewer = await requireAdmin();
   } catch (error) {
     const authError = viewerErrorResponse(error);
     if (authError) return authError;
     throw error;
   }
   const { id } = await params;
+  const visibleJob = await prisma.clientJob.findFirst({ where: { id, ...(viewer.isOwner ? {} : { financeBook: "SHARED" as const }) } });
+  if (!visibleJob) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const job = await prisma.clientJob.findUnique({
     where: { id },
     select: { status: true, paidAt: true },

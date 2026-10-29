@@ -98,6 +98,7 @@ const prismaLeadSlaStore: LeadSlaStore = {
     return prisma.contactSubmission.findMany({
       where: {
         stage: "NEW",
+        agreements: { none: { financeBook: { not: "SHARED" } } },
         ownerId: null,
         migrationReviewRequired: false,
         eligibleSellerId: { not: null },
@@ -147,6 +148,7 @@ export async function dispatchLeadSlaAlerts(
           company: true,
           intentLevel: true,
           sourceKey: true,
+          agreements: { select: { financeBook: true } },
           stage: true,
           ownerId: true,
           eligibleSellerId: true,
@@ -171,6 +173,7 @@ export async function dispatchLeadSlaAlerts(
       const elapsedMs = now.getTime() - lead.createdAt.getTime();
       const createdEffects: CreateNotificationInput[] = [];
 
+      if (lead?.agreements?.some(agreement => agreement.financeBook !== "SHARED")) return [];
       if (!lead.slaAlertedAt && elapsedMs >= threshold * 60_000) {
         const input: CreateNotificationInput = {
           recipientId: lead.eligibleSellerId,

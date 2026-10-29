@@ -234,6 +234,141 @@ scopes ללקוחות/הסכמים/לידים/משימות. רועי הורד ל
 
 `UPDATE "User" SET role='ADMIN'` מחזיר את רועי מיידית. העמודות אדיטיביות.
 
+
+## 2026-10-26 — שיוך כספי פרטי ומשותף, בנפרד ממי שהביא את הלקוח
+
+**Status:** Accepted ומופעל בחי לאחר אישור שחרור; נתוני ייבוא ואסמכתאות כספיות נשמרים מחוץ למאגר הציבורי.
+
+`User.isOwner` נשאר מקור ההרשאה המתמשך מה־DB. רועי ADMIN בפעילות משותפת. אלעד בלבד בוחר PRIVATE/SHARED בהצעה/מוצר; SHARED מתחלק תמיד 50/50 אחרי עלויות משותפות. Client.partner הוא ברירת מחדל לעתיד, ולא ראיה לבעלות על כל המוצרים של אותה זהות. השיוך נשמר כ־snapshot על Agreement, ClientProduct, ClientJob, Expense ועל תנועות כספיות. UNASSIGNED גלוי לבעלים בלבד ואינו הופך לתקורה בגלל clientId חסר.
+
+הכנסה מאומתת נשמרת ב־FinanceTransaction לפי מזהה ספק/מסוף/עסקה/סוג למניעת כפל בין webhook, pull וחיוב הסכם. מוצר ותשלום קיימים אינם משויכים מחדש לעסקה אחרת. FinanceExpensePayment הוא יומן תשלומי הוצאות בשקלים עם מועד ומשלם; תחזית מנויים/הוצאות נפרדת מתנועות בפועל. החזר הוצאה למי ששילם אינו הוצאה שנייה. הוצאות פרטיות לא מפחיתות רווח משותף; חשבון מעורב חושף לרועי רק את ההקצאה המשותפת.
+
+נשמר הסטאק הקיים. ספקי Cloudflare billing history ו־Neon usage נקראים בשרת עם מפתחות ייעודיים; שימוש ואומדנים אינם חיוב ששולם. ספקים ללא חיבור מוצגים להזנת חשבונית ידנית. נתון מיושן/חסר מטבע אינו אפס תקין. סנכרון היסטורי מבוצע בנפרד ורק לאחר backfill של שיוכים, כדי לא לקבע תנועות כ־UNASSIGNED לפני סיווגן.
+
+הגבלת פרטיות שמרנית: ליד עם כל הסכם PRIVATE/UNASSIGNED, גם ליד מעורב, מוסתר מרועי בשלמותו. סינון זה חל גם על מונים, נתיבי contacts ישנים והתראות. משימה כללית שאינה מקושרת להסכם אינה מקבלת שיוך כספי אוטומטי.
+
+מקור ואימות: docs/superpowers/specs/2026-10-26-private-shared-finance-design.md; תכנית ובדיקות ב־docs/superpowers/plans/2026-10-26-private-shared-finance.md. המיגרציה אדיטיבית; מקור הנתונים המקורי והעבודה הלא קשורה בעותק הראשי נשמרו.
+
+
+### טיפול בחיובים מאוחדים ומזהי ספק חסרים
+
+חיוב סליקה יכול לכלול מספר הוראות קבע. נשמרת תנועת ספק אחת בסכום שנגבה בפועל; שורות היסטוריה אינן מצטברות להכנסה נוספת ואינן מחליפות את סכום התנועה. חיוב של כמה הוראות מקבל ספר משותף/פרטי רק לאחר אימות כל הוראה לאותו ספר, או אסמכתה מפורשת לכל החיוב/החשבון. אחרת השיוך נשאר UNASSIGNED; אין לבחור הסכם אחר באותו חשבון. קישור ללקוח/הסכם/מוצר נשמר רק אם הוא זהה בכל ההוראות. התנגשות של אותה עסקה בין חשבונות ממשיכה לעצור סנכרון. מזהי חשבון/הוראה לא חיוביים או לא תקינים נחשבים חסרים, ולכן אינם סותרים התאמה מוכחת לפי מזהה עסקה.
+
+בתנועת מט״ח שווי שקלי ומע״מ שנקראו מהמסמך המקורי גוברים על אומדן ועל הגדרת ברירת המחדל של הלקוח. שומרים אסמכתה מחוץ למאגר הציבורי, והיסטוריה אינה נכתבת מחדש בשליפה חוזרת. התראה לבעלים מציינת תנועות שממתינות לשיוך ואינן כלולות בחישוב.
+
+
+## 2026-10-26 — התראות תשלום שקטות ושחזור הסתרת חייבים
+
+**Status:** Accepted ומיושם; ללא שינוי במבנה הנתונים.
+
+תשלום תקין נרשם בדוחות וביומן הכספי בלי התראה באפליקציה, Push או הודעת תשלום פנימית במייל. גם הודעת הצלחה רגילה למוכר אינה נשלחת, אך רישום עמלה ואירועי תשלום נשארים. חריגי תשלום, כשל גבייה ופעולה נדרשת ממשיכים להתריע. התראות הצלחה ישנות מסוננות בשאילתת הקריאה ובמונה הלא־נקראו יחד, לפי סוג וכותרת מדויקים; אין מחיקת היסטוריה ואין החלשה של סינון הספר הכספי.
+
+הסתרת חייב אינה סגירת חוב ואינה משנה את קארדקום. היא מחייבת פעולה מפורשת, זמינה לביטול מיידי ולשחזור מרשימת מוסתרים בולטת. שורות הסתרה היסטוריות מחוץ לחלון הסריקה נשארות ניתנות לשחזור בלי להמציא סכום חוב עדכני. בקשת הסתרה מחייבת boolean מפורש ומפתח מוכר; כתיבה מקבילית שומרת את החלטות ההסתרה הקיימות.
+
+סריקת חייבים רוחבית מוגבלת לבעלים, כי אין שיוך כספי מאומת לכל שורה. התראות חדשות או חוב שגדל בסריקה מתוזמנת מיועדות לבעלים בלבד. רענון יזום של הדוח מעדכן snapshot ללא שליחת התראות. בסיס ההשוואה של הסריקה המתוזמנת נשמר בנפרד ב־KeyValue בשם `cardcom_debtors_alert_baseline`, כדי שרענון שקט לא יבלע התראה עתידית על חייב חדש או חוב שגדל. בהפעלה הראשונה הבסיס מאותחל אטומית מהדוח הקודם בלבד, ללא דריסה של בסיס שכבר קיים; רק סריקה מתוזמנת מקדמת אותו לאחר טיפול בהתראות. אין שינוי בסכימה, במנגנון גבייה, בהסכמים או ביומן התקבולים לצורך רענון הדוח.
+
+## 2026-10-26 — Personal read-only MCP resource server
+
+**Status:** Implemented in isolated branch; external auth choice is proposed,
+not provisioned; deployment and persistent access pending explicit approval.
+
+Use the maintained MCP TypeScript SDK for stateless authenticated Streamable
+HTTP inside the existing Next application. Reuse the current finance report,
+receipt deduplication/VAT/rounding and debtor report partition instead of adding
+parallel financial formulas. Extend the shared report with a bounded cash
+period; recurring run-rate remains a current forecast. Hidden historical debt
+stays unknown/stale when its snapshot is absent. The debtor read loader is
+shared with the existing GET and has no sweep/provider/write dependencies.
+
+Propose managed Auth0 OAuth authorization-code/PKCE rather than inventing an
+OAuth server on top of NextAuth Credentials. Verify signed issuer/audience/
+expiry and bind the verified subject/client to a persisted User through a
+revocable expiring grant; re-read grant/user flags on every request. Owner sees
+private/shared, shared ADMIN sees shared only, and debtor rows/counts/totals are
+owner-only. No actual provider/client/grant is created by this change, and no
+application/database/payment secret is usable as an MCP credential.
+
+The route stays disabled by default. Personal Work plugin setup and a real
+successful call from the parent dot are separate acceptance gates. No public
+plugin or Roy grant. See `docs/mcp/README.md` and `docs/mcp/VERIFICATION.md` for
+configuration proposal, tests, revocation and outstanding deployment/security
+gates. Canonical main changes and the existing finance worktree were preserved.
+
+### 2026-10-26 — MCP release dependency triage
+
+**Status:** Locally implemented/tested; deployment and Auth0 approval pending.
+
+Apply same-major/same-beta-line security releases for the actual framework/auth/
+validation surface: Next16.4.3, NextAuth5.0.0-beta.32/Auth core0.41.3,
+@auth/prisma-adapter2.11.3 and Zod4.6.6. Lock-only compatible patches cover
+source-map-js1.2.2 and the existing same-origin editor paste-XSS in
+ProseMirror1.42.8. Do not migrate middleware/auth architecture or change finance
+formulas. Preserve the original dev-only ESLint config/Hooks7.0.1 behavior with
+an explicit override instead of broad unrelated UI refactors or rule disabling.
+
+Audit entries are classified by actual API/import exposure, not npm's production
+flag alone. No critical entry remains; existing blog/editor conditional highs
+and the pre-hydration raw-HTML trust assumption are documented for a separate
+release-risk decision, not silently accepted or called MCP vulnerabilities.
+Auth0 Free is a published option, but account/tenant/plan entitlements remain
+unverified after a read-only dashboard visit reached login. No provisioning,
+credentials, terms, grants, security settings or production data changed.
+See docs/mcp/DEPENDENCY-REVIEW.md and docs/mcp/AUTH0-SETUP.md.
+
+### 2026-10-26 — Close blog/editor release blockers before personal MCP setup
+
+**Status:** Locally verified release candidate; exact Auth0 proposal/publication
+approved, provider user login and final dot acceptance still required.
+
+Sanitize stored blog HTML on the server with a maintained explicit allowlist
+before SSR/client serialization, replacing the raw-first hydration sanitizer.
+Escape tag openers in blog JSON-LD. Retain existing article/editor layout and
+formatting; no business/blog data is rewritten. Use matching patched Tiptap3.30.5
+packages/peers and declare the existing Markdown maintenance-script dependency
+explicitly instead of relying on editor transitives. Existing Vercel Node24
+already supports sanitize-html2.18.1; no runtime migration is introduced.
+
+633 tests pass including four security regressions and real browser synthetic
+render/typing/bold checks. Production audit has0 critical/0 high; residual
+moderates are classified in release notes. User credentials and new explicit
+terms still require the supported flow; approval is not treated as permission
+for an unspecified tenant, paid plan or broader access.
+
+
+## 2026-10-29 — Marketing link preview artwork
+
+**Status:** Implemented locally, pending deployment.
+
+The homepage and shared marketing OG renderer use a generated light-background Fuzion banner with a glass brandmark, cyan/magenta refraction and large Hebrew/English lettering. The versioned public JPEG is 1200×630 and approximately 76 KB. The root metadata image handler serves these JPEG bytes directly; Open Graph and Twitter metadata include image dimensions and descriptive alt text. Existing marketing subpage routes reuse the artwork with their page label. Agreement and individual blog article layouts retain their specialized renderers. No dependency or architecture change is required.
+
+The image was generated with the built-in imagegen tool using the existing brandmark as reference; the source prompt is recorded in `docs/brand/social/share-image-prompt.md`.
+
+## 2026-10-29 — Reversible agreement visibility archive
+
+**Status:** Implemented on an isolated branch; migration/deployment and actual cleanup are separate actions.
+
+Archive/restore uses independent Agreement metadata and an append-only audit table. Only persisted owners can preview/execute. A private server policy supplies protected IDs and an explicit age cutoff; no customer exception is committed to source. Missing policy fails closed. Five-minute actor/action/policy-bound preview tickets are revalidated against full financial dependencies inside Serializable transactions with conditional metadata writes and atomic audit.
+
+Signature, payment/partial or attempted payment, provider/recurring traces, unknown evidence and unverified financial/product/client links block archive. A cancelled record is not assumed unsigned. Restore returns visibility only. Neither operation calls providers, sends messages, alters financial/lead history, or changes MCP/OAuth permissions. Existing DELETE remains disabled.
+
+Only agreement/quote list surfaces gain archive filtering. Private/shared scopes remain unchanged; operator/reason metadata is redacted for nonowners. Late signature/payment evidence keeps an archived agreement visible for review rather than suppressing callbacks or changing revenue. Complete history remains in client/lead detail and finance readers.
+
+The deployment and cleanup boundary is documented in `docs/AGREEMENT_ARCHIVE_RUNBOOK.md`. Production reports and private cleanup configuration stay outside version control.
+
+Verification: 694 tests passed, 2 skipped, including real synthetic PostgreSQL races, rollback and private/shared visibility checks; TypeScript and production build pass. Full lint reports zero errors and 17 existing warnings. Local browser checks confirm synthetic archive/restore, URL persistence and one-time preview. Independent review findings were reproduced and fixed. No production migration, backfill, archive, deployment or MCP/OAuth change was performed.
+
+## 2026-10-29 — Original-currency product price corrections
+
+**Status:** Prepared locally; migration, release and production correction require separate authorization.
+
+`ClientProduct.monthlyAmount` remains a nullable ILS forecast valuation. New original amount/currency fields preserve an approved monthly gross price in USD or ILS. USD prices remain unvalued in ILS until there is an explicitly sourced FX workflow; expense-rate constants and historical receipt rates are not used to value current revenue.
+
+The existing owner product editor accepts a separate versioned price correction. The original price, previous valuation, client rollup before/after, actor, source and reason are stored in a restrictive revision history in the same Serializable transaction as the correction and client rollup. Undo appends a compensating revision, restores the exact previous product price snapshot and recalculates the client rollup; any former rollup drift remains in the audit rather than being reinstated. Existing receipt, agreement, book, VAT and payment evidence are independent. Older inline ILS editors and callbacks cannot overwrite a corrected price.
+
+Unknown active valuations propagate to nullable client rollups and scoped client views. The Clients footer identifies its sum as a row display total; the finance report continues to calculate run-rate from products and reports omitted ILS valuations. Monthly partner figures never substitute cumulative collections for an unknown monthly amount.
+
+The storefront audit primitive assumes another schema and swallows failures; the application's existing restrictive archive-event pattern is used so a failed audit insertion rolls back the price correction. The migration is additive and performs no client backfill. Rollback retains the additive schema and understands corrected prices; disabling the editor does not erase revisions.
+
 ## 2026-10-29 — Protected unsigned agreement business name correction
 
 Owner-only corrections use the existing agreement PATCH and canonical writer. Each correction checks persisted ownership, locks the same row as signing, requires the opening updatedAt snapshot, and atomically stores before/after/user/time in an additive JSON history. Only DRAFT/SENT without signature evidence may change. Optional archive metadata is checked under the lock using PostgreSQL row JSON to remain compatible with the separate archive branch.

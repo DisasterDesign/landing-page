@@ -340,6 +340,7 @@ export async function updateAgreementDraftFields(
     expectedUpdatedAt?: string;
     correction?: { businessName: string; expectedUpdatedAt: string };
     data: {
+      financeBook?: Agreement["financeBook"];
       tier?: Agreement["tier"];
       additionalServices?: string[];
       monthlyPrice?: number;
@@ -898,7 +899,7 @@ export async function applyPaymentSuccess(
       })
     : null;
   const firstMonthEligible =
-    creditedSellerId !== null && creditedPartner?.revenueSharePct == null;
+    agreement.financeBook === "SHARED" && creditedSellerId !== null && creditedPartner?.revenueSharePct == null;
   let commissionCreated = false;
   const existingCommission = await transaction.sellerCommission.findUnique({
     where: { agreementId: agreement.id },
@@ -995,7 +996,7 @@ export async function applyPaymentSuccess(
     });
     if (fromStage === "LOST") {
       const admins = await transaction.user.findMany({
-        where: { role: "ADMIN" },
+        where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
         select: { id: true },
       });
       for (const admin of admins) {
@@ -1013,22 +1014,11 @@ export async function applyPaymentSuccess(
       }
     }
   }
-  if (creditedSellerId && (commissionCreated || existingCommission)) {
-    effects.push({
-      kind: "NOTIFICATION",
-      input: {
-        recipientId: creditedSellerId,
-        type: "AGREEMENT_SIGNED",
-        title: `העסקה שולמה — ${agreement.customerName}`,
-        body: `עמלה: ${agreement.monthlyPrice} ₪ נרשמה לך`,
-        leadId: agreement.leadId ?? undefined,
-        url: `/seller/report/${agreement.id}`,
-        dedupeKey: `${creditedSellerId}:commission-created:${agreement.id}`,
-      },
-    });
-  } else if (agreement.isSellerDeal && !creditedSellerId) {
+  // Commission records remain canonical accounting truth; routine payment
+  // success does not interrupt the seller. Missing attribution still does.
+  if (agreement.isSellerDeal && !creditedSellerId) {
     const admins = await transaction.user.findMany({
-      where: { role: "ADMIN" },
+      where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
       select: { id: true },
     });
     for (const admin of admins) {
@@ -1114,7 +1104,7 @@ export async function applyPaymentFailure(
       });
     } else {
       const admins = await transaction.user.findMany({
-        where: { role: "ADMIN" },
+        where: agreement.financeBook === "SHARED" ? { role: "ADMIN" } : { isOwner: true },
         select: { id: true },
       });
       for (const admin of admins) {

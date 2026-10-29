@@ -1,3 +1,5 @@
+import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
+import { requireFinanceTaskAccess } from "@/lib/finance/task-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -24,6 +26,7 @@ export async function POST(
     }
 
     const { id } = await params;
+    await requireFinanceTaskAccess(await getViewer(), id);
 
     const task = await prisma.task.findUnique({
       where: { id },
@@ -77,6 +80,7 @@ export async function POST(
 
     return NextResponse.json(attachment, { status: 201 });
   } catch (error) {
+    const accessError = viewerErrorResponse(error); if (accessError) return accessError;
     console.error("Error uploading attachment:", error);
     return NextResponse.json(
       { error: "Internal server error" },
