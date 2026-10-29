@@ -1,3 +1,4 @@
+import { archiveVisibilityWhere } from "@/lib/agreements/archive-visibility";
 import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { getViewer, viewerErrorResponse } from "@/lib/auth/viewer";
 import { financeAgreementScope, requireBookSelection } from "@/lib/finance/access";
@@ -34,7 +35,7 @@ export async function GET() {
       ["ADMIN", "SELLER"],
     );
     const agreements = await prisma.agreement.findMany({
-      where: { AND: [sellerAgreementScope(sellerId), financeAgreementScope(viewer)] },
+      where: { AND: [sellerAgreementScope(sellerId), financeAgreementScope(viewer), await archiveVisibilityWhere(prisma, null, { AND: [sellerAgreementScope(sellerId), financeAgreementScope(viewer)] })] },
       select: {
         id: true,
         tier: true,

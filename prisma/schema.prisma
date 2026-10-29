@@ -358,6 +358,8 @@ model User {
   leadInteractions        LeadInteraction[]
   ownedLeadFollowUps      LeadFollowUp[]        @relation("LeadFollowUpOwner")
   createdLeadFollowUps    LeadFollowUp[]        @relation("LeadFollowUpCreator")
+  archivedAgreements      Agreement[] @relation("AgreementArchiver")
+  agreementArchiveEvents  AgreementArchiveEvent[]
   partnerAgreements       Agreement[]           @relation("AgreementPartner")
   creditedAgreements      Agreement[]           @relation("AgreementCreditedSeller")
   commissions             SellerCommission[]    @relation("SellerCommissions")
@@ -1098,6 +1100,12 @@ model ClientNote {
 }
 
 model Agreement {
+  archivedAt       DateTime?
+  archivedById     String?
+  archivedBy       User? @relation("AgreementArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
+  archiveReason    String?
+  archiveVersion   Int @default(0)
+  archiveEvents    AgreementArchiveEvent[]
   /// Immutable attribution snapshot; never inferred from the typing user.
   financeBook FinanceBook @default(UNASSIGNED)
   id                 String          @id @default(cuid())
@@ -1195,6 +1203,7 @@ model Agreement {
 
   charges AgreementCharge[]
 
+  @@index([archivedAt, kind])
   @@index([status])
   @@index([clientId])
   @@index([leadId])
@@ -1205,6 +1214,22 @@ model Agreement {
   @@index([partnerId])
   @@index([creditedSellerId])
   @@index([createdBy])
+}
+
+// Visibility-only audit. Financial and lead event histories remain independent.
+model AgreementArchiveEvent {
+  id          String @id @default(cuid())
+  agreementId String
+  agreement   Agreement @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  actorId     String
+  actor       User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action      String
+  reason      String
+  occurredAt  DateTime @default(now())
+  version     Int
+
+  @@unique([agreementId, version])
+  @@index([agreementId, occurredAt])
 }
 
 model AgreementCharge {
