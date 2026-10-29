@@ -1,3 +1,4 @@
+import { correctionSchema } from "@/lib/agreements/business-name";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -59,7 +60,13 @@ export async function PATCH(
     await requirePersistedUserRole(session.user.id, ["ADMIN"]);
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error: "Invalid request"}, {status: 400});
+    if (Object.prototype.hasOwnProperty.call(body, "businessName")) {
+      const correction = correctionSchema.safeParse(body);
+      if (!correction.success) return NextResponse.json({error: "Invalid correction"}, {status: 400});
+      return NextResponse.json(await updateAgreementDraftFields({agreementId: id, actor: {userId: session.user.id, role: "ADMIN"}, data: {}, correction: correction.data}));
+    }
     const parsed = updateAgreementSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -162,6 +169,7 @@ export async function PATCH(
     }
 
     const agreement = await updateAgreementDraftFields({
+      expectedUpdatedAt: existing.updatedAt.toISOString(),
       agreementId: id,
       actor: { userId: session.user.id, role: "ADMIN" },
       data: {
@@ -177,6 +185,7 @@ export async function PATCH(
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") return NextResponse.json({error: "ההסכם השתנה. יש לטעון מחדש."}, {status: 409});
     console.error("Error updating agreement:", error);
     return leadDomainErrorResponse(error);
   }

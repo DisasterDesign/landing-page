@@ -1,3 +1,4 @@
+import { assertAgreementSnapshot, correctedBusinessNameContent, correctionSchema } from "@/lib/agreements/business-name";
 import {
   type Agreement,
   type LeadStage,
@@ -336,6 +337,8 @@ export async function updateAgreementDraftFields(
   input: {
     agreementId: string;
     actor: AuthenticatedLeadActor;
+    expectedUpdatedAt?: string;
+    correction?: { businessName: string; expectedUpdatedAt: string };
     data: {
       tier?: Agreement["tier"];
       additionalServices?: string[];
@@ -361,6 +364,10 @@ export async function updateAgreementDraftFields(
 ): Promise<Agreement> {
   const store = dependencies.store ?? prismaAgreementLifecycleStore;
   return store.transaction(async (transaction) => {
+    // Read optional archive metadata through JSON for compatibility with the
+    // independently developed archive feature, without importing its schema.
+    const locked = (input.correction || input.data.content !== undefined) ? await transaction.$queryRaw<Array<{archivedAt: string | null}>>`SELECT to_jsonb(a)->>'archivedAt' AS "archivedAt" FROM "Agreement" a WHERE "id" = ${input.agreementId} FOR UPDATE` : [];
+    if (locked[0]?.archivedAt) throw new LeadDomainError("CONFLICT", "Agreement is archived");
     const agreement = await transaction.agreement.findUnique({
       where: { id: input.agreementId },
       include: {
@@ -370,8 +377,23 @@ export async function updateAgreementDraftFields(
     if (!agreement) {
       throw new LeadDomainError("NOT_FOUND", "Agreement not found");
     }
+    if (input.data.content !== undefined) assertAgreementSnapshot(agreement.updatedAt, input.expectedUpdatedAt);
+    if (input.correction) {
+      const owner = await transaction.user.findUnique({where: {id: input.actor.userId}, select: {isOwner: true, role: true}});
+      if (!owner?.isOwner || owner.role !== "ADMIN") throw new LeadDomainError("FORBIDDEN", "Owner required");
+      const correction = correctionSchema.parse(input.correction);
+      assertAgreementSnapshot(agreement.updatedAt, correction.expectedUpdatedAt);
+      if (!["DRAFT", "SENT"].includes(agreement.status) || agreement.signedAt || agreement.signatureData || ("archivedAt" in agreement && agreement.archivedAt)) throw new LeadDomainError("CONFLICT", "Agreement is closed");
+      if (correction.businessName === agreement.businessName) throw new LeadDomainError("VALIDATION", "Name is unchanged");
+      const content = correctedBusinessNameContent(agreement.content, agreement.businessName, correction.businessName);
+      const history = Array.isArray(agreement.businessNameCorrections) ? agreement.businessNameCorrections : [];
+      return transaction.agreement.update({where: {id: agreement.id}, data: {
+        businessName: correction.businessName, content,
+        businessNameCorrections: [...history, {before: agreement.businessName, after: correction.businessName, userId: input.actor.userId, occurredAt: new Date().toISOString()}],
+      }});
+    }
     await authorizeAgreementUserAction(transaction, input.actor, agreement);
-    if (agreement.status === "SIGNED" || agreement.status === "CANCELLED") {
+    if (!["DRAFT", "SENT"].includes(agreement.status) || agreement.signedAt || agreement.signatureData) {
       throw new LeadDomainError(
         "CONFLICT",
         "Finalized agreement content is immutable",

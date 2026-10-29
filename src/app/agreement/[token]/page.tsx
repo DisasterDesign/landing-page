@@ -30,6 +30,7 @@ const getAgreement = cache(async (token: string) => {
   return prisma.agreement.findUnique({
     where: { signToken: token },
     select: {
+      updatedAt: true,
       tier: true,
       monthlyPrice: true,
       oneTimeFee: true,
@@ -197,6 +198,7 @@ export default async function AgreementSignPage({
     <BrandShell dir={dir}>
       <SignAgreementClient
         token={token}
+        expectedUpdatedAt={agreement.updatedAt.toISOString()}
         content={agreement.content}
         locale={en ? "en" : "he"}
         vatExempt={agreement.vatExempt}

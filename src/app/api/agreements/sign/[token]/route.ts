@@ -1,3 +1,6 @@
+import { assertAgreementSnapshot } from "@/lib/agreements/business-name";
+import { LeadDomainError } from "@/lib/leads/errors";
+import { leadDomainErrorResponse } from "@/lib/leads/http";
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -34,6 +37,7 @@ export async function GET(
       where: { signToken: token },
       select: {
         id: true,
+        updatedAt: true,
         tier: true,
         monthlyPrice: true,
         oneTimeFee: true,
@@ -97,8 +101,8 @@ export async function POST(
     const signedUserAgent = request.headers.get("user-agent");
 
     const signed = await prisma.$transaction(async (transaction) => {
-      const lockRows = await transaction.$queryRaw<Array<{ id: string }>>`
-        SELECT "id" FROM "Agreement" WHERE "signToken" = ${token} FOR UPDATE
+      const lockRows = await transaction.$queryRaw<Array<{ id: string; archivedAt: string | null }>>`
+        SELECT "id", to_jsonb(a)->>'archivedAt' AS "archivedAt" FROM "Agreement" a WHERE "signToken" = ${token} FOR UPDATE
       `;
       if (lockRows.length === 0) return { outcome: "NOT_FOUND" as const };
 
@@ -116,6 +120,11 @@ export async function POST(
           agreement: existing,
         };
       }
+
+      if (!["DRAFT", "SENT"].includes(existing.status) || existing.signedAt || existing.signatureData || ("archivedAt" in existing && existing.archivedAt)) return {outcome: "CANCELLED" as const};
+      assertAgreementSnapshot(existing.updatedAt, body.expectedUpdatedAt);
+
+      if (lockRows[0].archivedAt) return {outcome: "CANCELLED" as const};
 
       const locale = existing.locale === "en" ? "en" : "he";
       const finalContent = renderAgreement(existing.tier, {
@@ -249,6 +258,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, paymentUrl });
   } catch (error) {
+    if (error instanceof LeadDomainError) return leadDomainErrorResponse(error);
     console.error("Error signing agreement:", error);
     return NextResponse.json(
       { error: "Internal server error" },

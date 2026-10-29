@@ -1,0 +1,3 @@
+# Protected business name correction
+
+Implement the requested scope using the existing PATCH and canonical agreement writer. Add an additive JSON audit trail. Lock the agreement row for correction and signing; compare updatedAt snapshots before changes. Preserve the existing document byte-for-byte except its business-name table cell (fail closed on unknown templates), avoiding accidental adoption of newer legal terms. Downloads already read that document. Add owner-only UI with fresh snapshot, before/after confirmation and conflict feedback. Require a signing snapshot and reload on conflict, preserving already committed signatures. Verify with synthetic tests, TypeScript, lint and production build. No live mutations or deployment.

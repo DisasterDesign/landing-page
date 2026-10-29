@@ -85,7 +85,8 @@ export async function GET(request: NextRequest) {
     // "copy link" button building /agreement/undefined, which failed silently
     // for days. The rule that actually holds: the token may ride on
     // admin/owner-scoped responses, never on public or unscoped ones.
-    return NextResponse.json({ data: agreements });
+    const owner = await prisma.user.findUnique({where: {id: session.user.id}, select: {isOwner: true}});
+    return NextResponse.json({ data: agreements, canCorrectBusinessName: owner?.isOwner === true });
   } catch (error) {
     if (error instanceof PersistedRoleAuthorizationError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

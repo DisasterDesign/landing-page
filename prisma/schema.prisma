@@ -1092,6 +1092,7 @@ model Agreement {
   email              String
   status             AgreementStatus @default(DRAFT)
   signedAt           DateTime?
+  businessNameCorrections Json @default("[]")
   signatureData      String?
   content            String
   // One-off custom proposals (e.g. video production) carry their own legal

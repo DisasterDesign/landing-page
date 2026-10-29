@@ -233,3 +233,9 @@ scopes ללקוחות/הסכמים/לידים/משימות. רועי הורד ל
 ### Reversibility
 
 `UPDATE "User" SET role='ADMIN'` מחזיר את רועי מיידית. העמודות אדיטיביות.
+
+## 2026-10-29 — Protected unsigned agreement business name correction
+
+Owner-only corrections use the existing agreement PATCH and canonical writer. Each correction checks persisted ownership, locks the same row as signing, requires the opening updatedAt snapshot, and atomically stores before/after/user/time in an additive JSON history. Only DRAFT/SENT without signature evidence may change. Optional archive metadata is checked under the lock using PostgreSQL row JSON to remain compatible with the separate archive branch.
+
+The original stored HTML is preserved except its recognized business-name table cell. Unknown templates fail closed; rendering a draft with today's template could silently change legal terms. Both downloads and previews read this same corrected content. Price, contact, identifiers, signing token, billing and notifications are untouched. Signing requires a matching snapshot before any client, signature, payment or notification effects; an already committed signature remains idempotent. Old browser pages must reload after rollout. Apply the additive history column before app deployment; no live correction or deployment is performed by this development task.

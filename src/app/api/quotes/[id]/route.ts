@@ -41,6 +41,7 @@ export async function PATCH(
     const existing = await prisma.agreement.findUnique({
       where: { id },
       select: {
+        updatedAt: true,
         kind: true,
         status: true,
         projectTitle: true,
@@ -70,6 +71,7 @@ export async function PATCH(
     });
 
     const updated = await updateAgreementDraftFields({
+      expectedUpdatedAt: existing?.updatedAt.toISOString(),
       agreementId: id,
       actor: { userId: viewer.userId, role: "ADMIN" },
       data: { ...plan.data, content, documentVersion: AGREEMENT_DOCUMENT_VERSION },

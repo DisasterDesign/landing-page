@@ -20,6 +20,7 @@ type PaymentStatus = "PENDING" | "SENT" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 interface Agreement {
   id: string;
+  updatedAt: string;
   leadId?: string | null;
   tier: Tier | null;
   monthlyPrice: number;
@@ -131,6 +132,28 @@ export default function AgreementsPage() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [viewing, setViewing] = useState<Agreement | null>(null);
+  const [canCorrectName, setCanCorrectName] = useState(false);
+  const [correction, setCorrection] = useState<Agreement | null>(null);
+  const [correctedName, setCorrectedName] = useState("");
+  const [confirmedCorrection, setConfirmedCorrection] = useState(false);
+  const [savingCorrection, setSavingCorrection] = useState(false);
+  async function openCorrection() {
+    if (!viewing) return;
+    const res = await fetch(`/api/agreements/${viewing.id}`, {cache: "no-store"});
+    if (!res.ok) { toast.error("שגיאה בטעינת ההסכם"); return; }
+    const fresh = await res.json();
+    setCorrection(fresh); setCorrectedName(fresh.businessName || ""); setConfirmedCorrection(false);
+  }
+  async function saveCorrection() {
+    if (!correction || !confirmedCorrection) return;
+    setSavingCorrection(true);
+    try {
+      const res = await fetch(`/api/agreements/${correction.id}`, {method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({businessName: correctedName.trim(), expectedUpdatedAt: correction.updatedAt})});
+      if (!res.ok) throw new Error(res.status === 409 ? "ההסכם השתנה. סגור את החלון ופתח מחדש." : "לא ניתן לשמור את התיקון");
+      const updated = await res.json(); setViewing(updated); setCorrection(null); await fetchList(); toast.success("שם העסק תוקן");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "שגיאה בשמירה"); }
+    finally { setSavingCorrection(false); }
+  }
   const [creating, setCreating] = useState(false);
 
   const [tierChoice, setTierChoice] = useState<TierChoice>("ADVANCED");
@@ -175,6 +198,7 @@ export default function AgreementsPage() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setAgreements(json.data || []);
+      setCanCorrectName(json.canCorrectBusinessName === true);
     } catch {
       toast.error("שגיאה בטעינת הסכמים");
     } finally {
@@ -1403,13 +1427,25 @@ export default function AgreementsPage() {
         )}
       </Modal>
 
+      <Modal isOpen={correction !== null} onClose={() => {if (!savingCorrection) setCorrection(null);}} title="תיקון שם העסק">
+        {correction && <div className="space-y-4" dir="rtl">
+          <p>שם נוכחי: <strong>{correction.businessName || "—"}</strong></p>
+          <label className="block">שם חדש<input value={correctedName} maxLength={200} disabled={savingCorrection} onChange={e => {setCorrectedName(e.target.value); setConfirmedCorrection(false);}} className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3" /></label>
+          <p>לאחר שמירה: <strong>{correctedName.trim() || "—"}</strong></p>
+          <label className="block"><input type="checkbox" checked={confirmedCorrection} disabled={savingCorrection} onChange={e => setConfirmedCorrection(e.target.checked)} /> אני מאשר את תיקון שם העסק המוצג לעיל</label>
+          <button onClick={saveCorrection} disabled={savingCorrection || !confirmedCorrection || !correctedName.trim() || correctedName.trim() === correction.businessName} className="rounded-xl bg-cyan text-black px-4 py-2 disabled:opacity-40">{savingCorrection ? "שומר..." : "שמירת התיקון"}</button>
+        </div>}
+      </Modal>
+
       {/* View modal */}
       <Modal
-        isOpen={viewing !== null}
+        isOpen={viewing !== null && correction === null}
         onClose={() => setViewing(null)}
         title={viewing ? `הסכם — ${viewing.customerName}` : ""}
       >
         {viewing && (
+          <>
+          {canCorrectName && ["DRAFT", "SENT"].includes(viewing.status) && !viewing.signedAt && <button onClick={openCorrection} className="mb-4 text-cyan underline">תיקון שם העסק</button>}
           <iframe
             srcDoc={viewing.content}
             sandbox=""
@@ -1417,6 +1453,7 @@ export default function AgreementsPage() {
             className="w-full bg-white rounded-xl border border-gray-700"
             style={{ height: "60vh" }}
           />
+          </>
         )}
       </Modal>
 

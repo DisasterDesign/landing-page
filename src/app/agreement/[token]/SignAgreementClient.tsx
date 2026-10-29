@@ -14,6 +14,7 @@ interface PriceInfo {
 
 interface Props {
   token: string;
+  expectedUpdatedAt: string;
   content: string;
   priceInfo: PriceInfo;
   locale?: Locale;
@@ -162,6 +163,7 @@ function buildStrings(locale: Locale, vatExempt: boolean): Strings {
 
 export default function SignAgreementClient({
   token,
+  expectedUpdatedAt,
   content,
   priceInfo,
   initial,
@@ -177,6 +179,7 @@ export default function SignAgreementClient({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [stale, setStale] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
   const [customerName, setCustomerName] = useState(initial.customerName);
@@ -349,8 +352,13 @@ export default function SignAgreementClient({
           phone: phone.trim(),
           email: email.trim(),
           signatureData,
+          expectedUpdatedAt,
         }),
       });
+      if (res.status === 409) {
+        setStale(true);
+        throw new Error(locale === "en" ? "The agreement changed. Reload to review it before signing." : "ההסכם השתנה. יש לטעון מחדש ולעיין בו לפני חתימה.");
+      }
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || t.errSign);
@@ -641,6 +649,7 @@ export default function SignAgreementClient({
             <span>{t.consent}</span>
           </label>
 
+          {stale && <button type="button" onClick={() => window.location.reload()} className="text-cyan underline">{locale === "en" ? "Reload agreement" : "טעינת ההסכם מחדש"}</button>}
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-xl px-4 py-3">
               {error}
@@ -649,7 +658,7 @@ export default function SignAgreementClient({
 
           <button
             type="submit"
-            disabled={submitting || !hasSignature || !agreed}
+            disabled={stale || submitting || !hasSignature || !agreed}
             className="w-full bg-gradient-to-r from-pink to-cyan text-black font-extrabold py-3.5 rounded-full hover:shadow-[0_0_40px_rgba(229,3,162,0.45)] disabled:opacity-40 disabled:cursor-not-allowed transition-shadow"
           >
             {submitting ? t.submitting : t.submit}
