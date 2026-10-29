@@ -1,3 +1,4 @@
+import { archiveVisibilityWhere } from "@/lib/agreements/archive-visibility";
 import { requireFinanceLeadAccess } from "@/lib/finance/lead-access";
 import { financeClientScope, financeProductScope, financeAgreementScope, redactFinanceAgreement, requireBookSelection } from "@/lib/finance/access";
 import { NextRequest, NextResponse } from "next/server";
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
         // belong to /admin/jobs — mixing them in here would put a ₪3,500 logo
         // job next to the monthly contracts and break every count on the page.
         kind: "SUBSCRIPTION",
-        ...financeAgreementScope(viewer),
+        AND: [financeAgreementScope(viewer), await archiveVisibilityWhere(prisma, url.searchParams.get("archive"), financeAgreementScope(viewer))],
         ...(status ? { status } : {}),
         ...(tier ? { tier } : {}),
         ...(partnerId ? partnerAttributionScope(partnerId) : {}),

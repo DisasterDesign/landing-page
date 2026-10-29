@@ -1,3 +1,4 @@
+import { archiveVisibilityWhere, archiveProtectedIds } from "@/lib/agreements/archive-visibility";
 import { NextRequest, NextResponse } from "next/server";
 
 import { financeAgreementScope, requireBookSelection } from "@/lib/finance/access";
@@ -21,15 +22,16 @@ import {
  * docs/superpowers/specs/2026-08-10-one-time-project-quotes-design.md
  */
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const viewer = await requireAdmin();
 
     const quotes = await prisma.agreement.findMany({
-      where: { kind: "ONE_TIME", ...financeAgreementScope(viewer) },
+      where: { kind: "ONE_TIME", AND: [financeAgreementScope(viewer), await archiveVisibilityWhere(prisma, request.nextUrl.searchParams.get("archive"), financeAgreementScope(viewer))] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
+        archivedAt: true,
         projectTitle: true,
         financeBook: true,
         customerName: true,
@@ -53,6 +55,7 @@ export async function GET() {
       },
     });
 
+    const protectedIds = new Set(await archiveProtectedIds(prisma, financeAgreementScope(viewer), quotes.map(q => q.id)));
     const now = new Date();
     const rows = quotes.map((q) => {
       const base = quoteJobInput(q);
@@ -70,6 +73,8 @@ export async function GET() {
         overdue: false,
         notes: null,
         agreementStatus: q.status,
+        archiveProtected: protectedIds.has(q.id),
+        archivedAt: q.archivedAt?.toISOString() ?? null,
         paymentStatus: q.paymentStatus,
         signToken: q.signToken,
         phone: q.phone,

@@ -342,3 +342,17 @@ for an unspecified tenant, paid plan or broader access.
 The homepage and shared marketing OG renderer use a generated light-background Fuzion banner with a glass brandmark, cyan/magenta refraction and large Hebrew/English lettering. The versioned public JPEG is 1200×630 and approximately 76 KB. The root metadata image handler serves these JPEG bytes directly; Open Graph and Twitter metadata include image dimensions and descriptive alt text. Existing marketing subpage routes reuse the artwork with their page label. Agreement and individual blog article layouts retain their specialized renderers. No dependency or architecture change is required.
 
 The image was generated with the built-in imagegen tool using the existing brandmark as reference; the source prompt is recorded in `docs/brand/social/share-image-prompt.md`.
+
+## 2026-10-29 — Reversible agreement visibility archive
+
+**Status:** Implemented on an isolated branch; migration/deployment and actual cleanup are separate actions.
+
+Archive/restore uses independent Agreement metadata and an append-only audit table. Only persisted owners can preview/execute. A private server policy supplies protected IDs and an explicit age cutoff; no customer exception is committed to source. Missing policy fails closed. Five-minute actor/action/policy-bound preview tickets are revalidated against full financial dependencies inside Serializable transactions with conditional metadata writes and atomic audit.
+
+Signature, payment/partial or attempted payment, provider/recurring traces, unknown evidence and unverified financial/product/client links block archive. A cancelled record is not assumed unsigned. Restore returns visibility only. Neither operation calls providers, sends messages, alters financial/lead history, or changes MCP/OAuth permissions. Existing DELETE remains disabled.
+
+Only agreement/quote list surfaces gain archive filtering. Private/shared scopes remain unchanged; operator/reason metadata is redacted for nonowners. Late signature/payment evidence keeps an archived agreement visible for review rather than suppressing callbacks or changing revenue. Complete history remains in client/lead detail and finance readers.
+
+The deployment and cleanup boundary is documented in `docs/AGREEMENT_ARCHIVE_RUNBOOK.md`. Production reports and private cleanup configuration stay outside version control.
+
+Verification: 694 tests passed, 2 skipped, including real synthetic PostgreSQL races, rollback and private/shared visibility checks; TypeScript and production build pass. Full lint reports zero errors and 17 existing warnings. Local browser checks confirm synthetic archive/restore, URL persistence and one-time preview. Independent review findings were reproduced and fixed. No production migration, backfill, archive, deployment or MCP/OAuth change was performed.

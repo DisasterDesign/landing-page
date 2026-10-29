@@ -61,7 +61,7 @@ export function redactFinanceClient<T extends Record<string, unknown>>(viewer: V
 export function redactFinanceAgreement<T extends Record<string, unknown>>(viewer: Viewer, agreement: T): T {
   if (viewer.isOwner) return agreement;
   const result: Record<string, unknown> = { ...agreement };
-  for (const key of Object.keys(result)) if (key.startsWith("cardcom") || ["signatureData", "signedIp", "signedUserAgent", "paymentId"].includes(key)) delete result[key];
+  for (const key of Object.keys(result)) if (key.startsWith("cardcom") || ["signatureData", "signedIp", "signedUserAgent", "paymentId", "archivedById", "archiveReason"].includes(key)) delete result[key];
   if (result.client && typeof result.client === "object") result.client = { id: (result.client as Record<string, unknown>).id, name: (result.client as Record<string, unknown>).name };
   return result as T;
 }
