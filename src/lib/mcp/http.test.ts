@@ -23,7 +23,7 @@ test('real loopback Streamable HTTP + signed OAuth-shaped tokens: initialize/lis
   }catch{res.writeHead(500);res.end();}
  });
  const config={issuer:grant.issuer,audience:'synthetic',jwksUri:'https://id.example.invalid/keys'};
- const handle=(request:Request)=>createMcpHandler({resourceUrl,issuer:grant.issuer,authenticate:r=>authenticateMcp(r,config,{verify:token=>jwtVerify(token,publicKey,{issuer:grant.issuer,audience:config.audience,requiredClaims:['exp','iat','sub'],algorithms:['RS256']}),loadGrant:async()=>({...grant,user:{...user}})}),data:{financeSummary:async(v)=>{businessReads++;return {visibility:v.isOwner?'owner':'shared'};},searchClients:async()=>{businessReads++;return {clients:[]};},debtorsReport:async()=>{businessReads++;return {hidden:[]};}}})(request);
+ const handle=(request:Request)=>createMcpHandler({resourceUrl,issuer:grant.issuer,authenticate:r=>authenticateMcp(r,config,{verify:token=>jwtVerify(token,publicKey,{issuer:grant.issuer,audience:config.audience,requiredClaims:['exp','iat','sub'],algorithms:['RS256']}),loadGrant:async()=>({...grant,user:{...user}})}),data:{financeReceipts:async()=>({rows:[]}),financeSummary:async(v)=>{businessReads++;return {visibility:v.isOwner?'owner':'shared'};},searchClients:async()=>{businessReads++;return {clients:[]};},debtorsReport:async()=>{businessReads++;return {hidden:[]};}}})(request);
  const sign=(expires=now+300)=>new SignJWT({scope:grant.scopes.join(' '),azp:grant.clientId,userId:'attacker',role:'OWNER'}).setProtectedHeader({alg:'RS256'}).setIssuer(grant.issuer).setSubject(grant.subject).setAudience(config.audience).setIssuedAt(now).setExpirationTime(expires).sign(privateKey);
  http.listen(0,'127.0.0.1');await once(http,'listening');const address=http.address();assert.ok(address&&typeof address==='object');resourceUrl=`http://127.0.0.1:${address.port}/api/mcp`;
  const token=await sign();
@@ -33,7 +33,7 @@ test('real loopback Streamable HTTP + signed OAuth-shaped tokens: initialize/lis
   for(const credential of [undefined,'invalid',await sign(now-1)]){const response=await post(credential);assert.equal(response.status,401);assert.match(response.headers.get('www-authenticate')??'',/resource_metadata/);assert.equal(response.headers.get('cache-control'),'no-store, private');}
   assert.equal(businessReads,0);
   await client.connect(new StreamableHTTPClientTransport(new URL(resourceUrl),{requestInit:{headers:{Authorization:`Bearer ${token}`}}}));
-  assert.equal((await client.listTools()).tools.length,3);
+  assert.equal((await client.listTools()).tools.length,4);
   const result=await client.callTool({name:'finance_summary',arguments:{}});assert.ok(JSON.stringify(result).includes('owner'));assert.equal(businessReads,1);
   user.isOwner=false;
   assert.equal((await client.listTools()).tools.length,2);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FinanceBookSelect, { type SelectableFinanceBook, FinanceBookBadge } from "@/components/admin/FinanceBookSelect";
 import Link from "next/link";
+import CashSettlementPanel from "@/components/admin/CashSettlementPanel";
 import toast from "react-hot-toast";
 import {
   CATEGORY_LABELS,
@@ -341,7 +342,7 @@ export default function FinancePage() {
         <div>
           <h1 className="text-2xl font-bold text-white">פיננסים — הכנסות מול הוצאות</h1>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-2xl">
-            תחזית חודשית לפי מוצרים פעילים, בנפרד מכסף שהתקבל בפועל. רווח משותף לאחר הוצאות מתחלק שווה בשווה. המרת מט״ח משוערת: $1 = ₪{USD_TO_ILS} · €1 = ₪{EUR_TO_ILS} (כולל עמלות המרה).
+            התחשבנות בפועל לפי תקבולים ותשלומים מתועדים, ובנפרד תחזית ותקציב. שערי התקציב המשוערים בלבד: $1 = ₪{USD_TO_ILS} · €1 = ₪{EUR_TO_ILS} (כולל עמלות המרה).
           </p>
         </div>
         <Link
@@ -352,28 +353,14 @@ export default function FinancePage() {
         </Link>
       </div>
 
-      {isOwner && <label className="flex items-center gap-3 text-sm text-gray-400">תצוגה
+      <CashSettlementPanel />
+      <h2 className="text-xl font-bold text-white">תחזית מנויים ותקציב — אינם סכום להעברה</h2>
+      {isOwner && <label className="flex items-center gap-3 text-sm text-gray-400">תצוגת תחזית ותקציב
         <select value={book || "combined"} onChange={(event) => setBook(event.target.value)} className={inputCls + " max-w-xs"}>
           <option value="combined">הכול</option><option value="personal">שלי בלבד</option><option value="fuzion">השותפות</option><option value="mine">החלק שלי</option>
         </select>
       </label>}
       {loadError && <p role="alert" className="text-sm text-amber-300">העדכון נכשל. {data ? "מוצגים הנתונים האחרונים שהתקבלו." : "אין נתונים זמינים כרגע."}</p>}
-      {data?.sync && (data.sync.stale === true || data.sync.status !== "SUCCESS") && <p className="text-sm text-amber-300">התקבולים טרם סונכרנו במלואם. סנכרון מוצלח אחרון: {data.sync.lastSuccessAt ? new Date(data.sync.lastSuccessAt).toLocaleString("he-IL") : "טרם הושלם"}</p>}
-      {data?.viewer?.isOwner && (data.unassignedTransactions?.length ?? 0) > 0 && <p className="text-sm text-amber-300 mb-3">{data.unassignedTransactions?.length} תנועות סליקה ממתינות לשיוך ואינן נכללות בחישוב. יש לבדוק את השיוך כדי להשלים את תמונת התקבולים.</p>}
-      {(data?.unassignedExpenseCount ?? 0) > 0 && <p className="text-sm text-amber-300 mb-3">{data?.unassignedExpenseCount} הוצאות פעילות ממתינות לשיוך ואינן נכללות ברווח. יש להשלים את השיוך כדי לקבל תמונה מלאה.</p>}
-      {data?.actual && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card label="התקבל בפועל החודש (ברוטו)" value={data.actual.gross} />
-        <Card label="תקבולים פחות מע״מ ועמלת סליקה משוערת" value={data.actual.profit} />
-        {isOwner && <Card label="הרווח האישי הצפוי (שלי בלבד)" value={data.personalProfit} />}
-        <Card label="הרווח החודשי הצפוי שלי" value={data.myProfit} highlight />
-      </div>}
-      {data?.actualAllocation && <div className="grid grid-cols-2 gap-3 mt-3">
-        <Card label="החלק שלי מתקבולים לאחר תשלומי הוצאות מתועדים" value={data.actualAllocation.myProfit} />
-        <Card label="החלק שלי מעבודות חד־פעמיות לאחר הוצאות" value={data.oneOffAllocation?.myProfit} />
-      </div>}
-      {data?.actualAllocation && <p className="text-xs text-gray-400">החלוקה כוללת רק הוצאות עם תשלום מתועד בפועל בחודש זה. התחזית החודשית נשארת בנפרד. עמלת הסליקה משוערת.</p>}
-      {data?.actualAllocation && <p className="text-xs text-gray-400">תשלומי הוצאות מתועדים בחודש: {data.actualAllocation.recordedPaymentCount ?? "—"}{(data.actualAllocation.unrecordedExpenseCount ?? 0) > 0 && <span className="text-amber-300"> · ל־{data.actualAllocation.unrecordedExpenseCount} הוצאות טרם תועד תשלום; התמונה חלקית.</span>}</p>}
-      {(data?.actual?.unvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.actual?.unvaluedCount} תקבולים ללא שווי בשקלים אינם נכללים בסכומים. הדוח חלקי.</p>}
       {(data?.forecastUnvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים אינם נכללים בתחזית. התחזית חלקית.</p>}
       {(data?.forecastWarnings?.length ?? 0) > 0 && <details className="mb-4 rounded-lg border border-amber-500/30 p-3 text-sm text-amber-200"><summary>פערים ומידע חסר בתחזית ({data?.forecastWarnings?.length})</summary><ul className="mt-2 space-y-2">{data?.forecastWarnings?.map((warning, index) => <li key={`${warning.code}-${index}`}><strong>{warning.clientName}</strong>: {warning.message}</li>)}</ul><p className="mt-2 text-xs">אלה בדיקות של הרשומות השמורות. מחירי Cardcom והוראות חלופיות אינם מאומתים באמצעות התחזית.</p></details>}
       {/* ===== Bottom line ===== */}
@@ -387,8 +374,8 @@ export default function FinancePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card small label="הוצאות קבועות" value={bl?.fixedMonthly} negative />
           <Card small label="הוצאות משתנות" value={bl?.variableMonthly} negative />
-          <Card small label="מחצית הרווח המשותף לפני הוצאות" value={bl?.partnerShareBeforeExpenses} />
-          <Card small label="מחצית הרווח המשותף אחרי הוצאות" value={bl?.partnerShareAfterExpenses} highlight />
+          <Card small label="תחזית מחצית הרווח לפני תקציב ומע״מ רועי" value={bl?.partnerShareBeforeExpenses} />
+          <Card small label="תחזית מחצית הרווח אחרי תקציב, לפני מע״מ רועי" value={bl?.partnerShareAfterExpenses} highlight />
         </div>
         {((bl?.oneOffIncomeThisMonth ?? 0) > 0 || (bl?.oneOffOutstanding ?? 0) > 0) && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

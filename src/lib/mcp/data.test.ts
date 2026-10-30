@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadRoute } from '../payments/route-harness';
 import * as math from '../finance/report';
+import * as cashPeriod from '../finance/cash-period';
+import * as cashMath from '../finance/cash-settlement';
+import type * as CashData from '../finance/cash-data';
 import * as money from '../finance';
 import * as access from '../finance/access';
 import * as transactions from '../finance/transactions';
@@ -56,8 +59,9 @@ function fixture(){
  const receipts=loadRoute<{loadReceipts:typeof Receipts;receiptTotals:typeof Totals}>(new URL('../finance/receipts.ts',import.meta.url),{'@/lib/prisma':{prisma:db},'@/lib/cardcom':{getCardcomConfig:()=>null},'@/lib/finance':money,'./transactions':transactions,'./report':math});
  const report=loadRoute<{buildFinanceReport:typeof Report}>(new URL('../finance/report-data.ts',import.meta.url),{'@/lib/prisma':{prisma:db},'@/lib/auth/viewer':{ViewerAuthorizationError:Error},'./access':access,'@/lib/finance':money,'./report':math,'./receipts':receipts,'./forecast-audit':forecastAudit});
  const debtors=loadRoute<{loadDebtorsReport:typeof Debtors}>(new URL('../finance/debtors-report.ts',import.meta.url),{'@/lib/prisma':{prisma:db},'@/lib/debtor-dismissal':dismissal,'./debtor-report-details':details});
- const data=loadRoute<typeof Data>(new URL('./data.ts',import.meta.url),{'@/lib/prisma':{prisma:db},'@/lib/finance/report-data':report,'@/lib/finance/access':access,'@/lib/finance/debtors-report':debtors,'@/lib/debtor-dismissal':dismissal,'@/lib/cardcom-debtor-evidence':debtorEvidence});
- return {data,report,receipts,reads:()=>reads,at,tables};
+ const cashData=loadRoute<typeof CashData>(new URL('../finance/cash-data.ts',import.meta.url),{'./access':access,'@/lib/prisma':{prisma:db},'./cash-period':cashPeriod,'./cash-settlement':cashMath,'./receipts':receipts});
+ const data=loadRoute<typeof Data>(new URL('./data.ts',import.meta.url),{'@/lib/finance/cash-data':cashData,'@/lib/prisma':{prisma:db},'@/lib/finance/report-data':report,'@/lib/finance/access':access,'@/lib/finance/debtors-report':debtors,'@/lib/debtor-dismissal':dismissal,'@/lib/cardcom-debtor-evidence':debtorEvidence});
+ return {data,report,receipts,cashData,reads:()=>reads,at,tables};
 }
 const owner:Viewer={userId:'elad',isOwner:true,role:'ADMIN',revenueSharePct:null};const roy:Viewer={...owner,userId:'roy',isOwner:false};
 test('MCP cash/run-rate matches actual app report for owner and Roy; refunds, periods, private scope and no side effects',async()=>{
@@ -67,7 +71,8 @@ test('MCP cash/run-rate matches actual app report for owner and Roy; refunds, pe
   const input={from:from.toISOString().slice(0,10),to:to.toISOString().slice(0,10)};
   const direct=await f.report.buildFinanceReport(viewer,viewer.isOwner?'combined':'fuzion',{from,to});
   const mcp=await f.data.financeSummary(viewer,input);
-  assert.deepEqual(mcp.collectedCash,{...direct.actual,allocationAfterRecordedExpenses:direct.actualAllocation});
+  assert.deepEqual(mcp.collectedCash,direct.actual);
+  assert.equal('allocationAfterRecordedExpenses' in mcp.collectedCash,false);
   assert.deepEqual(mcp.recurringMonthly.books,direct.books);assert.equal(mcp.forecast.myShare,direct.myProfit);
   assert.equal(mcp.collectedCash.gross,viewer.isOwner?1286.2:106.2);
   if(!viewer.isOwner){assert.equal('personal'in mcp.recurringMonthly.books,false);assert.equal(JSON.stringify(mcp).includes('PRIVATE_'),false);assert.equal('privateProfit'in mcp.forecast,false);}
@@ -116,4 +121,21 @@ test('legacy payer-level settled timestamp and unknown currency cannot claim a v
  const r=await f.data.debtorsReport(owner,{limit:20});
  assert.equal(r.visible.count,1);assert.equal(r.settled.count,0);assert.equal(r.visible.knownOpenAmount,0);assert.equal(r.visible.unknownAmountCount,1);
  assert.equal((r.visible.rows[0] as {currency?:string}).currency,'UNKNOWN');assert.equal(r.visible.rows[0].settledAt,null);
+});
+
+
+test('UI adapter and MCP share identical scoped cash object at identical cutoff; receipt reader is owner-only',async()=>{
+ const f=fixture();const request={from:'2026-10-01',to:'2026-11-01',asOf:'2026-10-30T00:00:00Z',timezone:'Asia/Jerusalem' as const};
+ for(const viewer of [owner,roy]){
+  const ui=await f.cashData.buildCashSettlement(viewer,request);const mcp=await f.data.financeSummary(viewer,request);
+  assert.deepEqual(mcp.cashSettlement.totals,ui.totals);assert.deepEqual(mcp.cashSettlement.roy,ui.roy);assert.deepEqual(mcp.cashSettlement.clients,ui.clients);assert.deepEqual(mcp.cashSettlement.period,ui.period);
+  if(!viewer.isOwner)assert.equal(JSON.stringify(mcp.cashSettlement).includes('PRIVATE_'),false);
+ }
+ const before=f.reads();await assert.rejects(()=>f.data.mcpData.financeReceipts(roy,{...request,limit:1,offset:0}),/Forbidden/);assert.equal(f.reads(),before);
+});
+
+
+test('shared receipt linked to private-only client cannot reveal that identity to partner',async()=>{
+ const f=fixture();f.tables.financeTransaction.push({...f.tables.financeTransaction[0],providerTransactionId:'wrong-link',clientId:'private-only'});
+ const s=await f.cashData.buildCashSettlement(roy,{});assert.equal(JSON.stringify(s).includes('PRIVATE_CLIENT_SECRET'),false);assert.equal(JSON.stringify(s).includes('private-only'),false);
 });
