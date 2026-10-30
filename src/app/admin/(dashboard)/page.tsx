@@ -36,9 +36,9 @@ interface BusinessKpis {
   personalMrr: number;
   monthlyProfit: number;
   partnerShare: number;
-  /** settlement.transferToRoy — profit after shared expenses, halved, plus
-   *  reimbursement for what Roy paid. Null until the API ships it. */
-  settlementTransfer: number | null;
+  /** Forecast entitlement after the monthly budget, before Roy invoice VAT.
+   *  Actual cash settlement is available in the partner report. */
+  forecastRoyShare: number | null;
 }
 
 const CLIENT_GOAL = 100; // strategy.md target by Aug 2026
@@ -151,7 +151,7 @@ export default function AdminDashboardPage() {
           personalMrr: report.books?.personal?.amount ?? 0,
           monthlyProfit: report.totals?.profit ?? 0,
           partnerShare: report.totals?.partnerShare ?? 0,
-          settlementTransfer: report.settlement?.transferToRoy ?? null,
+          forecastRoyShare: report.settlement?.royEntitlement ?? null,
         });
       }
       if (reportRes.status === "rejected") setFinanceStale(true);
@@ -273,8 +273,8 @@ export default function AdminDashboardPage() {
           {kpis.isOwner && <KpiCard label="רווח אישי צפוי — שלי בלבד" value={kpis.personalProfit == null ? "—" : `₪${fmt(kpis.personalProfit)}`} />}
           <KpiCard label="התקבל בפועל החודש" value={kpis.received == null ? "לא זמין" : `₪${fmt(kpis.received)}`} />
           <KpiCard
-            label="העברה לרועי (אחרי הוצאות)"
-            value={`₪${fmt(kpis.settlementTransfer ?? kpis.partnerShare)}`}
+            label="תחזית חלק רועי לפני מע״מ"
+            value={`₪${fmt(kpis.forecastRoyShare ?? kpis.partnerShare)}`}
             href="/admin/partner-report"
           />
           <KpiCard label="לקוחות פעילים" value={fmt(kpis.fuzionClients)} />

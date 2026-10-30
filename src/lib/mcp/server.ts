@@ -3,14 +3,19 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod';
 import { McpAuthError, type McpPrincipal } from './auth';
 import type { Viewer } from '@/lib/auth/viewer';
+import { resolveCashPeriod } from '@/lib/finance/cash-period';
 
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>Number.isFinite(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s,'Invalid calendar date');
-export const periodSchema=z.object({from:date.optional(),to:date.optional()}).strict().refine(p=>Boolean(p.from)===Boolean(p.to),'Supply both from and to').refine(p=>!p.from||!p.to||(p.from<p.to&&Date.parse(p.to)-Date.parse(p.from)<=366*86400000),'Period must be positive and at most 366 days');
+const periodFields={from:z.string().optional(),to:z.string().optional(),timezone:z.enum(['Asia/Jerusalem','UTC']).optional(),asOf:z.string().optional()};
+const validPeriod=(p:z.infer<typeof periodSchemaBase>)=>{try{resolveCashPeriod(p);return true;}catch{return false;}};
+const periodSchemaBase=z.object(periodFields).strict();
+export const periodSchema=periodSchemaBase.refine(validPeriod,'Invalid cash period or cutoff');
+const receiptSchema=z.object({...periodFields,limit:z.number().int().min(1).max(200).default(100),offset:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-200).default(0)}).strict().refine(validPeriod,'Invalid cash period or cutoff');
 const searchSchema=z.object({query:z.string().trim().min(1).max(100),limit:z.number().int().min(1).max(20).default(10)}).strict();
 const debtorSchema=z.object({limit:z.number().int().min(1).max(100).default(20)}).strict();
 export type PeriodInput=z.infer<typeof periodSchema>;
 export interface McpData {
  financeSummary(viewer:Viewer,input:PeriodInput):Promise<unknown>;
+ financeReceipts(viewer:Viewer,input:z.infer<typeof receiptSchema>):Promise<unknown>;
  searchClients(viewer:Viewer,input:z.infer<typeof searchSchema>):Promise<unknown>;
  debtorsReport(viewer:Viewer,input:z.infer<typeof debtorSchema>):Promise<unknown>;
 }
@@ -46,7 +51,8 @@ export function createMcpHandler(options:McpHandlerOptions) {
     try{const value=await run(args);return {content:[{type:'text' as const,text:JSON.stringify(value)}]};}catch{return failure();}
    });
   };
-  add('finance_summary','finance:read',periodSchema,'Read financial summary. UTC cash period [from,to); recurring revenue and forecast are current estimates, separate from collected cash. No synchronization.',args=>options.data.financeSummary(principal.viewer,periodSchema.parse(args)));
+  add('finance_summary','finance:read',periodSchema,'Read cash settlement and separately labeled forecast. Explicit [from,to) and cash cutoff; date-only boundaries default to Asia/Jerusalem, or request UTC. Missing evidence never final payable. No synchronization.',args=>options.data.financeSummary(principal.viewer,periodSchema.parse(args)));
+  if(principal.viewer.isOwner)add('finance_receipts','finance:read',receiptSchema,'Owner-only actual shared receipt rows and canonical settlement, client totals and private exclusion totals. Bounded period, pagination, VAT/FX provenance, incomplete evidence and freshness. No synchronization.',args=>options.data.financeReceipts(principal.viewer,receiptSchema.parse(args)));
   add('search_clients','clients:read',searchSchema,'Search visible clients by name only; bounded results and necessary status, without identity or payment identifiers.',args=>options.data.searchClients(principal.viewer,searchSchema.parse(args)));
   if(principal.viewer.isOwner)add('debtors_report','debtors:read',debtorSchema,'Owner-only stored debtor report including hidden records, unknown historical amounts, freshness and scan-window limitations. Never refreshes Cardcom.',args=>options.data.debtorsReport(principal.viewer,debtorSchema.parse(args)));
   const transport=new WebStandardStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});

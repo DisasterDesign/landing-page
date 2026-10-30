@@ -6,16 +6,17 @@ import { loadDebtorsReport } from '@/lib/finance/debtors-report';
 import { debtorIlsAmount, isVerifiedSettlement } from '@/lib/cardcom-debtor-evidence';
 import { hasDebtorSnapshot } from '@/lib/debtor-dismissal';
 import type { McpData, PeriodInput } from './server';
+import { buildCashSettlement, readOwnerReceipts } from '@/lib/finance/cash-data';
 
 export async function financeSummary(viewer:Viewer,input:PeriodInput){
- const asOf=new Date();
- const from=input.from?new Date(input.from):new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth(),1));
- const to=input.to?new Date(input.to):new Date(asOf.getTime()+1);
+ const cashSettlement=await buildCashSettlement(viewer,input);
+ const from=new Date(cashSettlement.period.from);
+ const to=new Date(cashSettlement.period.cashToExclusive);
  const report=await buildFinanceReport(viewer,viewer.isOwner?'combined':'fuzion',{from,to});
  return {
-  currency:'ILS',asOf:report.snapshotAt,period:{from:from.toISOString(),toExclusive:to.toISOString(),cashAsOf:report.snapshotAt,timezone:'UTC'},
+  currency:'ILS',asOf:cashSettlement.period.asOf,period:{from:from.toISOString(),toExclusive:cashSettlement.period.toExclusive,cashAsOf:cashSettlement.period.asOf,timezone:cashSettlement.period.timezone},cashSettlement,
   recurringMonthly:{basis:'CURRENT_PRODUCT_RUN_RATE',gross:report.bottomLine.totalMrr,vat:report.bottomLine.totalVat,netBeforeFees:report.bottomLine.totalMrr-report.bottomLine.totalVat,estimatedFee:report.bottomLine.totalCardcomFee,feesEstimated:true,books:report.books,unvaluedCount:report.forecastUnvaluedCount,warnings:report.forecastWarnings},
-  collectedCash:{...report.actual,allocationAfterRecordedExpenses:report.actualAllocation},
+  collectedCash:report.actual,
   forecast:{basis:'CURRENT_RUN_RATE_AFTER_MONTHLY_EXPENSES',myShare:report.myProfit,sharedExpenses:report.settlement.sharedExpenses,...(viewer.isOwner?{privateProfit:report.personalProfit,privateExpenses:report.settlement.personalExpenses}:{}),sharedProfit:report.settlement.profit,partnerShare:report.settlement.royEntitlement},
   freshness:{status:report.sync.status,lastSuccessAt:report.sync.lastSuccessAt,lastAttemptAt:report.sync.lastAttemptAt,stale:report.sync.stale,complete:report.sync.complete},
   ...(viewer.isOwner?{unclassified:{receiptRowsObserved:report.unassignedTransactions?.length??0,receiptSourceLimit:100,receiptMayBeTruncated:(report.unassignedTransactions?.length??0)===100,activeExpenseCount:report.unassignedExpenseCount}}:{}),
@@ -49,4 +50,4 @@ export async function debtorsReport(viewer:Viewer,input:{limit:number}){
   inactiveOrders:{count:report.inactiveOrders.length,truncated:report.inactiveOrders.length>input.limit,rows:report.inactiveOrders.slice(0,input.limit).map(a=>({name:a.client?.name??a.businessName??a.customerName,monthlyPrice:a.monthlyPrice,priceBasis:a.priceBasis,expectedAgreementGross:a.expectedAgreementGross,alternatives:a.alternatives,orderStateStale:a.orderStateStale,syncedAt:a.cardcomSyncedAt}))},
   totalsCaveat:'Bucket totals are separate and may overlap agreement problem charges; never sum the categories.'};
 }
-export const mcpData:McpData={financeSummary,searchClients,debtorsReport};
+export const mcpData:McpData={financeSummary,financeReceipts:readOwnerReceipts,searchClients,debtorsReport};

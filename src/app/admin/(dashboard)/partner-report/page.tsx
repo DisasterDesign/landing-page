@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
+import CashSettlementPanel from "@/components/admin/CashSettlementPanel";
 
 interface PartnerRow {
   id: string;
@@ -113,7 +114,7 @@ export default function PartnerReportPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">דוח שותף — תמונת מצב</h1>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-xl">
-            תחזית חודשית למוצרים פעילים. הרווח המשותף לאחר מע״מ, סליקה והוצאות משותפות מתחלק 50/50. התקבולים בפועל מוצגים בנפרד.
+            התחשבנות משותפת לפי תקבולים והוצאות ששולמו, חלוקה 50/50 ומע״מ על חלק רועי. תחזית המנויים מוצגת בנפרד.
           </p>
         </div>
         {snapshotLabel && (
@@ -124,14 +125,14 @@ export default function PartnerReportPage() {
       </div>
 
       {loadError && <p role="alert" className="text-sm text-amber-300">העדכון נכשל. {data ? "מוצגים הנתונים האחרונים." : "אין נתונים זמינים כרגע."}</p>}
+      <CashSettlementPanel />
+      <h2 className="text-xl font-bold text-white">תחזית מנויים ותקציב — אינם סכום להעברה</h2>
       {data && <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {data.viewer?.isOwner === true && <SummaryCard label="רווח אישי צפוי — שלי בלבד" value={data.personalProfit} />}
         <SummaryCard label="הרווח החודשי הצפוי שלי" value={data.myProfit} accent />
-        <SummaryCard label="התקבל בפועל החודש (ברוטו)" value={data.actual?.gross} />
+
       </div>}
       {(data?.forecastUnvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">{data?.forecastUnvaluedCount} מוצרים ללא סכום חודשי בשקלים אינם נכללים. התחזית חלקית.</p>}
-      {data?.sync && (data.sync.stale || data.sync.status !== "SUCCESS") && <p className="text-sm text-amber-300">סנכרון התקבולים אינו מלא. סכומי הכסף שהתקבל בפועל עשויים להיות חלקיים.</p>}
-      {(data?.actual?.unvaluedCount ?? 0) > 0 && <p className="text-sm text-amber-300">יש תקבולים ללא שווי בשקלים. הסכומים חלקיים.</p>}
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
@@ -150,14 +151,14 @@ export default function PartnerReportPage() {
           accent
         />
         <SummaryCard
-          label="מחצית אלעד בשותפות (אחרי הוצאות)"
+          label="תחזית מחצית הרווח אחרי תקציב"
           value={data?.settlement ? data.settlement.profit / 2 : totals?.eladShare}
           accent
           highlight
         />
         <SummaryCard
-          label="העברה לרועי"
-          value={data?.settlement?.transferToRoy ?? totals?.partnerShare}
+          label="תחזית חלק רועי לפני מע״מ"
+          value={data?.settlement?.royEntitlement ?? totals?.partnerShare}
           accent
           highlight
         />
@@ -167,17 +168,9 @@ export default function PartnerReportPage() {
       {data?.settlement && (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 space-y-2">
           <div className="text-xs text-gray-400">
-            התחשבנות חודשית (מודל 12.8): הכנסות פיוז&apos;ן נטו{" "}
-            <span className="font-mono text-gray-200">₪{fmtNum(data.books?.fuzion.profit)}</span>
-            {" "}− הוצאות משותפות{" "}
-            <span className="font-mono text-gray-200">₪{fmtNum(data.settlement.sharedExpenses)}</span>
-            {" "}= רווח{" "}
-            <span className="font-mono text-white">₪{fmtNum(data.settlement.profit)}</span>
-            {" "}→ העברה לרועי{" "}
-            <span className="font-mono text-pink">₪{fmtNum(data.settlement.transferToRoy)}</span>
-            {data.settlement.transferToRoy !== data.settlement.royEntitlement && (
-              <> (חצי רווח + החזר הוצאות ששילם)</>
-            )}
+            תחזית רווח משותף לאחר תקציב הוצאות: <span className="font-mono text-white">₪{fmtNum(data.settlement.profit)}</span>
+            {" "}· תחזית חלק רועי לפני מע״מ: <span className="font-mono text-pink">₪{fmtNum(data.settlement.royEntitlement)}</span>.
+            אלה נתוני מנויים ותקציב; ההתחשבנות בפועל נמצאת בטבלאות שלמעלה.
             {data.viewer?.isOwner === true && data.books?.personal && <>. הספר האישי — {data.books.personal.count} לקוחות, <span className="font-mono text-gray-200">₪{fmtNum(data.books.personal.profit)}</span> לאלעד בלבד, מחוץ לחישוב.</>}
           </div>
           {data.expensesByCategory && Object.keys(data.expensesByCategory).length > 0 && (
