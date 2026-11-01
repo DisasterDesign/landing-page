@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { startNotificationRefresh } from "@/lib/admin/notification-refresh";
 
 type NotifType =
   | "TASK_ASSIGNED"
@@ -61,8 +62,6 @@ function targetUrlFor(n: NotificationItem): string | null {
   }
 }
 
-const POLL_MS = 30000;
-
 function timeAgo(iso: string): string {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
   const m = Math.floor(diff / 60000);
@@ -80,12 +79,14 @@ export default function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const pollerRef = useRef<ReturnType<typeof startNotificationRefresh> | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/notifications", { cache: "no-store" });
+      const res = await fetch("/api/notifications", { cache: "no-store", signal });
       if (!res.ok) return;
       const json = await res.json();
+      if (signal.aborted) return;
       setItems(json.notifications || []);
       setUnread(json.unreadCount || 0);
     } catch {
@@ -94,9 +95,12 @@ export default function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    load();
-    const t = setInterval(load, POLL_MS);
-    return () => clearInterval(t);
+    const poller = startNotificationRefresh(load);
+    pollerRef.current = poller;
+    return () => {
+      poller.stop();
+      pollerRef.current = null;
+    };
   }, [load]);
 
   // Click outside to close
@@ -120,7 +124,7 @@ export default function NotificationBell() {
     try {
       await fetch("/api/notifications", { method: "POST" });
     } catch {
-      load();
+      pollerRef.current?.refresh();
     }
   };
 
